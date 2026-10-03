@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- The key cap follows your interact key. It stays pressed in and dark while you hold the key, and it springs back with the ripple when you let go. This works for keyboard keys, key combinations such as Shift-F, and gamepad buttons.
+- Typing in chat doesn't press the key cap.
+
 ## 1.0.4-beta (2026-10-03)
 
 - A gamepad button glyph is smaller, so it fits between the HUD's lines instead of running past them.

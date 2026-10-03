@@ -232,7 +232,7 @@ end
 -- Out of range, the key label turns RED_FONT_COLOR, the way ActionButton_UpdateRangeIndicator colors an
 -- action button's hotkey. A gamepad glyph has no label, so the glyph itself turns red. It loses its own
 -- colors first, because red over a colored glyph (Xbox's blue X) comes out nearly black. While the key is
--- pressed in (PlayPress), cap.pressShade darkens all of it.
+-- pressed in (KeyDown), cap.pressShade darkens all of it.
 local WHITE = {1, 1, 1};
 local function PaintKeyCap()
   local shade = cap.pressShade or 1;
@@ -285,9 +285,9 @@ local function AnimationGroup(steps)
 end
 
 -- Interact feedback: an additive glow in the target type's color over the HUD and the icon scaling to POP
--- and back, while the key is pressed in (PlayPress). Only rendering changes; the layout stays. Scale steps
--- in one group multiply, so step 2 scales by 1/scale to end at exactly the starting size. PULSE_TIME is the
--- longest part, the ripple; a fade-out waits for it.
+-- and back. Only rendering changes; the layout stays. Scale steps in one group multiply, so step 2 scales
+-- by 1/scale to end at exactly the starting size. PULSE_TIME covers the longest part, the key's ripple; a
+-- fade-out waits for it.
 local PULSE_TIME = 0.35;
 local POP = 1.15;
 frame.pulse = AnimationGroup({
@@ -297,55 +297,112 @@ frame.pulse = AnimationGroup({
   { "Scale", frame.icon, 2, 0.2, smoothing = "IN_OUT", scale = 1 / POP },
 });
 
--- The key cap or gamepad button is pressed in: it shrinks PRESS_DEPTH units toward its center over
--- PRESS_DOWN while it darkens to PRESS_SHADE, then springs back over PRESS_UP. A white ring along its
--- outline (Media\PressRingKey for the key's face, Media\PressRingRound for a glyph) grows to RIPPLE_GROW
--- of its size and fades from RIPPLE_ALPHA over RIPPLE_TIME. The ring textures' outline fills 1/RING_PAD of
--- the image on each axis, which leaves it room to grow. The press scale depends on the cap's size, so
--- PlayPress sets it before each press.
+----
+--  The key cap follows the interact key itself (KeyWatcher): up, held down, and released.
+--  Down: the key cap or gamepad button shrinks PRESS_DEPTH units toward its center over PRESS_DOWN and
+--  darkens to PRESS_SHADE, and stays that way while the key is held. Released: it springs back over
+--  PRESS_UP, and a white ring along its outline (Media\PressRingKey for the key's face, Media\PressRingRound
+--  for a glyph) grows to RIPPLE_GROW of its size and fades from RIPPLE_ALPHA over RIPPLE_TIME. The ring
+--  textures' outline fills 1/RING_PAD of the image on each axis, which leaves it room to grow.
+--  An animation snaps back when it ends, so pressIn holds the pressed size with a second, KEY_HOLD_TIME long
+--  step that keeps it. pressOut starts from wherever the press got to, so a quick tap or a press during a
+--  release doesn't jump. cap.pressDepth (0 up, 1 fully down) drives both the darkening and that start.
+----
 local PRESS_DEPTH, PRESS_DOWN, PRESS_UP, PRESS_SHADE = 2, 0.05, 0.15, 0.7;
 local RIPPLE_TIME, RIPPLE_GROW, RIPPLE_ALPHA = 0.35, 1.45, 0.55;
 local RING_PAD = 1.6;
 local RING_KEY, RING_ROUND = MEDIA .. "PressRingKey", MEDIA .. "PressRingRound";
+local KEY_HOLD_TIME = 3600;
 cap.ring = cap:CreateTexture(nil, "OVERLAY");
 cap.ring:SetBlendMode("ADD");
 cap.ring:SetPoint("CENTER");
 cap.ring:SetAlpha(0);
-frame.press = AnimationGroup({
-  { "Scale", cap.icon, 1, PRESS_DOWN, smoothing = "OUT", scale = 1, name = "iconIn" },
-  { "Scale", cap.text, 1, PRESS_DOWN, smoothing = "OUT", scale = 1, name = "textIn" },
-  { "Scale", cap.icon, 2, PRESS_UP, smoothing = "IN_OUT", scale = 1, name = "iconOut" },
-  { "Scale", cap.text, 2, PRESS_UP, smoothing = "IN_OUT", scale = 1, name = "textOut" },
+cap.pressDepth = 0;
+frame.pressIn = AnimationGroup({
+  { "Scale", cap.icon, 1, PRESS_DOWN, smoothing = "OUT", scale = 1, name = "icon" },
+  { "Scale", cap.text, 1, PRESS_DOWN, smoothing = "OUT", scale = 1, name = "text" },
+  { "Scale", cap.icon, 2, KEY_HOLD_TIME, scale = 1 },
+  { "Scale", cap.text, 2, KEY_HOLD_TIME, scale = 1 },
+});
+frame.pressOut = AnimationGroup({
+  { "Scale", cap.icon, 1, PRESS_UP, smoothing = "IN_OUT", scale = 1, name = "icon" },
+  { "Scale", cap.text, 1, PRESS_UP, smoothing = "IN_OUT", scale = 1, name = "text" },
 });
 frame.ripple = AnimationGroup({
   { "Scale", cap.ring, 1, RIPPLE_TIME, smoothing = "OUT", scale = RIPPLE_GROW },
   { "Alpha", cap.ring, 1, RIPPLE_TIME, alpha = {RIPPLE_ALPHA, 0} },
 });
 
--- The darkening follows the press's own curve: ease out going in, ease in and out coming back.
-local pressTween = CreateTween();
-local function PlayPress()
+-- The cap's size when fully pressed, as a share of its normal size.
+local function PressedScale()
   local size = cap.capHeight or 0;
-  if not cap:IsShown() or size <= PRESS_DEPTH then return end
-  local k = (size - PRESS_DEPTH) / size;
-  for _, name in ipairs({ "iconIn", "textIn" }) do frame.press[name]:SetScaleTo(k, k); end
-  for _, name in ipairs({ "iconOut", "textOut" }) do frame.press[name]:SetScaleTo(1 / k, 1 / k); end
-  cap.ring:SetTexture(cap.isGlyph and RING_ROUND or RING_KEY);
-  cap.ring:SetSize(cap.capWidth * RING_PAD, cap.capHeight * RING_PAD);
-  frame.press:Stop();
-  frame.press:Play();
-  frame.ripple:Stop();
-  frame.ripple:Play();
-  local total = PRESS_DOWN + PRESS_UP;
-  pressTween:Play(total, function(t)
-    local s = t * total;
-    local u = (s - PRESS_DOWN) / PRESS_UP;
-    local depth = s < PRESS_DOWN and 1 - (1 - s / PRESS_DOWN) ^ 2 or 1 - u * u * (3 - 2 * u);
-    cap.pressShade = 1 - (1 - PRESS_SHADE) * depth;
+  return size > PRESS_DEPTH and (size - PRESS_DEPTH) / size or 1;
+end
+
+-- Moves cap.pressDepth to depth over duration, and darkens the cap along with it.
+local depthTween = CreateTween();
+local function TweenDepth(depth, duration, ease)
+  local from = cap.pressDepth;
+  depthTween:Play(duration, function(t)
+    cap.pressDepth = from + (depth - from) * ease(t);
+    cap.pressShade = 1 - (1 - PRESS_SHADE) * cap.pressDepth;
     PaintKeyCap();
   end);
 end
+local function EaseOut(t) return 1 - (1 - t) ^ 2 end
+local function EaseInOut(t) return t * t * (3 - 2 * t) end
 
+-- Both groups animate the icon and the text by the same scale.
+local function SetPressScale(group, from, to)
+  for _, name in ipairs({ "icon", "text" }) do
+    group[name]:SetScaleFrom(from, from);
+    group[name]:SetScaleTo(to, to);
+  end
+end
+
+local function KeyDown()
+  if cap.isDown then return end
+  cap.isDown = true;
+  local k = PressedScale();
+  SetPressScale(frame.pressIn, 1 - (1 - k) * cap.pressDepth, k);
+  frame.pressOut:Stop();
+  frame.pressIn:Stop();
+  frame.pressIn:Play();
+  TweenDepth(1, PRESS_DOWN, EaseOut);
+end
+
+-- withRipple is false when the HUD goes away under a held key.
+local function KeyUp(withRipple)
+  if not cap.isDown then return end
+  cap.isDown = false;
+  SetPressScale(frame.pressOut, 1 - (1 - PressedScale()) * cap.pressDepth, 1);
+  frame.pressIn:Stop();
+  frame.pressOut:Stop();
+  frame.pressOut:Play();
+  TweenDepth(0, PRESS_UP, EaseInOut);
+  if withRipple then
+    cap.ring:SetTexture(cap.isGlyph and RING_ROUND or RING_KEY);
+    cap.ring:SetSize(cap.capWidth * RING_PAD, cap.capHeight * RING_PAD);
+    frame.ripple:Stop();
+    frame.ripple:Play();
+  end
+end
+
+-- A whole press at once: for an interaction KeyWatcher didn't see the key for (a tap shorter than a frame,
+-- another binding, the Edit Mode preview). KeyWatcher leaves the key alone until the tap is done.
+local tapToken = 0;
+local function TapKey()
+  if not cap:IsShown() then return end
+  tapToken = tapToken + 1;
+  local token = tapToken;
+  cap.tapping = true;
+  KeyDown();
+  C_Timer.After(PRESS_DOWN, function()
+    if token ~= tapToken then return end
+    cap.tapping = false;
+    KeyUp(true);
+  end);
+end
 -- When the frame changes to another target or another action (skinning, then looting the same corpse),
 -- the icon and name drop 5 units at once, then rise into place and fade in over SWITCH_TIME. Translation
 -- steps in one group add up. The icon glow fades in with them: it moves with the icon at once, so without
@@ -368,10 +425,14 @@ local function PlaySwitchAnim()
   frame.switchAnim:Play();
 end
 
+local IsChordDown; --defined with the interact key code below
+
+-- The interaction itself: the flash and icon pop. The key cap shows the press it came from: if the key is
+-- still down, KeyWatcher holds it and plays the release; otherwise it plays a whole tap.
 local function PlayInteractPulse()
   frame.pulse:Stop();
   frame.pulse:Play();
-  PlayPress();
+  if cap.key and IsChordDown(cap.key) then KeyDown(); else TapKey(); end
 end
 
 -- The HUD fades with its own animation group, not Blizzard's shared fade manager, which risks taint.
@@ -522,9 +583,11 @@ end
 -- (Feat\Forever.lua) returns its glyph while that UI is on.
 ns.gamepadActive = false;
 local function IsPadKey(key) return key:find("^PAD") ~= nil or key:find("%-PAD") ~= nil end
+-- Also returns the key itself ("F", "SHIFT-F", "PAD3"), which KeyWatcher checks. The gamepad UI's
+-- interact button is the left face button, GAMEPAD_FACE_LEFT.
 local function GetInteractKeyText()
   local glyph = ns.GamepadInteractGlyph and ns.GamepadInteractGlyph();
-  if glyph then return "|A:" .. glyph .. ":14:14|a" end
+  if glyph then return "|A:" .. glyph .. ":14:14|a", GAMEPAD_FACE_LEFT or "PAD3" end
   local keys = { GetBindingKey("INTERACTTARGET") };
   local key = keys[1];
   for _, k in ipairs(keys) do
@@ -533,7 +596,23 @@ local function GetInteractKeyText()
   if not key then return nil end
   local text = GetBindingText(key, 1);
   if not text or text == "" then return nil end
-  return text;
+  return text, key;
+end
+
+-- Whether a key chord is held: its key and every modifier in it ("SHIFT-F", "PADLTRIGGER-PAD1"). A chord
+-- whose key is the minus key ends in "-" ("SHIFT--").
+local MODIFIER_DOWN = { ALT = IsAltKeyDown, CTRL = IsControlKeyDown, SHIFT = IsShiftKeyDown, META = IsMetaKeyDown };
+function IsChordDown(chord)
+  local key = chord:match("%-(%-)$") or chord:match("([^%-]+)$") or chord;
+  for modifier in chord:sub(1, #chord - #key):gmatch("([^%-]+)%-") do
+    local isDown = MODIFIER_DOWN[modifier];
+    if isDown then
+      if not isDown() then return false end
+    elseif not IsKeyDown(modifier) then
+      return false;
+    end
+  end
+  return IsKeyDown(key) and true or false;
 end
 
 -- UpdateKeyCap and UpdateLayout measure text on hidden font strings that aren't anchored to the HUD.
@@ -628,11 +707,36 @@ local function SetKeyCapText(text)
 end
 
 local function UpdateKeyCap()
-  -- The Edit Mode sample shows "F" when the key is unbound.
-  local text = EnhancedSoftInteractDB.showKey and (GetInteractKeyText() or (frame.sampleName and "F"));
+  local text, key;
+  if EnhancedSoftInteractDB.showKey then
+    text, key = GetInteractKeyText();
+    if not text and frame.sampleName then text = "F"; end --the Edit Mode sample shows "F" when the key is unbound
+  end
+  cap.key = key;
   cap:SetShown(text and true or false);
   if text then SetKeyCapText(text); end
 end
+
+-- Watches the interact key every frame while the key cap is showing, and presses the cap with it. While a
+-- text box has the keyboard (typing in chat), the key types instead, so the cap stays up. With
+-- interactAnim off, or when the HUD goes away, a held cap comes up without a ripple.
+local keyWatcher = CreateFrame("Frame");
+keyWatcher:SetScript("OnUpdate", function()
+  local watching = cap.key and frame:IsShown() and not frame.fadingOut and cap:IsShown()
+    and EnhancedSoftInteractDB.interactAnim
+    and not (GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus());
+  if not watching then
+    if cap.isDown and not cap.tapping then KeyUp(false); end
+    return;
+  end
+  if cap.tapping then return end
+  local isDown = IsChordDown(cap.key);
+  if isDown and not cap.isDown then
+    KeyDown();
+  elseif not isDown and cap.isDown then
+    KeyUp(true);
+  end
+end);
 
 ----
 --  Name, requirement line and columns
