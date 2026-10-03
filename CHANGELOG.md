@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.1.2-beta (2026-10-04)
+
+- The Interact Key now stays on while you use the gamepad UI.
+- The addon no longer prints a chat message each time it turns the Interact Key back on.
+- A new option in Edit Mode lets you keep Blizzard's soft target tooltip and nameplate next to the HUD.
+- Turning the addon off now brings Blizzard's soft target tooltip and nameplate back on WoW: Forever.
+
 ## 1.1.1-beta (2026-10-03)
 
 - Corpses and objects no longer show a cog on the HUD when Interact Key Icons isn't set to Show All. The addon now keeps that setting on Show All, and you can turn this off in Edit Mode.
