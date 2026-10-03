@@ -230,9 +230,11 @@ local function StyleKeyCap()
 end
 
 -- Out of range, the key label turns RED_FONT_COLOR, the way ActionButton_UpdateRangeIndicator colors an
--- action button's hotkey. A gamepad glyph has no label, so the glyph itself takes the red tint.
+-- action button's hotkey. A gamepad glyph has no label, so the glyph itself turns red. It loses its own
+-- colors first, because red over a colored glyph (Xbox's blue X) comes out nearly black.
 local function PaintKeyCap()
   local red = frame.outOfRange and { RED_FONT_COLOR:GetRGB() };
+  cap.icon:SetDesaturated(cap.isGlyph and red and true or false);
   if cap.isGlyph then
     cap.icon:SetVertexColor(unpack(red or {1, 1, 1}));
   else

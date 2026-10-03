@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Out of range, a gamepad button glyph turns a clear red. It used to go nearly black, because the red tint multiplied the glyph's own color.
+
 ## 1.0.3-beta (2026-10-03)
 
 - The debug window's portrait shows the cog centered in its ring, at the size Blizzard's bag frames use. The cog used to sit off-center and reach past the ring.
