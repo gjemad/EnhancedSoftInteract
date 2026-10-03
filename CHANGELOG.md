@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.1.0-beta (2026-10-03)
+
+- Turning off the gamepad no longer leaves the Interact Key off. While Keep Interact Key On is checked in Edit Mode, the addon turns the key back on and says so in chat.
+- Every setting lives in Edit Mode now. The addon's page under Options > AddOns and the /esi options command are gone. Bind Interact With Target in Blizzard's Keybindings.
+- A new Enabled checkbox at the top of the Edit Mode panel turns the addon off. The HUD hides, Blizzard's soft target tooltip and nameplate come back, and the addon stops keeping the Interact Key on.
+- A preview window opens next to the HUD's Edit Mode settings. Clicking it shows the next sample, which replaces the Next Sample button. Pressing your interact key plays the interact animation on it.
+- The preview's minimize button folds it into a tab on the edge of the settings window. The tab shows the Group Finder eye, which looks around while you hover it.
+- The addon compartment entry opens the HUD in Edit Mode.
+
 ## 1.0.5-beta (2026-10-03)
 
 - The key cap follows your interact key. It stays pressed in and dark while you hold the key. This works for keyboard keys, key combinations such as Shift-F, and gamepad buttons.
