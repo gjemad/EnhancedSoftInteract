@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.5-beta (2026-10-03)
 
 - The key cap follows your interact key. It stays pressed in and dark while you hold the key. This works for keyboard keys, key combinations such as Shift-F, and gamepad buttons.
 - The ripple plays when the interaction happens. If holding the key interacts before you let go, the key cap springs back right then. Each further interaction during the same hold plays a quick tap.
