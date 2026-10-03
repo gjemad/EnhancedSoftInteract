@@ -835,8 +835,8 @@ local function OnSoftTargetChanged(oldTarget, newTarget)
   local signature = iconKey .. "|" .. tostring(talkBadge and true or false) .. "|" .. tostring(outOfRange);
   if knownTarget and knownTarget == frame.lastTarget and signature == frame.lastSignature
       and frame:IsShown() and not frame.fadingOut then
-    -- Debug prints every game event, doubles included; unchanged range checks stay silent.
-    if frame.debugIcons and not frame.fromRangeCheck then
+    -- The debug log keeps every game event, doubles included; unchanged range checks aren't logged.
+    if ns.DebugSoftTarget and not frame.fromRangeCheck then
       ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange);
     end
     return;
@@ -856,7 +856,7 @@ local function OnSoftTargetChanged(oldTarget, newTarget)
   SetTypeColor(visible); --blend while the frame is up, set at once when it fades in
   if switched and EnhancedSoftInteractDB.switchAnim then PlaySwitchAnim(); end
 
-  if frame.debugIcons then
+  if ns.DebugSoftTarget then
     ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange);
   end
 end
