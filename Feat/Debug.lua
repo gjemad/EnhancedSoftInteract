@@ -50,7 +50,7 @@ function ns.DebugSoftTarget(oldGUID, newGUID, hasCursor, resolvedKey, iconKey, t
       tostring(C_InputInterfaceStyle and C_InputInterfaceStyle.GetCurrentStyle() == Enum.InputDeviceInterfaceType.Gamepad or false),
       tostring(ns.GamepadInteractGlyph and ns.GamepadInteractGlyph())),
     ("layout: width=%s nameColumn=%s height=%s key=%s keyCap=%s"):format(
-      tostring(frame.boxWidth), tostring(frame.nameWidth), tostring(EnhancedSoftInteractDB.hudHeight),
+      ("%.0f"):format(frame.boxWidth or 0), ("%.0f"):format(frame.nameWidth or 0), tostring(EnhancedSoftInteractDB.hudHeight),
       cap:IsShown() and Safe(cap.text:GetText()) or "hidden",
       cap:IsShown() and ("%.0fx%.0f"):format(cap.capWidth or 0, cap.capHeight or 0) or "-"),
   };
@@ -82,7 +82,14 @@ local function CreateWindow()
   w:SetScript("OnDragStart", w.StartMoving);
   w:SetScript("OnDragStop", w.StopMovingOrSizing);
   w:SetBorder("HeldBagLayout");
+  -- The bag border's portrait ring is smaller than the template's default, so the icon gets the size and
+  -- place Blizzard's bag frames use (36 at -4, 1), moved against the cog art's off-center body.
+  local PORTRAIT_SIZE = 36;
+  local offset = ns.iconArtOffsets["cursor interact"] or {0, 0};
+  local function Round(v) return math.floor(v + 0.5) end
   w:SetPortraitAtlasRaw("Crosshair_interact_64");
+  w:SetPortraitTextureSizeAndOffset(PORTRAIT_SIZE, -4 - Round(offset[1] * PORTRAIT_SIZE / 64),
+    1 + Round(offset[2] * PORTRAIT_SIZE / 64));
   w:SetTitle("Enhanced Soft Interact Debug");
   w:SetScript("OnShow", function() PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN); end);
   w:SetScript("OnHide", function() PlaySound(SOUNDKIT.IG_QUEST_LOG_CLOSE); end);
@@ -112,7 +119,7 @@ local function CreateWindow()
 
   -- A read-only edit box, so the text can be selected and copied. Typing puts the shown text back.
   local scroll = CreateFrame("ScrollFrame", nil, w, "ScrollFrameTemplate");
-  scroll:SetPoint("TOPLEFT", 12, -32);
+  scroll:SetPoint("TOPLEFT", 12, -44); --below the portrait ring
   scroll:SetPoint("BOTTOMRIGHT", -30, 40);
   local text = CreateFrame("EditBox", nil, scroll);
   text:SetMultiLine(true);
