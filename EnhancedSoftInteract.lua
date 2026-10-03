@@ -301,9 +301,10 @@ frame.pulse = AnimationGroup({
 --  The key cap follows the interact key itself (KeyWatcher): up, held down, and released.
 --  Down: the key cap or gamepad button shrinks PRESS_DEPTH units toward its center over PRESS_DOWN and
 --  darkens to PRESS_SHADE, and stays that way while the key is held. Released: it springs back over
---  PRESS_UP, and a white ring along its outline (Media\PressRingKey for the key's face, Media\PressRingRound
---  for a glyph) grows to RIPPLE_GROW of its size and fades from RIPPLE_ALPHA over RIPPLE_TIME. The ring
---  textures' outline fills 1/RING_PAD of the image on each axis, which leaves it room to grow.
+--  PRESS_UP. The interaction itself (PlayInteractPulse) adds the ripple: a white ring along the cap's
+--  outline (Media\PressRingKey for the key's face, Media\PressRingRound for a glyph) grows to RIPPLE_GROW of
+--  its size and fades from RIPPLE_ALPHA over RIPPLE_TIME. The ring textures' outline fills 1/RING_PAD of the
+--  image on each axis, which leaves it room to grow.
 --  An animation snaps back when it ends, so pressIn holds the pressed size with a second, KEY_HOLD_TIME long
 --  step that keeps it. pressOut starts from wherever the press got to, so a quick tap or a press during a
 --  release doesn't jump. cap.pressDepth (0 up, 1 fully down) drives both the darkening and that start.
@@ -371,21 +372,25 @@ local function KeyDown()
   TweenDepth(1, PRESS_DOWN, EaseOut);
 end
 
--- withRipple is false when the HUD goes away under a held key.
+local function PlayRipple()
+  cap.ring:SetTexture(cap.isGlyph and RING_ROUND or RING_KEY);
+  cap.ring:SetSize(cap.capWidth * RING_PAD, cap.capHeight * RING_PAD);
+  frame.ripple:Stop();
+  frame.ripple:Play();
+end
+
+-- withRipple is true when an interaction releases the key. A release without one sets cap.releasedAt, so an
+-- interaction that comes right after it adds the ripple (PlayInteractPulse).
 local function KeyUp(withRipple)
   if not cap.isDown then return end
   cap.isDown = false;
+  cap.releasedAt = not withRipple and GetTime() or nil;
   SetPressScale(frame.pressOut, 1 - (1 - PressedScale()) * cap.pressDepth, 1);
   frame.pressIn:Stop();
   frame.pressOut:Stop();
   frame.pressOut:Play();
   TweenDepth(0, PRESS_UP, EaseInOut);
-  if withRipple then
-    cap.ring:SetTexture(cap.isGlyph and RING_ROUND or RING_KEY);
-    cap.ring:SetSize(cap.capWidth * RING_PAD, cap.capHeight * RING_PAD);
-    frame.ripple:Stop();
-    frame.ripple:Play();
-  end
+  if withRipple then PlayRipple(); end
 end
 
 -- A whole press at once: for an interaction KeyWatcher didn't see the key for (a tap shorter than a frame,
@@ -427,12 +432,27 @@ end
 
 local IsChordDown; --defined with the interact key code below
 
--- The interaction itself: the flash and icon pop. The key cap shows the press it came from: if the key is
--- still down, KeyWatcher holds it and plays the release; otherwise it plays a whole tap.
+-- The interaction itself: the flash and icon pop, and the key cap's release with the ripple.
+--  Held key: the cap comes up now, while the key is still down. Holding the key long enough interacts
+--  without a key-up, and the cap stays up (cap.consumed) until the key is let go and pressed again.
+--  Just released (within RELEASE_GRACE): the game interacted on the key-up, so the ripple joins the
+--  spring-back that's already running.
+--  Otherwise a whole tap: a press KeyWatcher didn't see, another binding, the Edit Mode preview, or the
+--  game interacting again while the key stays held.
+local RELEASE_GRACE = 0.15;
 local function PlayInteractPulse()
   frame.pulse:Stop();
   frame.pulse:Play();
-  if cap.key and IsChordDown(cap.key) then KeyDown(); else TapKey(); end
+  if cap.isDown and not cap.tapping then
+    KeyUp(true);
+    cap.consumed = true;
+  elseif not cap.isDown and cap.releasedAt and GetTime() - cap.releasedAt < RELEASE_GRACE then
+    cap.releasedAt = nil;
+    PlayRipple();
+  else
+    TapKey();
+    if cap.key and IsChordDown(cap.key) then cap.consumed = true; end
+  end
 end
 
 -- The HUD fades with its own animation group, not Blizzard's shared fade manager, which risks taint.
@@ -717,9 +737,11 @@ local function UpdateKeyCap()
   if text then SetKeyCapText(text); end
 end
 
--- Watches the interact key every frame while the key cap is showing, and presses the cap with it. While a
--- text box has the keyboard (typing in chat), the key types instead, so the cap stays up. With
--- interactAnim off, or when the HUD goes away, a held cap comes up without a ripple.
+-- Watches the interact key every frame while the key cap is showing, and presses the cap with it. Letting
+-- go comes up without a ripple; the interaction adds that (PlayInteractPulse). A key whose hold already
+-- interacted (cap.consumed) stays up until it's let go. While a text box has the keyboard (typing in
+-- chat), the key types instead, so the cap stays up. With interactAnim off, or when the HUD goes away, a
+-- held cap comes up.
 local keyWatcher = CreateFrame("Frame");
 keyWatcher:SetScript("OnUpdate", function()
   local watching = cap.key and frame:IsShown() and not frame.fadingOut and cap:IsShown()
@@ -727,14 +749,17 @@ keyWatcher:SetScript("OnUpdate", function()
     and not (GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus());
   if not watching then
     if cap.isDown and not cap.tapping then KeyUp(false); end
+    cap.consumed = false;
     return;
   end
   if cap.tapping then return end
   local isDown = IsChordDown(cap.key);
-  if isDown and not cap.isDown then
+  if cap.consumed then
+    if not isDown then cap.consumed = false; end
+  elseif isDown and not cap.isDown then
     KeyDown();
   elseif not isDown and cap.isDown then
-    KeyUp(true);
+    KeyUp(false);
   end
 end);
 
