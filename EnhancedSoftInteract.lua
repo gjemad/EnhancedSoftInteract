@@ -113,7 +113,7 @@ local function Notify(msg) print("|cffffd100ESI:|r " .. msg) end
 
 -- Saved-setting defaults. LoadSettings fills in unset keys from here, and the Edit Mode panel resets to them.
 local DEFAULTS = {
-  enabled = true, forceInteractKey = true, forceInteractIcons = true, previewMinimized = false,
+  enabled = true, hideBlizzard = true, forceInteractKey = true, forceInteractIcons = true, previewMinimized = false,
   showIcon = true, iconSize = 30, swapIconAndKey = false, showKey = true, keySize = 130,
   fontSize = 17, nameMinWidth = 100, nameMaxWidth = 200, hudHeight = 50, colorBrightness = 100,
   interactAnim = true, switchAnim = true,

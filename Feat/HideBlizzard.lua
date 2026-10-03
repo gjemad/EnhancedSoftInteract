@@ -1,24 +1,28 @@
 local _, ns = ...;
 
 -- The HUD replaces Blizzard's soft target tooltip and nameplate, and the icon Blizzard's nameplates draw
--- above the target, so the addon turns them off while it runs, and the player's own settings return once
--- it's disabled. The nameplate icon only shows while SoftTargetNameplateSize is above 0
+-- above the target, so the addon turns them off while it runs and Hide Blizzard's Soft Target Displays
+-- (hideBlizzard) is checked. The player's own settings return when either is turned off. The nameplate icon only shows while SoftTargetNameplateSize is above 0
 -- (Blizzard_NamePlates.lua); the icon CVars that give the HUD its cursor stay as they are.
 -- On WoW: Forever the addon sets temp CVars, as Blizzard's gamepad mode does. The client never saves
 -- those, and removing them brings the player's value back. Retail has no temp CVars, so the addon sets
--- the CVar and puts the player's value back at logout, before the client saves its settings. Both put
--- the player's value back when you uncheck Enabled in Edit Mode. It skips CVars a client doesn't have
--- (GetCVar gives nil).
+-- the CVar and puts the player's value back at logout, before the client saves its settings. Blizzard's
+-- nameplates read their CVars again on the next soft target change, so a toggle shows from the next
+-- target on. It skips CVars a client doesn't have (GetCVar gives nil).
 local HIDDEN_CVARS = { "SoftTargetTooltipInteract", "SoftTargetNameplateInteract", "SoftTargetNameplateSize" };
 local SetTempCVar, RemoveTempCVar = C_CVar.SetTempCVar, C_CVar.RemoveTempCVar;
 local playerValues = {}; --retail: each CVar's value from the player, from before the addon hid it
 local hidden = {}; --Forever: the CVars the addon holds at a temp value
 
+local function ShouldHide()
+  local db = EnhancedSoftInteractDB;
+  return db and db.enabled and db.hideBlizzard;
+end
+
 -- Setting a CVar fires CVAR_UPDATE synchronously, which calls this again; the guard stops that recursion.
 local hiding = false;
 local function HideBlizzardDisplays()
-  local db = EnhancedSoftInteractDB;
-  if hiding or not (db and db.enabled) then return end
+  if hiding or not ShouldHide() then return end
   hiding = true;
   for _, cvar in ipairs(HIDDEN_CVARS) do
     local value = GetCVar(cvar);
@@ -44,9 +48,9 @@ local function RestorePlayerValues()
   hiding = false;
 end
 
--- Called when Enabled changes.
+-- Called when Enabled or Hide Blizzard's Soft Target Displays changes.
 function ns.UpdateBlizzardDisplays()
-  if EnhancedSoftInteractDB.enabled then HideBlizzardDisplays(); else RestorePlayerValues(); end
+  if ShouldHide() then HideBlizzardDisplays(); else RestorePlayerValues(); end
 end
 
 -- Settings panels and Blizzard's gamepad mode can set these again; turn them back off.

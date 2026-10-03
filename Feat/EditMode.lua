@@ -134,15 +134,16 @@ local function BuildEditModeSettings()
     set = function(_, value)
       db.enabled = value;
       ns.UpdateBlizzardDisplays();
-      ns.KeepSettings(true);
+      ns.KeepSettings();
       LibEditMode:RefreshFrameSettings(frame);
     end,
   };
 
+  Checkbox("Hide Blizzard's Soft Target Displays", "hideBlizzard", ns.UpdateBlizzardDisplays);
+
   -- Game settings the HUD needs, kept by Feat\Persistence.lua.
   Section("persistence", "Persistence");
-  local function KeepNow() ns.KeepSettings(true); end
-  for _, kept in ipairs(ns.keptSettings) do Checkbox(kept.checkbox, kept.option, KeepNow); end
+  for _, kept in ipairs(ns.keptSettings) do Checkbox(kept.checkbox, kept.option, ns.KeepSettings); end
 
   Section("icon", "Icon & Key");
   Checkbox("Show Icon", "showIcon", function() UpdateIcon(); UpdateLayout(); end);
@@ -180,8 +181,9 @@ local function BuildEditModeSettings()
   -- LibEditMode shows a setting's desc as its tooltip.
   local DESCRIPTIONS = {
     ["Enabled"] = "Shows the HUD for your soft interact target. Turn off to hide it, bring back Blizzard's soft target tooltip, nameplate and nameplate icon, and stop keeping the Persistence settings. Those settings keep their current values.",
-    ["Keep Interact Key On"] = "Turns Enable Interact Key in Options > Controls back on if anything turns it off, such as turning off the gamepad, and says so in chat. The HUD needs the key. Uncheck this to leave the key alone.",
-    ["Keep Interact Key Icons on Show All"] = "Sets Interact Key Icons in Options > Accessibility back to Show All if anything changes it, and says so in chat. With fewer icons, corpses and objects show a plain cog on the HUD. Uncheck this to leave the setting alone.",
+    ["Hide Blizzard's Soft Target Displays"] = "Hides Blizzard's tooltip, nameplate and nameplate icon for your soft interact target, which show the same target as the HUD. Uncheck to see them next to the HUD. The change shows from your next target on.",
+    ["Keep Interact Key On"] = "Turns Enable Interact Key in Options > Controls back on if anything turns it off, such as turning off the gamepad. The HUD needs the key. Uncheck this to leave the key alone.",
+    ["Keep Interact Key Icons on Show All"] = "Sets Interact Key Icons in Options > Accessibility back to Show All if anything changes it. With fewer icons, corpses and objects show a plain cog on the HUD. Uncheck this to leave the setting alone.",
     ["Show Icon"] = "Shows the target's interact icon (talk, quest, vendor, herb, ...) on the HUD.",
     ["Icon Size"] = "Size of the interact icon.\nDefault: 30px",
     ["Swap Icon and Key"] = "Puts the icon on the right end of the HUD and the interact key on the left. The name stays centered.",
