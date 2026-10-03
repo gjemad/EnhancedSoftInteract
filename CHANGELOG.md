@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.4-beta (2026-10-03)
 
 - A gamepad button glyph is smaller, so it fits between the HUD's lines instead of running past them.
 - When you interact, the key cap or gamepad button shrinks toward its center and darkens for a moment, and a ring ripples out from its edge. Keys used to dip down instead.
