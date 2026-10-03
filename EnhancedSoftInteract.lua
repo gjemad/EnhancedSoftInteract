@@ -231,15 +231,19 @@ end
 
 -- Out of range, the key label turns RED_FONT_COLOR, the way ActionButton_UpdateRangeIndicator colors an
 -- action button's hotkey. A gamepad glyph has no label, so the glyph itself turns red. It loses its own
--- colors first, because red over a colored glyph (Xbox's blue X) comes out nearly black.
+-- colors first, because red over a colored glyph (Xbox's blue X) comes out nearly black. While the key is
+-- pressed in (PlayPress), cap.pressShade darkens all of it.
+local WHITE = {1, 1, 1};
 local function PaintKeyCap()
+  local shade = cap.pressShade or 1;
+  local function Shaded(c) return c[1] * shade, c[2] * shade, c[3] * shade end
   local red = frame.outOfRange and { RED_FONT_COLOR:GetRGB() };
   cap.icon:SetDesaturated(cap.isGlyph and red and true or false);
   if cap.isGlyph then
-    cap.icon:SetVertexColor(unpack(red or {1, 1, 1}));
+    cap.icon:SetVertexColor(Shaded(red or WHITE));
   else
-    cap.icon:SetVertexColor(1, 1, 1);
-    cap.text:SetTextColor(unpack(red or cap.textColor));
+    cap.icon:SetVertexColor(Shaded(WHITE));
+    cap.text:SetTextColor(Shaded(red or cap.textColor));
   end
 end
 
@@ -275,38 +279,72 @@ local function AnimationGroup(steps)
     if s.alpha then a:SetFromAlpha(s.alpha[1]); a:SetToAlpha(s.alpha[2]); end
     if s.scale then a:SetScaleFrom(1, 1); a:SetScaleTo(s.scale, s.scale); a:SetOrigin(s.origin or "CENTER", 0, 0); end
     if s.offset then a:SetOffset(0, s.offset); end
+    if s.name then group[s.name] = a; end
   end
   return group;
 end
 
--- Interact feedback, 0.3 seconds: an additive glow in the target type's color over the HUD, the icon
--- scaling to POP and back, and a press of the key. A key cap dips 2 units. A gamepad button is pressed the
--- way Blizzard's gamepad action bar presses one: it shrinks (4 of its 30 to 38 pixels there, PAD_PRESS)
--- with its bottom edge in place, so it sinks into the controller instead of sliding down. Only rendering
--- changes; the layout stays. Scale steps in one group multiply, so step 2 scales by 1/scale to end at
--- exactly the starting size.
-local PULSE_TIME = 0.3;
+-- Interact feedback: an additive glow in the target type's color over the HUD and the icon scaling to POP
+-- and back, while the key is pressed in (PlayPress). Only rendering changes; the layout stays. Scale steps
+-- in one group multiply, so step 2 scales by 1/scale to end at exactly the starting size. PULSE_TIME is the
+-- longest part, the ripple; a fade-out waits for it.
+local PULSE_TIME = 0.35;
 local POP = 1.15;
-local PAD_PRESS = 0.88;
-local function PulseGroup(keySteps)
-  local steps = {
-    { "Alpha", frame.flash, 1, 0.06, smoothing = "OUT", alpha = {0, 0.45} },
-    { "Alpha", frame.flash, 2, 0.24, smoothing = "IN", alpha = {0.45, 0} },
-    { "Scale", frame.icon, 1, 0.08, smoothing = "OUT", scale = POP },
-    { "Scale", frame.icon, 2, 0.2, smoothing = "IN_OUT", scale = 1 / POP },
-  };
-  for _, step in ipairs(keySteps) do table.insert(steps, step); end
-  return AnimationGroup(steps);
+frame.pulse = AnimationGroup({
+  { "Alpha", frame.flash, 1, 0.06, smoothing = "OUT", alpha = {0, 0.45} },
+  { "Alpha", frame.flash, 2, 0.24, smoothing = "IN", alpha = {0.45, 0} },
+  { "Scale", frame.icon, 1, 0.08, smoothing = "OUT", scale = POP },
+  { "Scale", frame.icon, 2, 0.2, smoothing = "IN_OUT", scale = 1 / POP },
+});
+
+-- The key cap or gamepad button is pressed in: it shrinks PRESS_DEPTH units toward its center over
+-- PRESS_DOWN while it darkens to PRESS_SHADE, then springs back over PRESS_UP. A white ring along its
+-- outline (Media\PressRingKey for the key's face, Media\PressRingRound for a glyph) grows to RIPPLE_GROW
+-- of its size and fades from RIPPLE_ALPHA over RIPPLE_TIME. The ring textures' outline fills 1/RING_PAD of
+-- the image on each axis, which leaves it room to grow. The press scale depends on the cap's size, so
+-- PlayPress sets it before each press.
+local PRESS_DEPTH, PRESS_DOWN, PRESS_UP, PRESS_SHADE = 2, 0.05, 0.15, 0.7;
+local RIPPLE_TIME, RIPPLE_GROW, RIPPLE_ALPHA = 0.35, 1.45, 0.55;
+local RING_PAD = 1.6;
+local RING_KEY, RING_ROUND = MEDIA .. "PressRingKey", MEDIA .. "PressRingRound";
+cap.ring = cap:CreateTexture(nil, "OVERLAY");
+cap.ring:SetBlendMode("ADD");
+cap.ring:SetPoint("CENTER");
+cap.ring:SetAlpha(0);
+frame.press = AnimationGroup({
+  { "Scale", cap.icon, 1, PRESS_DOWN, smoothing = "OUT", scale = 1, name = "iconIn" },
+  { "Scale", cap.text, 1, PRESS_DOWN, smoothing = "OUT", scale = 1, name = "textIn" },
+  { "Scale", cap.icon, 2, PRESS_UP, smoothing = "IN_OUT", scale = 1, name = "iconOut" },
+  { "Scale", cap.text, 2, PRESS_UP, smoothing = "IN_OUT", scale = 1, name = "textOut" },
+});
+frame.ripple = AnimationGroup({
+  { "Scale", cap.ring, 1, RIPPLE_TIME, smoothing = "OUT", scale = RIPPLE_GROW },
+  { "Alpha", cap.ring, 1, RIPPLE_TIME, alpha = {RIPPLE_ALPHA, 0} },
+});
+
+-- The darkening follows the press's own curve: ease out going in, ease in and out coming back.
+local pressTween = CreateTween();
+local function PlayPress()
+  local size = cap.capHeight or 0;
+  if not cap:IsShown() or size <= PRESS_DEPTH then return end
+  local k = (size - PRESS_DEPTH) / size;
+  for _, name in ipairs({ "iconIn", "textIn" }) do frame.press[name]:SetScaleTo(k, k); end
+  for _, name in ipairs({ "iconOut", "textOut" }) do frame.press[name]:SetScaleTo(1 / k, 1 / k); end
+  cap.ring:SetTexture(cap.isGlyph and RING_ROUND or RING_KEY);
+  cap.ring:SetSize(cap.capWidth * RING_PAD, cap.capHeight * RING_PAD);
+  frame.press:Stop();
+  frame.press:Play();
+  frame.ripple:Stop();
+  frame.ripple:Play();
+  local total = PRESS_DOWN + PRESS_UP;
+  pressTween:Play(total, function(t)
+    local s = t * total;
+    local u = (s - PRESS_DOWN) / PRESS_UP;
+    local depth = s < PRESS_DOWN and 1 - (1 - s / PRESS_DOWN) ^ 2 or 1 - u * u * (3 - 2 * u);
+    cap.pressShade = 1 - (1 - PRESS_SHADE) * depth;
+    PaintKeyCap();
+  end);
 end
-frame.keyPulse = PulseGroup({
-  { "Translation", cap, 1, 0.05, smoothing = "OUT", offset = -2 },
-  { "Translation", cap, 2, 0.15, smoothing = "IN_OUT", offset = 2 },
-});
-frame.padPulse = PulseGroup({
-  { "Scale", cap.icon, 1, 0.05, smoothing = "OUT", scale = PAD_PRESS, origin = "BOTTOM" },
-  { "Scale", cap.icon, 2, 0.15, smoothing = "IN_OUT", scale = 1 / PAD_PRESS, origin = "BOTTOM" },
-});
-frame.pulse = frame.keyPulse;
 
 -- When the frame changes to another target or another action (skinning, then looting the same corpse),
 -- the icon and name drop 5 units at once, then rise into place and fade in over SWITCH_TIME. Translation
@@ -331,10 +369,9 @@ local function PlaySwitchAnim()
 end
 
 local function PlayInteractPulse()
-  frame.keyPulse:Stop();
-  frame.padPulse:Stop();
-  frame.pulse = cap.isGlyph and frame.padPulse or frame.keyPulse;
+  frame.pulse:Stop();
   frame.pulse:Play();
+  PlayPress();
 end
 
 -- The HUD fades with its own animation group, not Blizzard's shared fade manager, which risks taint.
