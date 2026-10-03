@@ -19,6 +19,7 @@ EnhancedSoftInteract.lua
 Feat\Cursors.lua
 Feat\Forever.lua [ExcludeLoadGameType standard, classic][AllowLoadGameType camelot]
 Feat\HideBlizzard.lua
+Feat\InteractKey.lua
 Feat\Debug.lua
 Feat\EditMode.lua
-Feat\Options.lua
+Feat\Preview.lua

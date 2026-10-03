@@ -1,13 +1,14 @@
 local _, ns = ...;
 local frame, media, DEFAULTS, SLIDER_RANGES = ns.frame, ns.media, ns.DEFAULTS, ns.SLIDER_RANGES;
-local HUD_DEFAULT_POSITION, Notify, IsInteractKeyEnabled = ns.HUD_DEFAULT_POSITION, ns.Notify, ns.IsInteractKeyEnabled;
+local HUD_DEFAULT_POSITION, Notify = ns.HUD_DEFAULT_POSITION, ns.Notify;
 local SetIconSide, UpdateIcon, UpdateFont = ns.SetIconSide, ns.UpdateIcon, ns.UpdateFont;
 local UpdateKeyCap, UpdateLayout, UpdateHeight = ns.UpdateKeyCap, ns.UpdateLayout, ns.UpdateHeight;
 local PlayInteractPulse = ns.PlayInteractPulse;
 
 ----
 --  Samples for the HUD in Edit Mode: Classic Era NPCs and game objects (also in WoW: Forever), in three
---  name lengths, each with its cursor. "Next Sample" shows a random sample of the next length.
+--  name lengths, each with its cursor. Clicking the preview (Feat\Preview.lua) shows a random sample of the
+--  next length.
 ----
 local PREVIEW_NPCS = {
   { --short
@@ -52,33 +53,25 @@ local function ApplyPosition(pos)
   frame:SetPoint(pos.point, UIParent, pos.relativePoint or pos.point, pos.x, pos.y);
 end
 
--- Shows a sample target of the next name length. Herbs and ore look the way this character would see
--- them, so without the profession they are unable and show the requirement line.
-local sampleLength = 0;
+-- Shows a sample target of the next name length on every HUD (the real one and the preview). Herbs and
+-- ore look the way this character would see them, so without the profession they are unable and show the
+-- requirement line.
+local sampleLength, sampleName = 0, nil;
 local function ShowNextEditModeSample()
   sampleLength = sampleLength % #PREVIEW_NPCS + 1;
   local npcs = PREVIEW_NPCS[sampleLength];
   local npc;
-  repeat npc = npcs[math.random(#npcs)] until #npcs == 1 or npc[1] ~= frame.sampleName;
+  repeat npc = npcs[math.random(#npcs)] until #npcs == 1 or npc[1] ~= sampleName;
   local name, cursor = npc[1], npc[2];
-  frame.sampleName = name;
-  frame.name:SetText(name);
-  frame.requirementText = ns.RequirementFor(cursor);
-  if frame.requirementText then cursor = "Unable" .. cursor; end
-  frame.colorKey, frame.outOfRange = ns.ShowCursor(cursor), false;
-  ns.SetTypeColor(true);
-  if EnhancedSoftInteractDB.switchAnim then ns.PlaySwitchAnim(); end
-  ns.AnchorIcon();
-  UpdateKeyCap();
-  UpdateLayout();
+  sampleName = name;
+  local requirement = ns.RequirementFor(cursor);
+  if requirement then cursor = "Unable" .. cursor; end
+  ns.ShowSample(name, cursor, requirement);
 end
+ns.ShowNextEditModeSample = ShowNextEditModeSample;
 
 local function ShowEditModeSample()
   frame.inEditMode = true;
-  frame.fader:Stop();
-  frame.fadingOut = false;
-  frame:SetAlpha(1);
-  frame:Show();
   sampleLength = 0;
   ShowNextEditModeSample();
 end
@@ -99,7 +92,7 @@ local function BuildEditModeSettings()
   local sections = db.editModeSections;
   local settings = {};
   local currentSection;
-  local function InteractKeyOff() return not IsInteractKeyEnabled() end
+  local function AddonOff() return not db.enabled end
 
   local function Section(key, name)
     currentSection = key;
@@ -112,7 +105,7 @@ local function BuildEditModeSettings()
   local function Add(setting)
     local section, disabled = currentSection, setting.disabled;
     if section then setting.hidden = function() return sections[section] == false end end
-    setting.disabled = function(layoutName) return InteractKeyOff() or (disabled and disabled(layoutName)) end
+    setting.disabled = function(layoutName) return AddonOff() or (disabled and disabled(layoutName)) end
     settings[#settings + 1] = setting;
   end
   local function Checkbox(name, key, onChange)
@@ -136,14 +129,16 @@ local function BuildEditModeSettings()
 
   -- Outside the sections and never disabled, because it enables the rest.
   settings[1] = {
-    kind = kind.Checkbox, name = ENABLE_INTERACT_TEXT or "Enable Interact Key", default = true,
-    get = function() return IsInteractKeyEnabled() end,
+    kind = kind.Checkbox, name = "Enabled", default = DEFAULTS.enabled,
+    get = function() return db.enabled end,
     set = function(_, value)
-      SetCVar("softTargetInteract", value and Enum.SoftTargetEnableFlags.Any or Enum.SoftTargetEnableFlags.Gamepad);
-      if ns.RefreshOptionsState then ns.RefreshOptionsState(); end
+      db.enabled = value;
+      ns.UpdateBlizzardDisplays();
+      ns.KeepInteractKeyOn();
       LibEditMode:RefreshFrameSettings(frame);
     end,
   };
+  Checkbox("Keep Interact Key On", "forceInteractKey", function() ns.KeepInteractKeyOn(true); end);
 
   Section("icon", "Icon & Key");
   Checkbox("Show Icon", "showIcon", function() UpdateIcon(); UpdateLayout(); end);
@@ -180,7 +175,8 @@ local function BuildEditModeSettings()
 
   -- LibEditMode shows a setting's desc as its tooltip.
   local DESCRIPTIONS = {
-    [ENABLE_INTERACT_TEXT or "Enable Interact Key"] = "Enables the Interact Key for keyboard and mouse, which the HUD needs. It's the same setting as Options > Controls. Bind the key itself under Interact Key Settings.",
+    ["Enabled"] = "Shows the HUD for your soft interact target. Turn off to hide it, bring back Blizzard's soft target tooltip and nameplate, and stop keeping the Interact Key on. The Interact Key keeps its current setting.",
+    ["Keep Interact Key On"] = "Turns Enable Interact Key in Options > Controls back on if anything turns it off, such as turning off the gamepad, and says so in chat. The HUD needs the key. Uncheck this to leave the key alone.",
     ["Show Icon"] = "Shows the target's interact icon (talk, quest, vendor, herb, ...) on the HUD.",
     ["Icon Size"] = "Size of the interact icon.\nDefault: 30px",
     ["Swap Icon and Key"] = "Puts the icon on the right end of the HUD and the interact key on the left. The name stays centered.",
@@ -191,9 +187,9 @@ local function BuildEditModeSettings()
     ["Name Max Width"] = "Widest the name column gets. Longer names end in \"...\".\nDefault: 200px",
     ["Font Size"] = "Font size of the target name.\nDefault: 17",
     ["Color Brightness"] = "Brightness of the target type's color in the lines and the glow behind the icon.\nDefault: 100%",
-    ["Target Switch Animation"] = "When the frame changes to another target or action (skinning, then looting), the icon and name slide in and the color blends over. Next Sample shows it.",
+    ["Target Switch Animation"] = "When the frame changes to another target or action (skinning, then looting), the icon and name slide in and the color blends over. Click the preview to see it.",
     ["Shadow Height"] = "Height of the HUD. The soft shadow behind it reaches a little past this.\nDefault: 50px",
-    ["Interact Animation"] = "Plays a 0.3 second glow in the target type's color on the HUD when you press the interact key. Next Sample shows it.",
+    ["Interact Animation"] = "Plays a 0.3 second glow in the target type's color on the HUD when you press the interact key. Click the preview to see it.",
     ["Fade Animations"] = "Fades the HUD in and out. Turn off to show and hide it instantly.",
     ["Fade In Time"] = ("Seconds for the HUD to fade in.\nDefault: %.2fs"):format(DEFAULTS.fadeInTime),
     ["Fade Out Time"] = ("Seconds for the HUD to fade out.\nDefault: %.2fs"):format(DEFAULTS.fadeOutTime),
@@ -209,13 +205,6 @@ local function SetupEditMode()
     EnhancedSoftInteractDB.layouts[layoutName] = { point = point, x = x, y = y };
   end, HUD_DEFAULT_POSITION, "Enhanced Soft Interact");
   LibEditMode:AddFrameSettings(frame, BuildEditModeSettings());
-  LibEditMode:AddFrameSettingsButtons(frame, {
-    { text = "Next Sample", click = function()
-        ShowNextEditModeSample();
-        if EnhancedSoftInteractDB.interactAnim then PlayInteractPulse(); end
-      end },
-    { text = "Interact Key Settings...", click = function() ns.ToggleOptions(); end },
-  });
   LibEditMode:RegisterCallback("layout", function(layoutName) ApplyPosition(GetLayoutPosition(layoutName)); end);
   LibEditMode:RegisterCallback("rename", function(oldName, newName)
     local layouts = EnhancedSoftInteractDB.layouts;
@@ -229,7 +218,7 @@ end
 -- Opens Edit Mode (as Blizzard's /editmode does) and selects the HUD, which opens its settings panel.
 function ns.OpenHUDInEditMode()
   if InCombatLockdown() then Notify("Edit Mode can't be opened in combat."); return end
-  if not LibEditMode then ns.ToggleOptions(); return end
+  if not LibEditMode then Notify("Edit Mode isn't available."); return end
   if SettingsPanel:IsShown() then SettingsPanel:Close(true); end
   if not EditModeManagerFrame:IsShown() then
     if not EditModeManagerFrame:CanEnterEditMode() then Notify("Edit Mode isn't available right now."); return end
@@ -244,4 +233,11 @@ end
 table.insert(ns.onLoad, function()
   ApplyPosition(GetLayoutPosition(LibEditMode and LibEditMode:GetActiveLayoutName()));
   SetupEditMode();
+  if AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
+    local info = UIDropDownMenu_CreateInfo();
+    info.text = "Enhanced Soft Interact";
+    info.notCheckable = true;
+    info.func = ns.OpenHUDInEditMode;
+    AddonCompartmentFrame:RegisterAddon(info);
+  end
 end);

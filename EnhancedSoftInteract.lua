@@ -117,6 +117,7 @@ end
 
 -- Saved-setting defaults. LoadSettings fills in unset keys from here, and the Edit Mode panel resets to them.
 local DEFAULTS = {
+  enabled = true, forceInteractKey = true, previewMinimized = false,
   showIcon = true, iconSize = 30, swapIconAndKey = false, showKey = true, keySize = 130,
   fontSize = 17, nameMinWidth = 100, nameMaxWidth = 200, hudHeight = 50, colorBrightness = 100,
   interactAnim = true, switchAnim = true,
@@ -130,20 +131,6 @@ local SLIDER_RANGES = {
   fadeInTime = {0.01, 1, 0.01}, fadeOutTime = {0.01, 1, 0.01},
 };
 
-----
---  The HUD frame. Edit Mode moves it (LibEditMode, Feat\EditMode.lua), and each Edit Mode layout keeps
---  its own position in EnhancedSoftInteractDB.layouts. Outside Edit Mode it ignores the mouse.
-----
-local HUD_DEFAULT_POSITION = { point = "CENTER", x = 200, y = -100 };
-local frame = CreateFrame("Frame", "EnhancedSoftInteractHUD", UIParent);
-frame:SetSize(200, 40);
-frame:SetPoint(HUD_DEFAULT_POSITION.point, UIParent, HUD_DEFAULT_POSITION.point, HUD_DEFAULT_POSITION.x, HUD_DEFAULT_POSITION.y);
-frame:SetMovable(true);
-frame:SetDontSavePosition(true); --Edit Mode layouts hold the position, not WoW's layout-local.txt
-frame:EnableMouse(false);
-frame:Hide();
-frame.editModeName = "Enhanced Soft Interact";
-
 local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
 
 -- The look follows Blizzard's level-up banner. There is no plate, only a soft shadow (Media\SoftShadow.tga,
@@ -153,41 +140,6 @@ local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
 local SHADOW, GLOW = MEDIA .. "SoftShadow", MEDIA .. "SoftGlow";
 local SHADOW_ALPHA = 0.9;
 local LINE_ATLAS = "LevelUp-Bar-White";
-
--- frame.box is the layout box (icon | name | key, hudHeight tall) that everything anchors to. It draws
--- nothing itself.
-frame.box = frame:CreateTexture(nil, "BACKGROUND");
-frame.box:SetPoint("CENTER"); --a longer name widens the box equally on both sides
-frame.shadow = frame:CreateTexture(nil, "BACKGROUND", nil, -1);
-frame.iconGlow = frame:CreateTexture(nil, "BACKGROUND", nil, 1);
-frame.iconGlow:SetBlendMode("ADD");
-frame.lineLowGlow = frame:CreateTexture(nil, "BORDER", nil, -1);
-frame.lineLowGlow:SetBlendMode("ADD");
-frame.lineLow = frame:CreateTexture(nil, "BORDER");
-frame.lineHigh = frame:CreateTexture(nil, "BORDER");
-frame.flash = frame:CreateTexture(nil, "BORDER");
-frame.flash:SetBlendMode("ADD");
-frame.flash:SetAlpha(0);
-frame.icon = frame:CreateTexture(nil, "ARTWORK");
-local NAME_FONT = _G.Game17Font_Shadow and "Game17Font_Shadow" or "GameFontNormalLarge";
-frame.name = frame:CreateFontString(nil, "ARTWORK", NAME_FONT);
-frame.name:SetWordWrap(false); --one line; a name wider than its column ends in "..."
-frame.name:SetJustifyH("CENTER");
-frame.nameColor = { frame.name:GetTextColor() };
-frame.requirement = frame:CreateFontString(nil, "ARTWORK", NAME_FONT);
-frame.requirement:SetWordWrap(false);
-frame.requirement:SetJustifyH("CENTER");
-frame.requirement:SetTextColor(RED_FONT_COLOR:GetRGB()); --Blizzard's color for unmet requirements
-frame.requirement:Hide();
-
--- The shadow reaches SHADOW_PAD_X past both ends of the box and SHADOW_PAD_Y above and below it. The
--- interact flash covers the box and 20 units past its ends. The icon glow follows the icon.
-local SHADOW_PAD_X, SHADOW_PAD_Y = 75, 16;
-frame.shadow:SetPoint("TOPLEFT", frame.box, "TOPLEFT", -SHADOW_PAD_X, SHADOW_PAD_Y);
-frame.shadow:SetPoint("BOTTOMRIGHT", frame.box, "BOTTOMRIGHT", SHADOW_PAD_X, -SHADOW_PAD_Y);
-frame.flash:SetPoint("TOPLEFT", frame.box, "TOPLEFT", -20, 0);
-frame.flash:SetPoint("BOTTOMRIGHT", frame.box, "BOTTOMRIGHT", 20, 0);
-frame.iconGlow:SetPoint("CENTER", frame.icon, "CENTER");
 
 ----
 --  Interact key cap, on Blizzard's key art: the plunderstorm key, else the tutorial key, else a plain
@@ -202,54 +154,6 @@ local KEYCAP_STYLES = { --in order of preference
   { atlas = "newplayertutorial-icon-key", textColor = {0, 0, 0}, shadow = false },
 };
 local NO_MARGINS = {0, 0, 0, 0};
-
-local cap = CreateFrame("Frame", nil, frame);
-cap.icon = cap:CreateTexture(nil, "ARTWORK");
-cap.text = cap:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
-cap:Hide();
-frame.keyCap = cap;
-
--- Styles the cap with the first key art this client has, else a plain dark box. cap.art keeps the art's
--- proportions and face margins for SetKeyCapText.
-local function StyleKeyCap()
-  cap.isGlyph = false;
-  for _, style in ipairs(KEYCAP_STYLES) do
-    local info = C_Texture.GetAtlasInfo(style.atlas);
-    if info and info.width > 0 and info.height > 0 then
-      cap.icon:SetAtlas(style.atlas);
-      cap.art = { aspect = info.width / info.height, margins = style.margins or NO_MARGINS };
-      cap.textColor = style.textColor;
-      cap.text:SetShadowOffset(style.shadow and 1 or 0, style.shadow and -1 or 0);
-      return;
-    end
-  end
-  cap.art = { aspect = 1, margins = NO_MARGINS };
-  cap.icon:SetColorTexture(0, 0, 0, 0.6);
-  cap.textColor = {1, 1, 1};
-  cap.text:SetShadowOffset(1, -1);
-end
-
--- Out of range, the key label turns RED_FONT_COLOR, the way ActionButton_UpdateRangeIndicator colors an
--- action button's hotkey. A gamepad glyph has no label, so the glyph itself turns red. It loses its own
--- colors first, because red over a colored glyph (Xbox's blue X) comes out nearly black. While the key is
--- pressed in (KeyDown), cap.pressShade darkens all of it.
-local WHITE = {1, 1, 1};
-local function PaintKeyCap()
-  local shade = cap.pressShade or 1;
-  local function Shaded(c) return c[1] * shade, c[2] * shade, c[3] * shade end
-  local red = frame.outOfRange and { RED_FONT_COLOR:GetRGB() };
-  cap.icon:SetDesaturated(cap.isGlyph and red and true or false);
-  if cap.isGlyph then
-    cap.icon:SetVertexColor(Shaded(red or WHITE));
-  else
-    cap.icon:SetVertexColor(Shaded(WHITE));
-    cap.text:SetTextColor(Shaded(red or cap.textColor));
-  end
-end
-
-----
---  Animations
-----
 
 -- Calls step(t) every frame for duration seconds, with t going from 0 to 1. Playing again replaces the
 -- running tween.
@@ -266,331 +170,6 @@ local function CreateTween()
   end
   function driver:Stop() self:SetScript("OnUpdate", nil); end
   return driver;
-end
-
-local function AnimationGroup(steps)
-  local group = frame:CreateAnimationGroup();
-  for _, s in ipairs(steps) do
-    local a = group:CreateAnimation(s[1]);
-    a:SetTarget(s[2]);
-    a:SetOrder(s[3]);
-    a:SetDuration(s[4]);
-    if s.smoothing then a:SetSmoothing(s.smoothing); end
-    if s.alpha then a:SetFromAlpha(s.alpha[1]); a:SetToAlpha(s.alpha[2]); end
-    if s.scale then a:SetScaleFrom(1, 1); a:SetScaleTo(s.scale, s.scale); a:SetOrigin(s.origin or "CENTER", 0, 0); end
-    if s.offset then a:SetOffset(0, s.offset); end
-    if s.name then group[s.name] = a; end
-  end
-  return group;
-end
-
--- Interact feedback: an additive glow in the target type's color over the HUD and the icon scaling to POP
--- and back. Only rendering changes; the layout stays. Scale steps in one group multiply, so step 2 scales
--- by 1/scale to end at exactly the starting size. PULSE_TIME covers the longest part, the key's ripple; a
--- fade-out waits for it.
-local PULSE_TIME = 0.35;
-local POP = 1.15;
-frame.pulse = AnimationGroup({
-  { "Alpha", frame.flash, 1, 0.06, smoothing = "OUT", alpha = {0, 0.45} },
-  { "Alpha", frame.flash, 2, 0.24, smoothing = "IN", alpha = {0.45, 0} },
-  { "Scale", frame.icon, 1, 0.08, smoothing = "OUT", scale = POP },
-  { "Scale", frame.icon, 2, 0.2, smoothing = "IN_OUT", scale = 1 / POP },
-});
-
-----
---  The key cap follows the interact key itself (KeyWatcher): up, held down, and released.
---  Down: the key cap or gamepad button shrinks PRESS_DEPTH units toward its center over PRESS_DOWN and
---  darkens to PRESS_SHADE, and stays that way while the key is held. Released: it springs back over
---  PRESS_UP. The interaction itself (PlayInteractPulse) adds the ripple: a white ring along the cap's
---  outline (Media\PressRingKey for the key's face, Media\PressRingRound for a glyph) grows to RIPPLE_GROW of
---  its size and fades from RIPPLE_ALPHA over RIPPLE_TIME. The ring textures' outline fills 1/RING_PAD of the
---  image on each axis, which leaves it room to grow.
---  An animation snaps back when it ends, so pressIn holds the pressed size with a second, KEY_HOLD_TIME long
---  step that keeps it. pressOut starts from wherever the press got to, so a quick tap or a press during a
---  release doesn't jump. cap.pressDepth (0 up, 1 fully down) drives both the darkening and that start.
-----
-local PRESS_DEPTH, PRESS_DOWN, PRESS_UP, PRESS_SHADE = 2, 0.05, 0.15, 0.7;
-local RIPPLE_TIME, RIPPLE_GROW, RIPPLE_ALPHA = 0.35, 1.45, 0.55;
-local RING_PAD = 1.6;
-local RING_KEY, RING_ROUND = MEDIA .. "PressRingKey", MEDIA .. "PressRingRound";
-local KEY_HOLD_TIME = 3600;
-cap.ring = cap:CreateTexture(nil, "OVERLAY");
-cap.ring:SetBlendMode("ADD");
-cap.ring:SetPoint("CENTER");
-cap.ring:SetAlpha(0);
-cap.pressDepth = 0;
-frame.pressIn = AnimationGroup({
-  { "Scale", cap.icon, 1, PRESS_DOWN, smoothing = "OUT", scale = 1, name = "icon" },
-  { "Scale", cap.text, 1, PRESS_DOWN, smoothing = "OUT", scale = 1, name = "text" },
-  { "Scale", cap.icon, 2, KEY_HOLD_TIME, scale = 1 },
-  { "Scale", cap.text, 2, KEY_HOLD_TIME, scale = 1 },
-});
-frame.pressOut = AnimationGroup({
-  { "Scale", cap.icon, 1, PRESS_UP, smoothing = "IN_OUT", scale = 1, name = "icon" },
-  { "Scale", cap.text, 1, PRESS_UP, smoothing = "IN_OUT", scale = 1, name = "text" },
-});
-frame.ripple = AnimationGroup({
-  { "Scale", cap.ring, 1, RIPPLE_TIME, smoothing = "OUT", scale = RIPPLE_GROW },
-  { "Alpha", cap.ring, 1, RIPPLE_TIME, alpha = {RIPPLE_ALPHA, 0} },
-});
-
--- The cap's size when fully pressed, as a share of its normal size.
-local function PressedScale()
-  local size = cap.capHeight or 0;
-  return size > PRESS_DEPTH and (size - PRESS_DEPTH) / size or 1;
-end
-
--- Moves cap.pressDepth to depth over duration, and darkens the cap along with it.
-local depthTween = CreateTween();
-local function TweenDepth(depth, duration, ease)
-  local from = cap.pressDepth;
-  depthTween:Play(duration, function(t)
-    cap.pressDepth = from + (depth - from) * ease(t);
-    cap.pressShade = 1 - (1 - PRESS_SHADE) * cap.pressDepth;
-    PaintKeyCap();
-  end);
-end
-local function EaseOut(t) return 1 - (1 - t) ^ 2 end
-local function EaseInOut(t) return t * t * (3 - 2 * t) end
-
--- Both groups animate the icon and the text by the same scale.
-local function SetPressScale(group, from, to)
-  for _, name in ipairs({ "icon", "text" }) do
-    group[name]:SetScaleFrom(from, from);
-    group[name]:SetScaleTo(to, to);
-  end
-end
-
-local function KeyDown()
-  if cap.isDown then return end
-  cap.isDown = true;
-  local k = PressedScale();
-  SetPressScale(frame.pressIn, 1 - (1 - k) * cap.pressDepth, k);
-  frame.pressOut:Stop();
-  frame.pressIn:Stop();
-  frame.pressIn:Play();
-  TweenDepth(1, PRESS_DOWN, EaseOut);
-end
-
-local function PlayRipple()
-  cap.ring:SetTexture(cap.isGlyph and RING_ROUND or RING_KEY);
-  cap.ring:SetSize(cap.capWidth * RING_PAD, cap.capHeight * RING_PAD);
-  frame.ripple:Stop();
-  frame.ripple:Play();
-end
-
--- withRipple is true when an interaction releases the key. A release without one sets cap.releasedAt, so an
--- interaction that comes right after it adds the ripple (PlayInteractPulse).
-local function KeyUp(withRipple)
-  if not cap.isDown then return end
-  cap.isDown = false;
-  cap.releasedAt = not withRipple and GetTime() or nil;
-  SetPressScale(frame.pressOut, 1 - (1 - PressedScale()) * cap.pressDepth, 1);
-  frame.pressIn:Stop();
-  frame.pressOut:Stop();
-  frame.pressOut:Play();
-  TweenDepth(0, PRESS_UP, EaseInOut);
-  if withRipple then PlayRipple(); end
-end
-
--- A whole press at once: for an interaction KeyWatcher didn't see the key for (a tap shorter than a frame,
--- another binding, the Edit Mode preview). KeyWatcher leaves the key alone until the tap is done.
-local tapToken = 0;
-local function TapKey()
-  if not cap:IsShown() then return end
-  tapToken = tapToken + 1;
-  local token = tapToken;
-  cap.tapping = true;
-  KeyDown();
-  C_Timer.After(PRESS_DOWN, function()
-    if token ~= tapToken then return end
-    cap.tapping = false;
-    KeyUp(true);
-  end);
-end
--- When the frame changes to another target or another action (skinning, then looting the same corpse),
--- the icon and name drop 5 units at once, then rise into place and fade in over SWITCH_TIME. Translation
--- steps in one group add up. The icon glow fades in with them: it moves with the icon at once, so without
--- the fade it would show the old color at the new spot before the icon arrives. The type color and the
--- HUD's alpha blend over at the same time (SetTypeColor, FadeOver).
-local SWITCH_TIME = 0.2;
-local switchSteps = {};
-for _, region in ipairs({ frame.icon, frame.name }) do
-  table.insert(switchSteps, { "Translation", region, 1, 0, offset = -5 });
-  table.insert(switchSteps, { "Translation", region, 2, SWITCH_TIME, smoothing = "OUT", offset = 5 });
-end
-for _, region in ipairs({ frame.icon, frame.name, frame.iconGlow }) do
-  table.insert(switchSteps, { "Alpha", region, 1, 0, alpha = {0, 0} });
-  table.insert(switchSteps, { "Alpha", region, 2, SWITCH_TIME, smoothing = "OUT", alpha = {0, 1} });
-end
-frame.switchAnim = AnimationGroup(switchSteps);
-
-local function PlaySwitchAnim()
-  frame.switchAnim:Stop();
-  frame.switchAnim:Play();
-end
-
-local IsChordDown; --defined with the interact key code below
-
--- The interaction itself: the flash and icon pop, and the key cap's release with the ripple.
---  Held key: the cap comes up now, while the key is still down. Holding the key long enough interacts
---  without a key-up, and the cap stays up (cap.consumed) until the key is let go and pressed again.
---  Just released (within RELEASE_GRACE): the game interacted on the key-up, so the ripple joins the
---  spring-back that's already running.
---  Otherwise a whole tap: a press KeyWatcher didn't see, another binding, the Edit Mode preview, or the
---  game interacting again while the key stays held.
-local RELEASE_GRACE = 0.15;
-local function PlayInteractPulse()
-  frame.pulse:Stop();
-  frame.pulse:Play();
-  if cap.isDown and not cap.tapping then
-    KeyUp(true);
-    cap.consumed = true;
-  elseif not cap.isDown and cap.releasedAt and GetTime() - cap.releasedAt < RELEASE_GRACE then
-    cap.releasedAt = nil;
-    PlayRipple();
-  else
-    TapKey();
-    if cap.key and IsChordDown(cap.key) then cap.consumed = true; end
-  end
-end
-
--- The HUD fades with its own animation group, not Blizzard's shared fade manager, which risks taint.
--- FadeTo's durations are for a full fade from 0 to 1 alpha, so partial fades (interruptions) take
--- proportionally less. FadeOver takes the given time whatever the distance.
-frame.fader = frame:CreateAnimationGroup();
-frame.fadeAnim = frame.fader:CreateAnimation("Alpha");
-frame.fader:SetToFinalAlpha(true);
-frame.fader:SetScript("OnFinished", function()
-  if frame.fadingOut then
-    frame.fadingOut = false;
-    frame:Hide();
-  end
-end);
-
--- Returns the fade-in and fade-out durations, or 0 (instant) when fade animations are off.
-local function GetFadeTimes()
-  if not EnhancedSoftInteractDB.fadeEnabled then return 0, 0 end
-  return EnhancedSoftInteractDB.fadeInTime, EnhancedSoftInteractDB.fadeOutTime;
-end
-
-local function CurrentAlpha()
-  if not frame:IsShown() then return 0 end
-  if frame.fader:IsPlaying() then
-    local from, to = frame.fadeAnim:GetFromAlpha(), frame.fadeAnim:GetToAlpha();
-    return from + (to - from) * frame.fadeAnim:GetSmoothProgress();
-  end
-  return frame:GetAlpha();
-end
-
-local function FadeOver(toAlpha, duration, hideWhenDone)
-  local fromAlpha = CurrentAlpha();
-  frame.fader:Stop();
-  frame.fadingOut = hideWhenDone;
-  frame:SetAlpha(toAlpha);
-  frame:Show();
-  frame.fadeAnim:SetFromAlpha(fromAlpha);
-  frame.fadeAnim:SetToAlpha(toAlpha);
-  frame.fadeAnim:SetDuration(math.max(0.01, duration));
-  frame.fader:Play();
-end
-
-local function FadeTo(toAlpha, fullDuration, hideWhenDone)
-  FadeOver(toAlpha, fullDuration * math.abs(toAlpha - CurrentAlpha()), hideWhenDone);
-end
-
-----
---  Layout
-----
-
--- Lines in the target type's color: a strong one under the name, 5 units wider than the box on each
--- side, with an additive glow, and a fainter one above the name, 20 units shorter on each side. They sit
--- LINE_GAP beyond the name's letters, so they move apart as the font grows.
--- The level-up bar art is a 7-pixel strip whose stroke is its bottom row, so a texture draws its line
--- near its bottom edge. frame.lineStrokeShift (3/7 for that art, 0 for the plain fallback) raises each
--- texture by that share of its height, which puts the middle of the stroke on the line's position.
-local LINE_GAP = 6.5;
-local function UpdateLines()
-  local y = EnhancedSoftInteractDB.fontSize * 0.5 + LINE_GAP;
-  local function Line(tex, inset, offsetY, height)
-    offsetY = offsetY + height * (frame.lineStrokeShift or 0);
-    tex:ClearAllPoints();
-    tex:SetPoint("LEFT", frame.box, "LEFT", inset, offsetY);
-    tex:SetPoint("RIGHT", frame.box, "RIGHT", -inset, offsetY);
-    tex:SetHeight(height);
-  end
-  Line(frame.lineLow, -5, -y, 4);
-  Line(frame.lineLowGlow, -5, -y, 10);
-  Line(frame.lineHigh, 20, y, 3);
-end
-
--- The icon and the key cap sit at opposite ends of the box, EDGE_INSET from the edge. "Swap Icon and
--- Key" (swapIconAndKey) swaps their ends. The name sits between them (UpdateLayout).
-local EDGE_INSET = 7;
-local function Inset(side) return side == "LEFT" and EDGE_INSET or -EDGE_INSET end
-
--- Most cursor art isn't centered in its image. ns.iconArtOffsets (Feat\Cursors.lua) has how far each
--- one's art sits right of and below center, in 64px units; the icon moves the other way. AnchorIcon
--- rounds the nudge to whole units, because the renderer may snap a fractional nudge away. Unable icons
--- use their cursor's offset. Icons from a file ID are 32px files that are already centered.
-local function AnchorIcon()
-  local side = EnhancedSoftInteractDB.swapIconAndKey and "RIGHT" or "LEFT";
-  local key = frame.colorKey and NormalizeCursorKey(frame.colorKey):gsub("^cursor unable", "cursor ");
-  local offset = key and not frame.iconFromFileID and ns.iconArtOffsets[key];
-  local nudgeX, nudgeY = 0, 0;
-  if offset then
-    local function Round(v) return v >= 0 and math.floor(v + 0.5) or -math.floor(-v + 0.5) end
-    local scale = EnhancedSoftInteractDB.iconSize / 64;
-    nudgeX, nudgeY = Round(-offset[1] * scale), Round(offset[2] * scale);
-  end
-  frame.iconNudgeX, frame.iconNudgeY = nudgeX, nudgeY; --for /esi debug
-  frame.icon:ClearAllPoints();
-  frame.icon:SetPoint(side, frame.box, side, Inset(side) + nudgeX, nudgeY);
-end
-
-local function SetIconSide()
-  local keySide = EnhancedSoftInteractDB.swapIconAndKey and "LEFT" or "RIGHT";
-  AnchorIcon();
-  cap:ClearAllPoints();
-  cap:SetPoint(keySide, frame.box, keySide, Inset(keySide), 0);
-end
-
--- The glow behind the icon is GLOW_W x GLOW_H icon sizes in range and shrinks to GLOW_OUT_OF_RANGE_SCALE
--- of that out of range. While the HUD is visible it gets there over GLOW_TIME, easing out from its
--- current size, so a range change halfway reverses smoothly. It resizes the texture instead of using a
--- Scale animation, so repeated changes can't add up.
-local GLOW_W, GLOW_H = 2.2, 1.9;
-local GLOW_OUT_OF_RANGE_SCALE = 0.55;
-local GLOW_TIME = 0.25;
-local function SizeGlow()
-  local size = EnhancedSoftInteractDB.iconSize * (frame.glowScale or 1);
-  frame.iconGlow:SetSize(size * GLOW_W, size * GLOW_H);
-end
-
-local glowTween, glowTarget = CreateTween(), nil;
-local function SetGlowScale(target, animate)
-  if not (animate and frame.glowScale) then
-    glowTween:Stop();
-    glowTarget, frame.glowScale = target, target;
-    SizeGlow();
-    return;
-  end
-  if target == glowTarget then return end --already there or on the way
-  glowTarget = target;
-  local from = frame.glowScale;
-  glowTween:Play(GLOW_TIME, function(t)
-    frame.glowScale = from + (target - from) * (1 - (1 - t) ^ 2);
-    SizeGlow();
-  end);
-end
-
-local function UpdateIcon()
-  local db = EnhancedSoftInteractDB;
-  frame.icon:SetSize(db.iconSize, db.iconSize);
-  frame.icon:SetShown(db.showIcon);
-  frame.iconGlow:SetShown(db.showIcon);
-  SizeGlow();
-  AnchorIcon(); --the nudge scales with the icon size
 end
 
 ----
@@ -622,7 +201,7 @@ end
 -- Whether a key chord is held: its key and every modifier in it ("SHIFT-F", "PADLTRIGGER-PAD1"). A chord
 -- whose key is the minus key ends in "-" ("SHIFT--").
 local MODIFIER_DOWN = { ALT = IsAltKeyDown, CTRL = IsControlKeyDown, SHIFT = IsShiftKeyDown, META = IsMetaKeyDown };
-function IsChordDown(chord)
+local function IsChordDown(chord)
   local key = chord:match("%-(%-)$") or chord:match("([^%-]+)$") or chord;
   for modifier in chord:sub(1, #chord - #key):gmatch("([^%-]+)%-") do
     local isDown = MODIFIER_DOWN[modifier];
@@ -669,410 +248,880 @@ local function InkOffset(text, fontPath)
   return (first[1] - last[2]) / 2000;
 end
 
--- SetKeyCapText moves the key text off the cap's center. A font string centers its whole line, including
--- the room for descenders, so capitals sit high. An "R" sat about 0.7 units high at font size 18, so the
--- text moves down 0.04 font sizes. On screenshots, letters also sat 0.8 to 1.3 units left after InkOffset
--- ("O", "R", "T"), so the text moves right by KEY_TEXT_NUDGE_X font sizes. WoW snaps text to whole pixels,
--- so a letter can still land half a pixel off.
-local KEY_TEXT_NUDGE_X = 0.06;
-
--- The whole key art is max(24, fontSize + 9) x keySize% tall and keeps its proportions. The cap frame
--- (capWidth x capHeight, what the layout uses) is the key's face, and the art hangs past it by its
--- margins. A label too wide for the face widens it to the text plus KEY_TEXT_PAD and stretches the art.
--- A gamepad button comes from GetBindingText as one atlas markup ("|A:Gamepad_Gen_1_32:14:14|a"); the
--- cap then draws that button's 64px glyph, which fills its square, in place of the key art. The glyph is
--- GLYPH_SHARE of the key art's height: at the default font and key size that is 26 units, between the
--- lines (30 units apart) and a little larger than the key face (23), because a round button looks smaller
--- than a square key of the same height.
-local KEY_TEXT_PAD = 10;
-local GLYPH_SHARE = 0.77;
-local function SetKeyCapText(text)
-  local db = EnhancedSoftInteractDB;
-  local scale = db.keySize / 100;
-  local height = math.max(24, db.fontSize + 9) * scale;
-  local glyph = text:match("^|A:([^:|]+):[^|]*|a$");
-  glyph = glyph and glyph:gsub("_32$", "_64");
-  if glyph and C_Texture.GetAtlasInfo(glyph) then
-    cap.icon:SetAtlas(glyph);
-    cap.icon:ClearAllPoints();
-    cap.icon:SetAllPoints();
-    cap.text:SetText("");
-    cap.isGlyph = true;
-    local size = height * GLYPH_SHARE;
-    cap.capWidth, cap.capHeight = size, size;
-    cap:SetSize(size, size);
-    PaintKeyCap();
-    return;
-  end
-  if cap.isGlyph then StyleKeyCap(); end --back from a gamepad glyph
-  local fontPath = media:Fetch("font", db.font);
-  local fontSize = math.max(10, (db.fontSize - 3) * scale);
-  cap.text:SetFont(fontPath, fontSize, "");
-  cap.text:SetPoint("CENTER", fontSize * (KEY_TEXT_NUDGE_X - InkOffset(text, fontPath)), -fontSize * 0.04);
-  cap.text:SetText(text);
-  keyTextMeasure:SetFont(fontPath, fontSize, "");
-  keyTextMeasure:SetText(text);
-  local textWidth = keyTextMeasure:GetStringWidth();
-  if issecretvalue(textWidth) then textWidth = fontSize * #text * 0.6; end --rough estimate; not seen yet
-  local m = cap.art.margins;
-  local faceShareX, faceShareY = 1 - m[1] - m[3], 1 - m[2] - m[4];
-  cap.capWidth = math.max(height * cap.art.aspect * faceShareX, textWidth + KEY_TEXT_PAD * scale);
-  cap.capHeight = height * faceShareY;
-  cap:SetSize(cap.capWidth, cap.capHeight);
-  local artWidth = cap.capWidth / faceShareX; --wider than normal only when a long label stretches the art
-  cap.icon:ClearAllPoints();
-  cap.icon:SetPoint("TOPLEFT", -m[1] * artWidth, m[2] * height);
-  cap.icon:SetPoint("BOTTOMRIGHT", m[3] * artWidth, -m[4] * height);
-  PaintKeyCap();
-end
-
-local function UpdateKeyCap()
-  local text, key;
-  if EnhancedSoftInteractDB.showKey then
-    text, key = GetInteractKeyText();
-    if not text and frame.sampleName then text = "F"; end --the Edit Mode sample shows "F" when the key is unbound
-  end
-  cap.key = key;
-  cap:SetShown(text and true or false);
-  if text then SetKeyCapText(text); end
-end
-
--- Watches the interact key every frame while the key cap is showing, and presses the cap with it. Letting
--- go comes up without a ripple; the interaction adds that (PlayInteractPulse). A key whose hold already
--- interacted (cap.consumed) stays up until it's let go. While a text box has the keyboard (typing in
--- chat), the key types instead, so the cap stays up. With interactAnim off, or when the HUD goes away, a
--- held cap comes up.
-local keyWatcher = CreateFrame("Frame");
-keyWatcher:SetScript("OnUpdate", function()
-  local watching = cap.key and frame:IsShown() and not frame.fadingOut and cap:IsShown()
-    and EnhancedSoftInteractDB.interactAnim
-    and not (GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus());
-  if not watching then
-    if cap.isDown and not cap.tapping then KeyUp(false); end
-    cap.consumed = false;
-    return;
-  end
-  if cap.tapping then return end
-  local isDown = IsChordDown(cap.key);
-  if cap.consumed then
-    if not isDown then cap.consumed = false; end
-  elseif isDown and not cap.isDown then
-    KeyDown();
-  elseif not isDown and cap.isDown then
-    KeyUp(false);
-  end
-end);
-
 ----
---  Name, requirement line and columns
+--  CreateHUD builds a HUD on frame: the real one (EnhancedSoftInteractHUD) and the Edit Mode preview
+--  (Feat\EditMode.lua). Each HUD has its own textures, animations and state, and returns its functions.
 ----
+local function CreateHUD(frame)
+  -- frame.box is the layout box (icon | name | key, hudHeight tall) that everything anchors to. It draws
+  -- nothing itself.
+  frame.box = frame:CreateTexture(nil, "BACKGROUND");
+  frame.box:SetPoint("CENTER"); --a longer name widens the box equally on both sides
+  frame.shadow = frame:CreateTexture(nil, "BACKGROUND", nil, -1);
+  frame.iconGlow = frame:CreateTexture(nil, "BACKGROUND", nil, 1);
+  frame.iconGlow:SetBlendMode("ADD");
+  frame.lineLowGlow = frame:CreateTexture(nil, "BORDER", nil, -1);
+  frame.lineLowGlow:SetBlendMode("ADD");
+  frame.lineLow = frame:CreateTexture(nil, "BORDER");
+  frame.lineHigh = frame:CreateTexture(nil, "BORDER");
+  frame.flash = frame:CreateTexture(nil, "BORDER");
+  frame.flash:SetBlendMode("ADD");
+  frame.flash:SetAlpha(0);
+  frame.icon = frame:CreateTexture(nil, "ARTWORK");
+  local NAME_FONT = _G.Game17Font_Shadow and "Game17Font_Shadow" or "GameFontNormalLarge";
+  frame.name = frame:CreateFontString(nil, "ARTWORK", NAME_FONT);
+  frame.name:SetWordWrap(false); --one line; a name wider than its column ends in "..."
+  frame.name:SetJustifyH("CENTER");
+  frame.nameColor = { frame.name:GetTextColor() };
+  frame.requirement = frame:CreateFontString(nil, "ARTWORK", NAME_FONT);
+  frame.requirement:SetWordWrap(false);
+  frame.requirement:SetJustifyH("CENTER");
+  frame.requirement:SetTextColor(RED_FONT_COLOR:GetRGB()); --Blizzard's color for unmet requirements
+  frame.requirement:Hide();
 
--- In range but unable (the character lacks the profession; ns.RequirementFor in Feat\Cursors.lua), a red
--- line under the name says why, in Blizzard's tooltip wording ("Requires Herbalism"). The HUD keeps its
--- height: the name shrinks to REQ_NAME_SCALE of the font size, turns grey and moves up REQ_NAME_Y, and the
--- requirement sits REQ_TEXT_Y below center at REQ_TEXT_SCALE. All of these are shares of the font size.
-local REQ_NAME_SCALE, REQ_TEXT_SCALE = 0.82, 0.65;
-local REQ_NAME_Y, REQ_TEXT_Y = 0.26, -0.41;
-local REQ_NAME_GREY = 0.8;
-local function NameFontSize()
-  local size = EnhancedSoftInteractDB.fontSize;
-  return frame.showRequirement and size * REQ_NAME_SCALE or size;
-end
+  -- The shadow reaches SHADOW_PAD_X past both ends of the box and SHADOW_PAD_Y above and below it. The
+  -- interact flash covers the box and 20 units past its ends. The icon glow follows the icon.
+  local SHADOW_PAD_X, SHADOW_PAD_Y = 75, 16;
+  frame.shadow:SetPoint("TOPLEFT", frame.box, "TOPLEFT", -SHADOW_PAD_X, SHADOW_PAD_Y);
+  frame.shadow:SetPoint("BOTTOMRIGHT", frame.box, "BOTTOMRIGHT", SHADOW_PAD_X, -SHADOW_PAD_Y);
+  frame.flash:SetPoint("TOPLEFT", frame.box, "TOPLEFT", -20, 0);
+  frame.flash:SetPoint("BOTTOMRIGHT", frame.box, "BOTTOMRIGHT", 20, 0);
+  frame.iconGlow:SetPoint("CENTER", frame.icon, "CENTER");
 
-local function StyleName()
-  local db = EnhancedSoftInteractDB;
-  local font = media:Fetch("font", db.font);
-  frame.showRequirement = frame.requirementText ~= nil and not frame.outOfRange;
-  frame.name:SetFont(font, NameFontSize());
-  if frame.showRequirement then
-    frame.name:SetTextColor(REQ_NAME_GREY, REQ_NAME_GREY, REQ_NAME_GREY);
-    frame.requirement:SetFont(font, db.fontSize * REQ_TEXT_SCALE);
-    frame.requirement:SetText(frame.requirementText);
-  else
-    frame.name:SetTextColor(unpack(frame.nameColor));
+  local cap = CreateFrame("Frame", nil, frame);
+  cap.icon = cap:CreateTexture(nil, "ARTWORK");
+  cap.text = cap:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
+  cap:Hide();
+  frame.keyCap = cap;
+
+  -- Styles the cap with the first key art this client has, else a plain dark box. cap.art keeps the art's
+  -- proportions and face margins for SetKeyCapText.
+  local function StyleKeyCap()
+    cap.isGlyph = false;
+    for _, style in ipairs(KEYCAP_STYLES) do
+      local info = C_Texture.GetAtlasInfo(style.atlas);
+      if info and info.width > 0 and info.height > 0 then
+        cap.icon:SetAtlas(style.atlas);
+        cap.art = { aspect = info.width / info.height, margins = style.margins or NO_MARGINS };
+        cap.textColor = style.textColor;
+        cap.text:SetShadowOffset(style.shadow and 1 or 0, style.shadow and -1 or 0);
+        return;
+      end
+    end
+    cap.art = { aspect = 1, margins = NO_MARGINS };
+    cap.icon:SetColorTexture(0, 0, 0, 0.6);
+    cap.textColor = {1, 1, 1};
+    cap.text:SetShadowOffset(1, -1);
   end
-  frame.requirement:SetShown(frame.showRequirement);
-end
 
--- The box is a table of three columns: icon | name | key cap (swapIconAndKey swaps the outer two). The icon
--- and key columns are as wide as their contents plus COLUMN_GAP; an empty column takes no room. The name
--- column fits the name (and the requirement line) between nameMinWidth and nameMaxWidth, and cuts a longer
--- name short with "...". A secret name has a secret width; its column then takes nameMaxWidth.
-local COLUMN_GAP = 8;
-local function UpdateLayout()
-  local db = EnhancedSoftInteractDB;
-  StyleName(); --sets frame.showRequirement, which the name column depends on
-  local minName = db.nameMinWidth;
-  local maxName = math.max(minName, db.nameMaxWidth);
-  local function Column(width) return width > 0 and width + COLUMN_GAP or 0 end
-  local left, right = Column(db.showIcon and db.iconSize or 0), Column(cap:IsShown() and cap.capWidth or 0);
-  if db.swapIconAndKey then left, right = right, left; end
-  local function FitWidth(text, size, width)
-    nameMeasure:SetFont(media:Fetch("font", db.font), size, "");
-    nameMeasure:SetText(text);
-    local textWidth = nameMeasure:GetStringWidth();
-    if issecretvalue(textWidth) then return maxName end
-    return math.min(maxName, math.max(width, math.ceil(textWidth) + 1)); --+1: no "..." on an exact fit
-  end
-  local nameWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "", NameFontSize(), minName);
-  local nameY = 0;
-  if frame.showRequirement then
-    nameWidth = FitWidth(frame.requirementText, db.fontSize * REQ_TEXT_SCALE, nameWidth);
-    nameY = db.fontSize * REQ_NAME_Y;
-    frame.requirement:ClearAllPoints();
-    frame.requirement:SetPoint("LEFT", frame.box, "LEFT", EDGE_INSET + left, db.fontSize * REQ_TEXT_Y);
-    frame.requirement:SetWidth(nameWidth);
-  end
-  frame.name:ClearAllPoints();
-  frame.name:SetPoint("LEFT", frame.box, "LEFT", EDGE_INSET + left, nameY);
-  frame.name:SetWidth(nameWidth);
-  local width = EDGE_INSET + left + nameWidth + right + EDGE_INSET;
-  frame.box:SetWidth(width);
-  frame.boxWidth, frame.nameWidth = width, nameWidth; --for /esi debug; reading them back could be secret
-end
-
--- After a font or font size change, the name, key cap, columns and lines follow.
-local function UpdateFont()
-  frame.name:SetText(frame.sampleName or UnitName("softInteract"));
-  UpdateKeyCap();
-  UpdateLayout();
-  UpdateLines();
-end
-
-local function UpdateHeight()
-  frame.box:SetHeight(EnhancedSoftInteractDB.hudHeight);
-end
-
-----
---  Colors
-----
-
--- Only a target you can interact with gets its type's color. In range but unable (such as a herb without
--- Herbalism) is UNABLE_COLOR. Out of range is OUT_OF_RANGE_COLOR, the frame fades to OUT_OF_RANGE_ALPHA,
--- and the key label turns red, as an action button's hotkey does when its target is out of range.
-local OUT_OF_RANGE_COLOR = {.35, .35, .35};
-local UNABLE_COLOR = {.5, .5, .5};
-local IN_RANGE_ALPHA, OUT_OF_RANGE_ALPHA = 1, 0.75;
-
--- The color for an icon key (frame.colorKey) and range, dimmed by colorBrightness (percent).
-local function GetTypeColor(key, outOfRange)
-  local color;
-  if outOfRange then
-    color = OUT_OF_RANGE_COLOR;
-  elseif IsUnableKey(key) then
-    color = UNABLE_COLOR;
-  else
-    color = TYPE_COLORS[key] or TYPE_COLORS["default"];
-  end
-  local scale = EnhancedSoftInteractDB.colorBrightness / 100;
-  return color[1] * scale, color[2] * scale, color[3] * scale;
-end
-
-local function PaintColor(r, g, b)
-  frame.iconGlow:SetVertexColor(r, g, b, 0.6);
-  frame.lineLow:SetVertexColor(r, g, b, 1);
-  frame.lineLowGlow:SetVertexColor(r, g, b, 0.35);
-  frame.lineHigh:SetVertexColor(r, g, b, 0.5);
-  frame.flash:SetVertexColor(r, g, b);
-end
-
--- Sets the colors, the key label and the glow size from frame.colorKey and frame.outOfRange. With blend
--- (the HUD is visible), the glow animates, and with switchAnim on the color blends over SWITCH_TIME from
--- wherever it is now, also from the middle of a running blend.
-local colorTween = CreateTween();
-local function SetTypeColor(blend)
-  PaintKeyCap();
-  SetGlowScale(frame.outOfRange and GLOW_OUT_OF_RANGE_SCALE or 1, blend);
-  local to = { GetTypeColor(frame.colorKey, frame.outOfRange) };
-  if not (blend and EnhancedSoftInteractDB.switchAnim and frame.rgb) then
-    colorTween:Stop();
-    frame.rgb = to;
-    PaintColor(unpack(to));
-    return;
-  end
-  local from = { unpack(frame.rgb) };
-  colorTween:Play(SWITCH_TIME, function(t)
-    for i = 1, 3 do frame.rgb[i] = from[i] + (to[i] - from[i]) * t; end
-    PaintColor(unpack(frame.rgb));
-  end);
-end
-
-local function UpdateColors() SetTypeColor(false); end
-
--- Textures for the shadow, glows and lines. A client without the level-up bar art gets plain lines.
-local function ApplyTextures()
-  local hasLineArt = C_Texture.GetAtlasInfo(LINE_ATLAS) ~= nil;
-  frame.shadow:SetTexture(SHADOW);
-  frame.shadow:SetVertexColor(0, 0, 0, SHADOW_ALPHA);
-  frame.iconGlow:SetTexture(GLOW);
-  frame.flash:SetTexture(GLOW);
-  for _, line in ipairs({ frame.lineLow, frame.lineLowGlow, frame.lineHigh }) do
-    if hasLineArt then line:SetAtlas(LINE_ATLAS); else line:SetTexture([[Interface\Buttons\WHITE8X8]]); end
-  end
-  frame.lineStrokeShift = hasLineArt and 3 / 7 or 0; --see UpdateLines
-end
-
-----
---  Showing a cursor and the soft target handler
-----
-
--- Shows a cursor by name ("Skin", "UnableSpeak") on the icon and returns its key in the TYPE_COLORS
--- spelling. It uses the crosshair atlas (ns.CrosshairAtlasFor), the centered art SetUnitCursorTexture
--- uses too, else the classic Interface\Cursor file, whose art sits in the top-left corner (the mouse
--- hotspot).
-local function ShowCursor(name)
-  frame.iconFromFileID = false;
-  local atlas = ns.CrosshairAtlasFor(name);
-  if atlas then
-    frame.icon:SetAtlas(atlas);
-  else
-    frame.icon:SetTexture([[Interface\Cursor\]] .. name);
-  end
-  return ColorKeyFor("Cursor " .. name);
-end
-
--- Draws the soft target's cursor on the icon, as Blizzard's nameplates and gamepad action bar do, asking
--- for the centered crosshair art. Returns false when the target has no cursor.
-local CROSSHAIR_STYLE = Enum.CursorStyle and Enum.CursorStyle.Crosshair;
-local function DrawTargetCursor()
-  return SetUnitCursorTexture(frame.icon, "softinteract", CROSSHAIR_STYLE);
-end
-
--- Which cursor DrawTargetCursor drew, as a TYPE_COLORS key. It asks the texture in three ways: its atlas
--- name, the cursor name in its path ("Cursor Crosshair_Mail_64"), then its file ID, because retail draws
--- some cursors straight from their own files (ns.cursorFileNames, Feat\Cursors.lua). The crosshair atlases
--- live in those same files, so the file ID only counts when the other two say nothing. A secret icon is
--- "default", and an unknown file ID stays a number, which has no color. frame.iconSource keeps what
--- matched, for /esi debug.
-local function IdentifyCursor()
-  local icon = frame.icon;
-  local atlas = icon:GetAtlas();
-  if issecretvalue(atlas) then frame.iconSource = "secret"; return "default" end
-  if atlas and atlas ~= "" then frame.iconSource = "atlas " .. atlas; return ColorKeyFor(atlas) end
-  local path = icon:GetTextureFilePath();
-  if issecretvalue(path) then frame.iconSource = "secret"; return "default" end
-  if type(path) == "string" and CursorName(path) then frame.iconSource = "path " .. path; return ColorKeyFor(path) end
-  local fileID = icon:GetTextureFileID();
-  if issecretvalue(fileID) then frame.iconSource = "secret"; return "default" end
-  frame.iconSource = "file " .. tostring(fileID);
-  local name = fileID and ns.cursorFileNames[fileID];
-  if not name then return tostring(fileID) end
-  frame.iconFromFileID = true;
-  return ColorKeyFor("Cursor " .. name);
-end
-
-local function OnSoftTargetCleared()
-  frame.lastTarget, frame.lastSignature, frame.lastAction = nil, nil, nil;
-  -- A running interact pulse finishes before the fade-out (looting clears the target at once).
-  local wait = frame.pulseUntil - GetTime();
-  local token = frame.fadeToken;
-  local function FadeOut()
-    if token == frame.fadeToken and frame:IsShown() and not frame.fadingOut then
-      FadeTo(0, select(2, GetFadeTimes()), true);
+  -- Out of range, the key label turns RED_FONT_COLOR, the way ActionButton_UpdateRangeIndicator colors an
+  -- action button's hotkey. A gamepad glyph has no label, so the glyph itself turns red. It loses its own
+  -- colors first, because red over a colored glyph (Xbox's blue X) comes out nearly black. While the key is
+  -- pressed in (KeyDown), cap.pressShade darkens all of it.
+  local WHITE = {1, 1, 1};
+  local function PaintKeyCap()
+    local shade = cap.pressShade or 1;
+    local function Shaded(c) return c[1] * shade, c[2] * shade, c[3] * shade end
+    local red = frame.outOfRange and { RED_FONT_COLOR:GetRGB() };
+    cap.icon:SetDesaturated(cap.isGlyph and red and true or false);
+    if cap.isGlyph then
+      cap.icon:SetVertexColor(Shaded(red or WHITE));
+    else
+      cap.icon:SetVertexColor(Shaded(WHITE));
+      cap.text:SetTextColor(Shaded(red or cap.textColor));
     end
   end
-  if wait > 0 then C_Timer.After(wait, FadeOut); else FadeOut(); end
-end
 
-local function OnSoftTargetChanged(oldTarget, newTarget)
-  frame.name:SetText(UnitName("softInteract"));
-  UpdateKeyCap(); --UpdateLayout runs below, once the requirement line is known
+  ----
+  --  Animations
+  ----
 
-  -- A target without a cursor gets the Interact cog, or UnableInteract out of interact range, as on
-  -- Blizzard's gamepad action bar.
-  frame.iconFromFileID = false;
-  local hasCursor = DrawTargetCursor();
-  local iconKey;
-  if hasCursor then
-    iconKey = IdentifyCursor();
-  else
-    frame.iconSource = "none";
-    iconKey = ShowCursor(InInteractRange() == false and "UnableInteract" or "Interact");
-  end
-  local resolvedKey = iconKey;
-
-  -- Range comes from UnitIsInInteractRange, which Blizzard's gamepad action bar also uses for its
-  -- Interact and UnableInteract icons. The soft-target cursor can stay on an Unable icon in interact
-  -- range (seen with skinnable corpses). While you cast or channel (skinning, gathering), the game reports
-  -- the target as Unable and out of range, because you can't interact while busy. The target that was in
-  -- range keeps its in-range look, and the range check restores the real state after the cast. A spell's
-  -- range check overrules both where the game gets a cursor wrong (ns.SpellRangeCheck in
-  -- Feat\Forever.lua, for skinnable corpses).
-  local knownTarget = not issecretvalue(newTarget) and newTarget or nil;
-  local unableName = iconKey:match("^Cursor Unable(.+)$");
-  local busy = UnitCastingInfo("player") or UnitChannelInfo("player");
-  local canInteract = InInteractRange();
-  local spellInRange = unableName and ns.SpellRangeCheck and ns.SpellRangeCheck(unableName, "softInteract");
-  if spellInRange ~= nil then canInteract = spellInRange end
-  if unableName and (canInteract or (busy and knownTarget and knownTarget == frame.inRangeTarget)) then
-    iconKey = ShowCursor(unableName);
+  local function AnimationGroup(steps)
+    local group = frame:CreateAnimationGroup();
+    for _, s in ipairs(steps) do
+      local a = group:CreateAnimation(s[1]);
+      a:SetTarget(s[2]);
+      a:SetOrder(s[3]);
+      a:SetDuration(s[4]);
+      if s.smoothing then a:SetSmoothing(s.smoothing); end
+      if s.alpha then a:SetFromAlpha(s.alpha[1]); a:SetToAlpha(s.alpha[2]); end
+      if s.scale then a:SetScaleFrom(1, 1); a:SetScaleTo(s.scale, s.scale); a:SetOrigin(s.origin or "CENTER", 0, 0); end
+      if s.offset then a:SetOffset(0, s.offset); end
+      if s.name then group[s.name] = a; end
+    end
+    return group;
   end
 
-  -- The range is final here, but the next steps can still make an in-range target Unable.
-  local inRange = not IsUnableKey(iconKey);
-  if inRange then frame.inRangeTarget = knownTarget; end
+  -- Interact feedback: an additive glow in the target type's color over the HUD and the icon scaling to POP
+  -- and back. Only rendering changes; the layout stays. Scale steps in one group multiply, so step 2 scales
+  -- by 1/scale to end at exactly the starting size. PULSE_TIME covers the longest part, the key's ripple; a
+  -- fade-out waits for it (frame.pulseUntil).
+  local PULSE_TIME = 0.35;
+  local POP = 1.15;
+  frame.pulseUntil = 0;
+  frame.pulse = AnimationGroup({
+    { "Alpha", frame.flash, 1, 0.06, smoothing = "OUT", alpha = {0, 0.45} },
+    { "Alpha", frame.flash, 2, 0.24, smoothing = "IN", alpha = {0.45, 0} },
+    { "Scale", frame.icon, 1, 0.08, smoothing = "OUT", scale = POP },
+    { "Scale", frame.icon, 2, 0.2, smoothing = "IN_OUT", scale = 1 / POP },
+  });
 
-  -- The game shows the gather cursor even to characters who can't gather. Without the profession, the
-  -- HUD shows the Unable icon and a requirement line.
-  local cursorName = iconKey:match("^Cursor (.+)$");
-  local requirement = cursorName and ns.RequirementFor(cursorName);
-  if requirement then iconKey = ShowCursor("Unable" .. cursorName); end
+  ----
+  --  The key cap follows the interact key itself (KeyWatcher): up, held down, and released.
+  --  Down: the key cap or gamepad button shrinks PRESS_DEPTH units toward its center over PRESS_DOWN and
+  --  darkens to PRESS_SHADE, and stays that way while the key is held. Released: it springs back over
+  --  PRESS_UP. The interaction itself (PlayInteractPulse) adds the ripple: a white ring along the cap's
+  --  outline (Media\PressRingKey for the key's face, Media\PressRingRound for a glyph) grows to RIPPLE_GROW of
+  --  its size and fades from RIPPLE_ALPHA over RIPPLE_TIME. The ring textures' outline fills 1/RING_PAD of the
+  --  image on each axis, which leaves it room to grow.
+  --  An animation snaps back when it ends, so pressIn holds the pressed size with a second, KEY_HOLD_TIME long
+  --  step that keeps it. pressOut starts from wherever the press got to, so a quick tap or a press during a
+  --  release doesn't jump. cap.pressDepth (0 up, 1 fully down) drives both the darkening and that start.
+  ----
+  local PRESS_DEPTH, PRESS_DOWN, PRESS_UP, PRESS_SHADE = 2, 0.05, 0.15, 0.7;
+  local RIPPLE_TIME, RIPPLE_GROW, RIPPLE_ALPHA = 0.35, 1.45, 0.55;
+  local RING_PAD = 1.6;
+  local RING_KEY, RING_ROUND = MEDIA .. "PressRingKey", MEDIA .. "PressRingRound";
+  local KEY_HOLD_TIME = 3600;
+  cap.ring = cap:CreateTexture(nil, "OVERLAY");
+  cap.ring:SetBlendMode("ADD");
+  cap.ring:SetPoint("CENTER");
+  cap.ring:SetAlpha(0);
+  cap.pressDepth = 0;
+  frame.pressIn = AnimationGroup({
+    { "Scale", cap.icon, 1, PRESS_DOWN, smoothing = "OUT", scale = 1, name = "icon" },
+    { "Scale", cap.text, 1, PRESS_DOWN, smoothing = "OUT", scale = 1, name = "text" },
+    { "Scale", cap.icon, 2, KEY_HOLD_TIME, scale = 1 },
+    { "Scale", cap.text, 2, KEY_HOLD_TIME, scale = 1 },
+  });
+  frame.pressOut = AnimationGroup({
+    { "Scale", cap.icon, 1, PRESS_UP, smoothing = "IN_OUT", scale = 1, name = "icon" },
+    { "Scale", cap.text, 1, PRESS_UP, smoothing = "IN_OUT", scale = 1, name = "text" },
+  });
+  frame.ripple = AnimationGroup({
+    { "Scale", cap.ring, 1, RIPPLE_TIME, smoothing = "OUT", scale = RIPPLE_GROW },
+    { "Alpha", cap.ring, 1, RIPPLE_TIME, alpha = {RIPPLE_ALPHA, 0} },
+  });
 
-  -- A talkable NPC with only a generic icon gets the speech bubble. Specific icons (trainer, transmog,
-  -- vendor, quest, ...) always win.
-  local talkBadge = (not hasCursor or GENERIC_ICONS[iconKey]) and IsTalkableNPC("softInteract");
-  if talkBadge then
-    local talkRange = InInteractRange();
-    if talkRange ~= nil then inRange = talkRange end
-    iconKey = ShowCursor(inRange and "Speak" or "UnableSpeak");
+  -- The cap's size when fully pressed, as a share of its normal size.
+  local function PressedScale()
+    local size = cap.capHeight or 0;
+    return size > PRESS_DEPTH and (size - PRESS_DEPTH) / size or 1;
   end
-  local outOfRange = not inRange;
 
-  -- The game re-sends this event for the same target, when you step into range (the icon changes from
-  -- Unable) and sometimes with nothing changed. The handler skips identical repeats.
-  local signature = iconKey .. "|" .. tostring(talkBadge and true or false) .. "|" .. tostring(outOfRange);
-  if knownTarget and knownTarget == frame.lastTarget and signature == frame.lastSignature
-      and frame:IsShown() and not frame.fadingOut then
-    -- The debug log keeps every game event, doubles included; unchanged range checks aren't logged.
-    if ns.DebugSoftTarget and not frame.fromRangeCheck then
+  -- Moves cap.pressDepth to depth over duration, and darkens the cap along with it.
+  local depthTween = CreateTween();
+  local function TweenDepth(depth, duration, ease)
+    local from = cap.pressDepth;
+    depthTween:Play(duration, function(t)
+      cap.pressDepth = from + (depth - from) * ease(t);
+      cap.pressShade = 1 - (1 - PRESS_SHADE) * cap.pressDepth;
+      PaintKeyCap();
+    end);
+  end
+  local function EaseOut(t) return 1 - (1 - t) ^ 2 end
+  local function EaseInOut(t) return t * t * (3 - 2 * t) end
+
+  -- Both groups animate the icon and the text by the same scale.
+  local function SetPressScale(group, from, to)
+    for _, name in ipairs({ "icon", "text" }) do
+      group[name]:SetScaleFrom(from, from);
+      group[name]:SetScaleTo(to, to);
+    end
+  end
+
+  local function KeyDown()
+    if cap.isDown then return end
+    cap.isDown = true;
+    local k = PressedScale();
+    SetPressScale(frame.pressIn, 1 - (1 - k) * cap.pressDepth, k);
+    frame.pressOut:Stop();
+    frame.pressIn:Stop();
+    frame.pressIn:Play();
+    TweenDepth(1, PRESS_DOWN, EaseOut);
+  end
+
+  local function PlayRipple()
+    cap.ring:SetTexture(cap.isGlyph and RING_ROUND or RING_KEY);
+    cap.ring:SetSize(cap.capWidth * RING_PAD, cap.capHeight * RING_PAD);
+    frame.ripple:Stop();
+    frame.ripple:Play();
+  end
+
+  -- withRipple is true when an interaction releases the key. A release without one sets cap.releasedAt, so an
+  -- interaction that comes right after it adds the ripple (PlayInteractPulse).
+  local function KeyUp(withRipple)
+    if not cap.isDown then return end
+    cap.isDown = false;
+    cap.releasedAt = not withRipple and GetTime() or nil;
+    SetPressScale(frame.pressOut, 1 - (1 - PressedScale()) * cap.pressDepth, 1);
+    frame.pressIn:Stop();
+    frame.pressOut:Stop();
+    frame.pressOut:Play();
+    TweenDepth(0, PRESS_UP, EaseInOut);
+    if withRipple then PlayRipple(); end
+  end
+
+  -- A whole press at once: for an interaction KeyWatcher didn't see the key for (a tap shorter than a frame,
+  -- another binding, the Edit Mode preview). KeyWatcher leaves the key alone until the tap is done.
+  local tapToken = 0;
+  local function TapKey()
+    if not cap:IsShown() then return end
+    tapToken = tapToken + 1;
+    local token = tapToken;
+    cap.tapping = true;
+    KeyDown();
+    C_Timer.After(PRESS_DOWN, function()
+      if token ~= tapToken then return end
+      cap.tapping = false;
+      KeyUp(true);
+    end);
+  end
+  -- When the frame changes to another target or another action (skinning, then looting the same corpse),
+  -- the icon and name drop 5 units at once, then rise into place and fade in over SWITCH_TIME. Translation
+  -- steps in one group add up. The icon glow fades in with them: it moves with the icon at once, so without
+  -- the fade it would show the old color at the new spot before the icon arrives. The type color and the
+  -- HUD's alpha blend over at the same time (SetTypeColor, FadeOver).
+  local SWITCH_TIME = 0.2;
+  local switchSteps = {};
+  for _, region in ipairs({ frame.icon, frame.name }) do
+    table.insert(switchSteps, { "Translation", region, 1, 0, offset = -5 });
+    table.insert(switchSteps, { "Translation", region, 2, SWITCH_TIME, smoothing = "OUT", offset = 5 });
+  end
+  for _, region in ipairs({ frame.icon, frame.name, frame.iconGlow }) do
+    table.insert(switchSteps, { "Alpha", region, 1, 0, alpha = {0, 0} });
+    table.insert(switchSteps, { "Alpha", region, 2, SWITCH_TIME, smoothing = "OUT", alpha = {0, 1} });
+  end
+  frame.switchAnim = AnimationGroup(switchSteps);
+
+  local function PlaySwitchAnim()
+    frame.switchAnim:Stop();
+    frame.switchAnim:Play();
+  end
+
+  -- The interaction itself: the flash and icon pop, and the key cap's release with the ripple.
+  --  Held key: the cap comes up now, while the key is still down. Holding the key long enough interacts
+  --  without a key-up, and the cap stays up (cap.consumed) until the key is let go and pressed again.
+  --  Just released (within RELEASE_GRACE): the game interacted on the key-up, so the ripple joins the
+  --  spring-back that's already running.
+  --  Otherwise a whole tap: a press KeyWatcher didn't see, another binding, the Edit Mode preview, or the
+  --  game interacting again while the key stays held.
+  local RELEASE_GRACE = 0.15;
+  local function PlayInteractPulse()
+    frame.pulse:Stop();
+    frame.pulse:Play();
+    frame.pulseUntil = GetTime() + PULSE_TIME;
+    if cap.isDown and not cap.tapping then
+      KeyUp(true);
+      cap.consumed = true;
+    elseif not cap.isDown and cap.releasedAt and GetTime() - cap.releasedAt < RELEASE_GRACE then
+      cap.releasedAt = nil;
+      PlayRipple();
+    else
+      TapKey();
+      if cap.key and IsChordDown(cap.key) then cap.consumed = true; end
+    end
+  end
+
+  -- The HUD fades with its own animation group, not Blizzard's shared fade manager, which risks taint.
+  -- FadeTo's durations are for a full fade from 0 to 1 alpha, so partial fades (interruptions) take
+  -- proportionally less. FadeOver takes the given time whatever the distance.
+  frame.fader = frame:CreateAnimationGroup();
+  frame.fadeAnim = frame.fader:CreateAnimation("Alpha");
+  frame.fader:SetToFinalAlpha(true);
+  frame.fader:SetScript("OnFinished", function()
+    if frame.fadingOut then
+      frame.fadingOut = false;
+      frame:Hide();
+    end
+  end);
+
+  -- Returns the fade-in and fade-out durations, or 0 (instant) when fade animations are off.
+  local function GetFadeTimes()
+    if not EnhancedSoftInteractDB.fadeEnabled then return 0, 0 end
+    return EnhancedSoftInteractDB.fadeInTime, EnhancedSoftInteractDB.fadeOutTime;
+  end
+
+  local function CurrentAlpha()
+    if not frame:IsShown() then return 0 end
+    if frame.fader:IsPlaying() then
+      local from, to = frame.fadeAnim:GetFromAlpha(), frame.fadeAnim:GetToAlpha();
+      return from + (to - from) * frame.fadeAnim:GetSmoothProgress();
+    end
+    return frame:GetAlpha();
+  end
+
+  local function FadeOver(toAlpha, duration, hideWhenDone)
+    local fromAlpha = CurrentAlpha();
+    frame.fader:Stop();
+    frame.fadingOut = hideWhenDone;
+    frame:SetAlpha(toAlpha);
+    frame:Show();
+    frame.fadeAnim:SetFromAlpha(fromAlpha);
+    frame.fadeAnim:SetToAlpha(toAlpha);
+    frame.fadeAnim:SetDuration(math.max(0.01, duration));
+    frame.fader:Play();
+  end
+
+  local function FadeTo(toAlpha, fullDuration, hideWhenDone)
+    FadeOver(toAlpha, fullDuration * math.abs(toAlpha - CurrentAlpha()), hideWhenDone);
+  end
+
+  ----
+  --  Layout
+  ----
+
+  -- Lines in the target type's color: a strong one under the name, 5 units wider than the box on each
+  -- side, with an additive glow, and a fainter one above the name, 20 units shorter on each side. They sit
+  -- LINE_GAP beyond the name's letters, so they move apart as the font grows.
+  -- The level-up bar art is a 7-pixel strip whose stroke is its bottom row, so a texture draws its line
+  -- near its bottom edge. frame.lineStrokeShift (3/7 for that art, 0 for the plain fallback) raises each
+  -- texture by that share of its height, which puts the middle of the stroke on the line's position.
+  local LINE_GAP = 6.5;
+  local function UpdateLines()
+    local y = EnhancedSoftInteractDB.fontSize * 0.5 + LINE_GAP;
+    local function Line(tex, inset, offsetY, height)
+      offsetY = offsetY + height * (frame.lineStrokeShift or 0);
+      tex:ClearAllPoints();
+      tex:SetPoint("LEFT", frame.box, "LEFT", inset, offsetY);
+      tex:SetPoint("RIGHT", frame.box, "RIGHT", -inset, offsetY);
+      tex:SetHeight(height);
+    end
+    Line(frame.lineLow, -5, -y, 4);
+    Line(frame.lineLowGlow, -5, -y, 10);
+    Line(frame.lineHigh, 20, y, 3);
+  end
+
+  -- The icon and the key cap sit at opposite ends of the box, EDGE_INSET from the edge. "Swap Icon and
+  -- Key" (swapIconAndKey) swaps their ends. The name sits between them (UpdateLayout).
+  local EDGE_INSET = 7;
+  local function Inset(side) return side == "LEFT" and EDGE_INSET or -EDGE_INSET end
+
+  -- Most cursor art isn't centered in its image. ns.iconArtOffsets (Feat\Cursors.lua) has how far each
+  -- one's art sits right of and below center, in 64px units; the icon moves the other way. AnchorIcon
+  -- rounds the nudge to whole units, because the renderer may snap a fractional nudge away. Unable icons
+  -- use their cursor's offset. Icons from a file ID are 32px files that are already centered.
+  local function AnchorIcon()
+    local side = EnhancedSoftInteractDB.swapIconAndKey and "RIGHT" or "LEFT";
+    local key = frame.colorKey and NormalizeCursorKey(frame.colorKey):gsub("^cursor unable", "cursor ");
+    local offset = key and not frame.iconFromFileID and ns.iconArtOffsets[key];
+    local nudgeX, nudgeY = 0, 0;
+    if offset then
+      local function Round(v) return v >= 0 and math.floor(v + 0.5) or -math.floor(-v + 0.5) end
+      local scale = EnhancedSoftInteractDB.iconSize / 64;
+      nudgeX, nudgeY = Round(-offset[1] * scale), Round(offset[2] * scale);
+    end
+    frame.iconNudgeX, frame.iconNudgeY = nudgeX, nudgeY; --for /esi debug
+    frame.icon:ClearAllPoints();
+    frame.icon:SetPoint(side, frame.box, side, Inset(side) + nudgeX, nudgeY);
+  end
+
+  local function SetIconSide()
+    local keySide = EnhancedSoftInteractDB.swapIconAndKey and "LEFT" or "RIGHT";
+    AnchorIcon();
+    cap:ClearAllPoints();
+    cap:SetPoint(keySide, frame.box, keySide, Inset(keySide), 0);
+  end
+
+  -- The glow behind the icon is GLOW_W x GLOW_H icon sizes in range and shrinks to GLOW_OUT_OF_RANGE_SCALE
+  -- of that out of range. While the HUD is visible it gets there over GLOW_TIME, easing out from its
+  -- current size, so a range change halfway reverses smoothly. It resizes the texture instead of using a
+  -- Scale animation, so repeated changes can't add up.
+  local GLOW_W, GLOW_H = 2.2, 1.9;
+  local GLOW_OUT_OF_RANGE_SCALE = 0.55;
+  local GLOW_TIME = 0.25;
+  local function SizeGlow()
+    local size = EnhancedSoftInteractDB.iconSize * (frame.glowScale or 1);
+    frame.iconGlow:SetSize(size * GLOW_W, size * GLOW_H);
+  end
+
+  local glowTween, glowTarget = CreateTween(), nil;
+  local function SetGlowScale(target, animate)
+    if not (animate and frame.glowScale) then
+      glowTween:Stop();
+      glowTarget, frame.glowScale = target, target;
+      SizeGlow();
+      return;
+    end
+    if target == glowTarget then return end --already there or on the way
+    glowTarget = target;
+    local from = frame.glowScale;
+    glowTween:Play(GLOW_TIME, function(t)
+      frame.glowScale = from + (target - from) * (1 - (1 - t) ^ 2);
+      SizeGlow();
+    end);
+  end
+
+  local function UpdateIcon()
+    local db = EnhancedSoftInteractDB;
+    frame.icon:SetSize(db.iconSize, db.iconSize);
+    frame.icon:SetShown(db.showIcon);
+    frame.iconGlow:SetShown(db.showIcon);
+    SizeGlow();
+    AnchorIcon(); --the nudge scales with the icon size
+  end
+
+  -- SetKeyCapText moves the key text off the cap's center. A font string centers its whole line, including
+  -- the room for descenders, so capitals sit high. An "R" sat about 0.7 units high at font size 18, so the
+  -- text moves down 0.04 font sizes. On screenshots, letters also sat 0.8 to 1.3 units left after InkOffset
+  -- ("O", "R", "T"), so the text moves right by KEY_TEXT_NUDGE_X font sizes. WoW snaps text to whole pixels,
+  -- so a letter can still land half a pixel off.
+  local KEY_TEXT_NUDGE_X = 0.06;
+
+  -- The whole key art is max(24, fontSize + 9) x keySize% tall and keeps its proportions. The cap frame
+  -- (capWidth x capHeight, what the layout uses) is the key's face, and the art hangs past it by its
+  -- margins. A label too wide for the face widens it to the text plus KEY_TEXT_PAD and stretches the art.
+  -- A gamepad button comes from GetBindingText as one atlas markup ("|A:Gamepad_Gen_1_32:14:14|a"); the
+  -- cap then draws that button's 64px glyph, which fills its square, in place of the key art. The glyph is
+  -- GLYPH_SHARE of the key art's height: at the default font and key size that is 26 units, between the
+  -- lines (30 units apart) and a little larger than the key face (23), because a round button looks smaller
+  -- than a square key of the same height.
+  local KEY_TEXT_PAD = 10;
+  local GLYPH_SHARE = 0.77;
+  local function SetKeyCapText(text)
+    local db = EnhancedSoftInteractDB;
+    local scale = db.keySize / 100;
+    local height = math.max(24, db.fontSize + 9) * scale;
+    local glyph = text:match("^|A:([^:|]+):[^|]*|a$");
+    glyph = glyph and glyph:gsub("_32$", "_64");
+    if glyph and C_Texture.GetAtlasInfo(glyph) then
+      cap.icon:SetAtlas(glyph);
+      cap.icon:ClearAllPoints();
+      cap.icon:SetAllPoints();
+      cap.text:SetText("");
+      cap.isGlyph = true;
+      local size = height * GLYPH_SHARE;
+      cap.capWidth, cap.capHeight = size, size;
+      cap:SetSize(size, size);
+      PaintKeyCap();
+      return;
+    end
+    if cap.isGlyph then StyleKeyCap(); end --back from a gamepad glyph
+    local fontPath = media:Fetch("font", db.font);
+    local fontSize = math.max(10, (db.fontSize - 3) * scale);
+    cap.text:SetFont(fontPath, fontSize, "");
+    cap.text:SetPoint("CENTER", fontSize * (KEY_TEXT_NUDGE_X - InkOffset(text, fontPath)), -fontSize * 0.04);
+    cap.text:SetText(text);
+    keyTextMeasure:SetFont(fontPath, fontSize, "");
+    keyTextMeasure:SetText(text);
+    local textWidth = keyTextMeasure:GetStringWidth();
+    if issecretvalue(textWidth) then textWidth = fontSize * #text * 0.6; end --rough estimate; not seen yet
+    local m = cap.art.margins;
+    local faceShareX, faceShareY = 1 - m[1] - m[3], 1 - m[2] - m[4];
+    cap.capWidth = math.max(height * cap.art.aspect * faceShareX, textWidth + KEY_TEXT_PAD * scale);
+    cap.capHeight = height * faceShareY;
+    cap:SetSize(cap.capWidth, cap.capHeight);
+    local artWidth = cap.capWidth / faceShareX; --wider than normal only when a long label stretches the art
+    cap.icon:ClearAllPoints();
+    cap.icon:SetPoint("TOPLEFT", -m[1] * artWidth, m[2] * height);
+    cap.icon:SetPoint("BOTTOMRIGHT", m[3] * artWidth, -m[4] * height);
+    PaintKeyCap();
+  end
+
+  local function UpdateKeyCap()
+    local text, key;
+    if EnhancedSoftInteractDB.showKey then
+      text, key = GetInteractKeyText();
+      if not text and frame.sampleName then text = "F"; end --the Edit Mode sample shows "F" when the key is unbound
+    end
+    cap.key = key;
+    cap:SetShown(text and true or false);
+    if text then SetKeyCapText(text); end
+  end
+
+  -- Watches the interact key every frame while the key cap is showing, and presses the cap with it. Letting
+  -- go comes up without a ripple; the interaction adds that (PlayInteractPulse). A key whose hold already
+  -- interacted (cap.consumed) stays up until it's let go. While a text box has the keyboard (typing in
+  -- chat), the key types instead, so the cap stays up. With interactAnim off, or when the HUD goes away, a
+  -- held cap comes up. An Edit Mode sample has no target for the game to interact with, so letting go of
+  -- the key plays the whole interaction there, ripple, flash and icon pop included.
+  local keyWatcher = CreateFrame("Frame");
+  keyWatcher:SetScript("OnUpdate", function()
+    local watching = cap.key and frame:IsShown() and not frame.fadingOut and cap:IsShown()
+      and EnhancedSoftInteractDB.interactAnim
+      and not (GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus());
+    if not watching then
+      if cap.isDown and not cap.tapping then KeyUp(false); end
+      cap.consumed = false;
+      return;
+    end
+    if cap.tapping then return end
+    local isDown = IsChordDown(cap.key);
+    if cap.consumed then
+      if not isDown then cap.consumed = false; end
+    elseif isDown and not cap.isDown then
+      KeyDown();
+    elseif not isDown and cap.isDown then
+      if frame.sampleName then PlayInteractPulse(); else KeyUp(false); end
+    end
+  end);
+
+  ----
+  --  Name, requirement line and columns
+  ----
+
+  -- In range but unable (the character lacks the profession; ns.RequirementFor in Feat\Cursors.lua), a red
+  -- line under the name says why, in Blizzard's tooltip wording ("Requires Herbalism"). The HUD keeps its
+  -- height: the name shrinks to REQ_NAME_SCALE of the font size, turns grey and moves up REQ_NAME_Y, and the
+  -- requirement sits REQ_TEXT_Y below center at REQ_TEXT_SCALE. All of these are shares of the font size.
+  local REQ_NAME_SCALE, REQ_TEXT_SCALE = 0.82, 0.65;
+  local REQ_NAME_Y, REQ_TEXT_Y = 0.26, -0.41;
+  local REQ_NAME_GREY = 0.8;
+  local function NameFontSize()
+    local size = EnhancedSoftInteractDB.fontSize;
+    return frame.showRequirement and size * REQ_NAME_SCALE or size;
+  end
+
+  local function StyleName()
+    local db = EnhancedSoftInteractDB;
+    local font = media:Fetch("font", db.font);
+    frame.showRequirement = frame.requirementText ~= nil and not frame.outOfRange;
+    frame.name:SetFont(font, NameFontSize());
+    if frame.showRequirement then
+      frame.name:SetTextColor(REQ_NAME_GREY, REQ_NAME_GREY, REQ_NAME_GREY);
+      frame.requirement:SetFont(font, db.fontSize * REQ_TEXT_SCALE);
+      frame.requirement:SetText(frame.requirementText);
+    else
+      frame.name:SetTextColor(unpack(frame.nameColor));
+    end
+    frame.requirement:SetShown(frame.showRequirement);
+  end
+
+  -- The box is a table of three columns: icon | name | key cap (swapIconAndKey swaps the outer two). The icon
+  -- and key columns are as wide as their contents plus COLUMN_GAP; an empty column takes no room. The name
+  -- column fits the name (and the requirement line) between nameMinWidth and nameMaxWidth, and cuts a longer
+  -- name short with "...". A secret name has a secret width; its column then takes nameMaxWidth.
+  local COLUMN_GAP = 8;
+  local function UpdateLayout()
+    local db = EnhancedSoftInteractDB;
+    StyleName(); --sets frame.showRequirement, which the name column depends on
+    local minName = db.nameMinWidth;
+    local maxName = math.max(minName, db.nameMaxWidth);
+    local function Column(width) return width > 0 and width + COLUMN_GAP or 0 end
+    local left, right = Column(db.showIcon and db.iconSize or 0), Column(cap:IsShown() and cap.capWidth or 0);
+    if db.swapIconAndKey then left, right = right, left; end
+    local function FitWidth(text, size, width)
+      nameMeasure:SetFont(media:Fetch("font", db.font), size, "");
+      nameMeasure:SetText(text);
+      local textWidth = nameMeasure:GetStringWidth();
+      if issecretvalue(textWidth) then return maxName end
+      return math.min(maxName, math.max(width, math.ceil(textWidth) + 1)); --+1: no "..." on an exact fit
+    end
+    local nameWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "", NameFontSize(), minName);
+    local nameY = 0;
+    if frame.showRequirement then
+      nameWidth = FitWidth(frame.requirementText, db.fontSize * REQ_TEXT_SCALE, nameWidth);
+      nameY = db.fontSize * REQ_NAME_Y;
+      frame.requirement:ClearAllPoints();
+      frame.requirement:SetPoint("LEFT", frame.box, "LEFT", EDGE_INSET + left, db.fontSize * REQ_TEXT_Y);
+      frame.requirement:SetWidth(nameWidth);
+    end
+    frame.name:ClearAllPoints();
+    frame.name:SetPoint("LEFT", frame.box, "LEFT", EDGE_INSET + left, nameY);
+    frame.name:SetWidth(nameWidth);
+    local width = EDGE_INSET + left + nameWidth + right + EDGE_INSET;
+    frame.box:SetWidth(width);
+    frame.boxWidth, frame.nameWidth = width, nameWidth; --for /esi debug; reading them back could be secret
+    if frame.onLayout then frame.onLayout(width); end --the preview scales itself to fit its window
+  end
+
+  -- After a font or font size change, the name, key cap, columns and lines follow.
+  local function UpdateFont()
+    frame.name:SetText(frame.sampleName or UnitName("softInteract"));
+    UpdateKeyCap();
+    UpdateLayout();
+    UpdateLines();
+  end
+
+  local function UpdateHeight()
+    frame.box:SetHeight(EnhancedSoftInteractDB.hudHeight);
+  end
+
+  ----
+  --  Colors
+  ----
+
+  -- Only a target you can interact with gets its type's color. In range but unable (such as a herb without
+  -- Herbalism) is UNABLE_COLOR. Out of range is OUT_OF_RANGE_COLOR, the frame fades to OUT_OF_RANGE_ALPHA,
+  -- and the key label turns red, as an action button's hotkey does when its target is out of range.
+  local OUT_OF_RANGE_COLOR = {.35, .35, .35};
+  local UNABLE_COLOR = {.5, .5, .5};
+  local IN_RANGE_ALPHA, OUT_OF_RANGE_ALPHA = 1, 0.75;
+
+  -- The color for an icon key (frame.colorKey) and range, dimmed by colorBrightness (percent).
+  local function GetTypeColor(key, outOfRange)
+    local color;
+    if outOfRange then
+      color = OUT_OF_RANGE_COLOR;
+    elseif IsUnableKey(key) then
+      color = UNABLE_COLOR;
+    else
+      color = TYPE_COLORS[key] or TYPE_COLORS["default"];
+    end
+    local scale = EnhancedSoftInteractDB.colorBrightness / 100;
+    return color[1] * scale, color[2] * scale, color[3] * scale;
+  end
+
+  local function PaintColor(r, g, b)
+    frame.iconGlow:SetVertexColor(r, g, b, 0.6);
+    frame.lineLow:SetVertexColor(r, g, b, 1);
+    frame.lineLowGlow:SetVertexColor(r, g, b, 0.35);
+    frame.lineHigh:SetVertexColor(r, g, b, 0.5);
+    frame.flash:SetVertexColor(r, g, b);
+  end
+
+  -- Sets the colors, the key label and the glow size from frame.colorKey and frame.outOfRange. With blend
+  -- (the HUD is visible), the glow animates, and with switchAnim on the color blends over SWITCH_TIME from
+  -- wherever it is now, also from the middle of a running blend.
+  local colorTween = CreateTween();
+  local function SetTypeColor(blend)
+    PaintKeyCap();
+    SetGlowScale(frame.outOfRange and GLOW_OUT_OF_RANGE_SCALE or 1, blend);
+    local to = { GetTypeColor(frame.colorKey, frame.outOfRange) };
+    if not (blend and EnhancedSoftInteractDB.switchAnim and frame.rgb) then
+      colorTween:Stop();
+      frame.rgb = to;
+      PaintColor(unpack(to));
+      return;
+    end
+    local from = { unpack(frame.rgb) };
+    colorTween:Play(SWITCH_TIME, function(t)
+      for i = 1, 3 do frame.rgb[i] = from[i] + (to[i] - from[i]) * t; end
+      PaintColor(unpack(frame.rgb));
+    end);
+  end
+
+  local function UpdateColors() SetTypeColor(false); end
+
+  -- Textures for the shadow, glows and lines. A client without the level-up bar art gets plain lines.
+  local function ApplyTextures()
+    local hasLineArt = C_Texture.GetAtlasInfo(LINE_ATLAS) ~= nil;
+    frame.shadow:SetTexture(SHADOW);
+    frame.shadow:SetVertexColor(0, 0, 0, SHADOW_ALPHA);
+    frame.iconGlow:SetTexture(GLOW);
+    frame.flash:SetTexture(GLOW);
+    for _, line in ipairs({ frame.lineLow, frame.lineLowGlow, frame.lineHigh }) do
+      if hasLineArt then line:SetAtlas(LINE_ATLAS); else line:SetTexture([[Interface\Buttons\WHITE8X8]]); end
+    end
+    frame.lineStrokeShift = hasLineArt and 3 / 7 or 0; --see UpdateLines
+  end
+
+  ----
+  --  Showing a cursor and the soft target handler
+  ----
+
+  -- Shows a cursor by name ("Skin", "UnableSpeak") on the icon and returns its key in the TYPE_COLORS
+  -- spelling. It uses the crosshair atlas (ns.CrosshairAtlasFor), the centered art SetUnitCursorTexture
+  -- uses too, else the classic Interface\Cursor file, whose art sits in the top-left corner (the mouse
+  -- hotspot).
+  local function ShowCursor(name)
+    frame.iconFromFileID = false;
+    local atlas = ns.CrosshairAtlasFor(name);
+    if atlas then
+      frame.icon:SetAtlas(atlas);
+    else
+      frame.icon:SetTexture([[Interface\Cursor\]] .. name);
+    end
+    return ColorKeyFor("Cursor " .. name);
+  end
+
+  -- Draws the soft target's cursor on the icon, as Blizzard's nameplates and gamepad action bar do, asking
+  -- for the centered crosshair art. Returns false when the target has no cursor.
+  local CROSSHAIR_STYLE = Enum.CursorStyle and Enum.CursorStyle.Crosshair;
+  local function DrawTargetCursor()
+    return SetUnitCursorTexture(frame.icon, "softinteract", CROSSHAIR_STYLE);
+  end
+
+  -- Which cursor DrawTargetCursor drew, as a TYPE_COLORS key. It asks the texture in three ways: its atlas
+  -- name, the cursor name in its path ("Cursor Crosshair_Mail_64"), then its file ID, because retail draws
+  -- some cursors straight from their own files (ns.cursorFileNames, Feat\Cursors.lua). The crosshair atlases
+  -- live in those same files, so the file ID only counts when the other two say nothing. A secret icon is
+  -- "default", and an unknown file ID stays a number, which has no color. frame.iconSource keeps what
+  -- matched, for /esi debug.
+  local function IdentifyCursor()
+    local icon = frame.icon;
+    local atlas = icon:GetAtlas();
+    if issecretvalue(atlas) then frame.iconSource = "secret"; return "default" end
+    if atlas and atlas ~= "" then frame.iconSource = "atlas " .. atlas; return ColorKeyFor(atlas) end
+    local path = icon:GetTextureFilePath();
+    if issecretvalue(path) then frame.iconSource = "secret"; return "default" end
+    if type(path) == "string" and CursorName(path) then frame.iconSource = "path " .. path; return ColorKeyFor(path) end
+    local fileID = icon:GetTextureFileID();
+    if issecretvalue(fileID) then frame.iconSource = "secret"; return "default" end
+    frame.iconSource = "file " .. tostring(fileID);
+    local name = fileID and ns.cursorFileNames[fileID];
+    if not name then return tostring(fileID) end
+    frame.iconFromFileID = true;
+    return ColorKeyFor("Cursor " .. name);
+  end
+
+  local function OnSoftTargetCleared()
+    frame.lastTarget, frame.lastSignature, frame.lastAction = nil, nil, nil;
+    -- A running interact pulse finishes before the fade-out (looting clears the target at once).
+    local wait = frame.pulseUntil - GetTime();
+    local token = frame.fadeToken;
+    local function FadeOut()
+      if token == frame.fadeToken and frame:IsShown() and not frame.fadingOut then
+        FadeTo(0, select(2, GetFadeTimes()), true);
+      end
+    end
+    if wait > 0 then C_Timer.After(wait, FadeOut); else FadeOut(); end
+  end
+
+  local function OnSoftTargetChanged(oldTarget, newTarget)
+    frame.name:SetText(UnitName("softInteract"));
+    UpdateKeyCap(); --UpdateLayout runs below, once the requirement line is known
+
+    -- A target without a cursor gets the Interact cog, or UnableInteract out of interact range, as on
+    -- Blizzard's gamepad action bar.
+    frame.iconFromFileID = false;
+    local hasCursor = DrawTargetCursor();
+    local iconKey;
+    if hasCursor then
+      iconKey = IdentifyCursor();
+    else
+      frame.iconSource = "none";
+      iconKey = ShowCursor(InInteractRange() == false and "UnableInteract" or "Interact");
+    end
+    local resolvedKey = iconKey;
+
+    -- Range comes from UnitIsInInteractRange, which Blizzard's gamepad action bar also uses for its
+    -- Interact and UnableInteract icons. The soft-target cursor can stay on an Unable icon in interact
+    -- range (seen with skinnable corpses). While you cast or channel (skinning, gathering), the game reports
+    -- the target as Unable and out of range, because you can't interact while busy. The target that was in
+    -- range keeps its in-range look, and the range check restores the real state after the cast. A spell's
+    -- range check overrules both where the game gets a cursor wrong (ns.SpellRangeCheck in
+    -- Feat\Forever.lua, for skinnable corpses).
+    local knownTarget = not issecretvalue(newTarget) and newTarget or nil;
+    local unableName = iconKey:match("^Cursor Unable(.+)$");
+    local busy = UnitCastingInfo("player") or UnitChannelInfo("player");
+    local canInteract = InInteractRange();
+    local spellInRange = unableName and ns.SpellRangeCheck and ns.SpellRangeCheck(unableName, "softInteract");
+    if spellInRange ~= nil then canInteract = spellInRange end
+    if unableName and (canInteract or (busy and knownTarget and knownTarget == frame.inRangeTarget)) then
+      iconKey = ShowCursor(unableName);
+    end
+
+    -- The range is final here, but the next steps can still make an in-range target Unable.
+    local inRange = not IsUnableKey(iconKey);
+    if inRange then frame.inRangeTarget = knownTarget; end
+
+    -- The game shows the gather cursor even to characters who can't gather. Without the profession, the
+    -- HUD shows the Unable icon and a requirement line.
+    local cursorName = iconKey:match("^Cursor (.+)$");
+    local requirement = cursorName and ns.RequirementFor(cursorName);
+    if requirement then iconKey = ShowCursor("Unable" .. cursorName); end
+
+    -- A talkable NPC with only a generic icon gets the speech bubble. Specific icons (trainer, transmog,
+    -- vendor, quest, ...) always win.
+    local talkBadge = (not hasCursor or GENERIC_ICONS[iconKey]) and IsTalkableNPC("softInteract");
+    if talkBadge then
+      local talkRange = InInteractRange();
+      if talkRange ~= nil then inRange = talkRange end
+      iconKey = ShowCursor(inRange and "Speak" or "UnableSpeak");
+    end
+    local outOfRange = not inRange;
+
+    -- The game re-sends this event for the same target, when you step into range (the icon changes from
+    -- Unable) and sometimes with nothing changed. The handler skips identical repeats.
+    local signature = iconKey .. "|" .. tostring(talkBadge and true or false) .. "|" .. tostring(outOfRange);
+    if knownTarget and knownTarget == frame.lastTarget and signature == frame.lastSignature
+        and frame:IsShown() and not frame.fadingOut then
+      -- The debug log keeps every game event, doubles included; unchanged range checks aren't logged.
+      if ns.DebugSoftTarget and not frame.fromRangeCheck then
+        ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange);
+      end
+      return;
+    end
+    -- It's a switch when the visible frame changes to another target or another action, not only its range.
+    local action = iconKey:lower():gsub("unable", "");
+    local visible = frame:IsShown() and not frame.fadingOut;
+    local switched = visible and (action ~= frame.lastAction or not knownTarget or knownTarget ~= frame.lastTarget);
+    frame.lastTarget, frame.lastSignature, frame.lastAction = knownTarget, signature, action;
+
+    -- A visible HUD dims or brightens over SWITCH_TIME, together with its colors. A short fade-in time
+    -- would otherwise drop it from 1 to 0.75 in about 0.02 seconds while the colors still blend.
+    local toAlpha = outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA;
+    if visible and EnhancedSoftInteractDB.switchAnim then
+      FadeOver(toAlpha, SWITCH_TIME, false);
+    else
+      FadeTo(toAlpha, (GetFadeTimes()), false);
+    end
+
+    frame.colorKey, frame.outOfRange = iconKey, outOfRange;
+    frame.requirementText = IsUnableKey(iconKey) and requirement or nil;
+    UpdateLayout();
+    AnchorIcon();
+    SetTypeColor(visible); --blend while the frame is up, set at once when it fades in
+    if switched and EnhancedSoftInteractDB.switchAnim then PlaySwitchAnim(); end
+
+    if ns.DebugSoftTarget then
       ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange);
     end
-    return;
-  end
-  -- It's a switch when the visible frame changes to another target or another action, not only its range.
-  local action = iconKey:lower():gsub("unable", "");
-  local visible = frame:IsShown() and not frame.fadingOut;
-  local switched = visible and (action ~= frame.lastAction or not knownTarget or knownTarget ~= frame.lastTarget);
-  frame.lastTarget, frame.lastSignature, frame.lastAction = knownTarget, signature, action;
-
-  -- A visible HUD dims or brightens over SWITCH_TIME, together with its colors. A short fade-in time
-  -- would otherwise drop it from 1 to 0.75 in about 0.02 seconds while the colors still blend.
-  local toAlpha = outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA;
-  if visible and EnhancedSoftInteractDB.switchAnim then
-    FadeOver(toAlpha, SWITCH_TIME, false);
-  else
-    FadeTo(toAlpha, (GetFadeTimes()), false);
   end
 
-  frame.colorKey, frame.outOfRange = iconKey, outOfRange;
-  frame.requirementText = IsUnableKey(iconKey) and requirement or nil;
-  UpdateLayout();
-  AnchorIcon();
-  SetTypeColor(visible); --blend while the frame is up, set at once when it fades in
-  if switched and EnhancedSoftInteractDB.switchAnim then PlaySwitchAnim(); end
-
-  if ns.DebugSoftTarget then
-    ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange);
+  -- Shows a made-up target in Edit Mode: a name, a cursor by name ("Skin", "UnableGatherHerbs") and an
+  -- optional requirement line, fully visible and in range.
+  local function ShowSample(name, cursor, requirementText)
+    frame.fader:Stop();
+    frame.fadingOut = false;
+    frame:SetAlpha(1);
+    frame:Show();
+    frame.sampleName = name;
+    frame.name:SetText(name);
+    frame.requirementText = requirementText;
+    frame.colorKey, frame.outOfRange = ShowCursor(cursor), false;
+    SetTypeColor(true);
+    if EnhancedSoftInteractDB.switchAnim then PlaySwitchAnim(); end
+    AnchorIcon();
+    UpdateKeyCap();
+    UpdateLayout();
   end
+
+  -- Applies every setting to the HUD (on load, and when the preview is built).
+  local function ApplyAllSettings()
+    ApplyTextures();
+    StyleKeyCap();
+    SetIconSide();
+    UpdateIcon();
+    UpdateFont();
+    UpdateHeight();
+    UpdateColors();
+  end
+
+  return {
+    frame = frame, ApplyAllSettings = ApplyAllSettings, ShowSample = ShowSample,
+    OnSoftTargetChanged = OnSoftTargetChanged, OnSoftTargetCleared = OnSoftTargetCleared,
+    PlayInteractPulse = PlayInteractPulse, GetTypeColor = GetTypeColor, UpdateColors = UpdateColors,
+    SetIconSide = SetIconSide, UpdateIcon = UpdateIcon, UpdateFont = UpdateFont, UpdateHeight = UpdateHeight,
+    UpdateKeyCap = UpdateKeyCap, UpdateLayout = UpdateLayout,
+  };
 end
 
+----
+--  The HUD frame. Edit Mode moves it (LibEditMode, Feat\EditMode.lua), and each Edit Mode layout keeps
+--  its own position in EnhancedSoftInteractDB.layouts. Outside Edit Mode it ignores the mouse.
+----
+local HUD_DEFAULT_POSITION = { point = "CENTER", x = 200, y = -100 };
+local frame = CreateFrame("Frame", "EnhancedSoftInteractHUD", UIParent);
+local hud = CreateHUD(frame);
+local huds = { hud }; --the real HUD and, once Edit Mode builds it, the preview
+frame:SetSize(200, 40);
+frame:SetPoint(HUD_DEFAULT_POSITION.point, UIParent, HUD_DEFAULT_POSITION.point, HUD_DEFAULT_POSITION.x, HUD_DEFAULT_POSITION.y);
+frame:SetMovable(true);
+frame:SetDontSavePosition(true); --Edit Mode layouts hold the position, not WoW's layout-local.txt
+frame:EnableMouse(false);
+frame:Hide();
+frame.editModeName = "Enhanced Soft Interact";
+
+-- With the addon disabled (Enabled in Edit Mode), every target counts as none.
 local function OnSoftInteractChanged(oldTarget, newTarget)
   if frame.inEditMode then return end --Edit Mode shows a sample instead (Feat\EditMode.lua)
   frame.fadeToken = (frame.fadeToken or 0) + 1; --cancels a delayed fade-out
-  if newTarget then
-    OnSoftTargetChanged(oldTarget, newTarget);
+  if newTarget and EnhancedSoftInteractDB.enabled then
+    hud.OnSoftTargetChanged(oldTarget, newTarget);
   elseif frame:IsShown() and not frame.fadingOut then
-    OnSoftTargetCleared();
+    hud.OnSoftTargetCleared();
   end
 end
 ns.OnSoftInteractChanged = OnSoftInteractChanged;
@@ -1100,15 +1149,19 @@ end);
 --  Settings and events
 ----
 
--- Applies every setting to the HUD (on load).
-local function ApplyAllSettings()
-  ApplyTextures();
-  StyleKeyCap();
-  SetIconSide();
-  UpdateIcon();
-  UpdateFont();
-  UpdateHeight();
-  UpdateColors();
+-- Runs one of the HUD functions on every HUD, so a setting changes the real HUD and the preview alike.
+local function OnEveryHUD(name)
+  return function(...)
+    for _, h in ipairs(huds) do h[name](...); end
+  end
+end
+
+-- Builds the Edit Mode preview's HUD on frame (Feat\EditMode.lua), once the settings are loaded.
+local function AddHUD(hudFrame)
+  local h = CreateHUD(hudFrame);
+  h.ApplyAllSettings();
+  table.insert(huds, h);
+  return h;
 end
 
 -- Fills in defaults, applies every setting and runs ns.onLoad.
@@ -1121,18 +1174,19 @@ local function LoadSettings()
   db.editModeSections = db.editModeSections or {};
   db.layouts = db.layouts or {};
   db.font = db.font or media:GetDefault("font"); --not in DEFAULTS: fonts from other addons may register later
-  ApplyAllSettings();
+  hud.ApplyAllSettings();
   for _, fn in ipairs(ns.onLoad) do fn(); end
 end
 
 -- The key cap follows binding and input device changes once the settings are loaded.
 local function RefreshKeyCap()
   if not frame.loaded then return end
-  UpdateKeyCap();
-  UpdateLayout();
+  for _, h in ipairs(huds) do
+    h.UpdateKeyCap();
+    h.UpdateLayout();
+  end
 end
 
-frame.pulseUntil = 0;
 frame:RegisterEvent("ADDON_LOADED");
 frame:RegisterEvent("PLAYER_SOFT_INTERACT_CHANGED");
 frame:RegisterEvent("PLAYER_SOFT_TARGET_INTERACTION");
@@ -1149,15 +1203,13 @@ frame:SetScript("OnEvent", function(_, event, ...)
     OnSoftInteractChanged(...);
   elseif event == "PLAYER_SOFT_TARGET_INTERACTION" then
     if EnhancedSoftInteractDB.interactAnim and frame:IsShown() and not frame.fadingOut then
-      PlayInteractPulse();
-      frame.pulseUntil = GetTime() + PULSE_TIME;
+      hud.PlayInteractPulse();
     end
   elseif event == "GAME_PAD_ACTIVE_CHANGED" then
     ns.gamepadActive = (...) and true or false; --payload: isActive
     RefreshKeyCap();
   elseif event == "UPDATE_BINDINGS" then
     RefreshKeyCap();
-    if ns.RefreshOptionsState then ns.RefreshOptionsState(); end
   end
 end);
 
@@ -1168,11 +1220,12 @@ function SlashCmdList.ENHANCEDSOFTINTERACT(msg)
   if command then command(); elseif ns.OpenHUDInEditMode then ns.OpenHUDInEditMode(); end
 end
 
--- Shared with the Feat files.
-ns.frame, ns.media, ns.typeColors = frame, media, TYPE_COLORS;
+-- Shared with the Feat files. The Update functions and ShowSample run on every HUD.
+ns.frame, ns.media, ns.typeColors, ns.AddHUD = frame, media, TYPE_COLORS, AddHUD;
 ns.DEFAULTS, ns.SLIDER_RANGES, ns.HUD_DEFAULT_POSITION = DEFAULTS, SLIDER_RANGES, HUD_DEFAULT_POSITION;
 ns.Notify, ns.IsInteractKeyEnabled, ns.IsUnableKey = Notify, IsInteractKeyEnabled, IsUnableKey;
-ns.ShowCursor, ns.GetTypeColor, ns.SetTypeColor, ns.UpdateColors = ShowCursor, GetTypeColor, SetTypeColor, UpdateColors;
-ns.AnchorIcon, ns.SetIconSide, ns.UpdateIcon, ns.UpdateFont = AnchorIcon, SetIconSide, UpdateIcon, UpdateFont;
-ns.UpdateKeyCap, ns.UpdateLayout, ns.UpdateHeight, ns.RefreshKeyCap = UpdateKeyCap, UpdateLayout, UpdateHeight, RefreshKeyCap;
-ns.PlayInteractPulse, ns.PlaySwitchAnim = PlayInteractPulse, PlaySwitchAnim;
+ns.GetTypeColor, ns.RefreshKeyCap = hud.GetTypeColor, RefreshKeyCap;
+for _, name in ipairs({ "ShowSample", "PlayInteractPulse", "UpdateColors", "SetIconSide", "UpdateIcon",
+    "UpdateFont", "UpdateHeight", "UpdateKeyCap", "UpdateLayout" }) do
+  ns[name] = OnEveryHUD(name);
+end
