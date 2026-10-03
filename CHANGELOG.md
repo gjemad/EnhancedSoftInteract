@@ -1,5 +1,10 @@
 # Changelog
 
+## 1.1.1-beta (2026-10-03)
+
+- Corpses and objects no longer show a cog on the HUD when Interact Key Icons isn't set to Show All. The addon now keeps that setting on Show All, and you can turn this off in Edit Mode.
+- The icon above your target's nameplate no longer shows next to the HUD.
+
 ## 1.1.0-beta (2026-10-03)
 
 - Turning off your gamepad no longer leaves the Interact Key turned off.
