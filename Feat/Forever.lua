@@ -1,5 +1,5 @@
 local _, ns = ...;
-local issecretvalue = issecretvalue or function() return false end;
+local issecretvalue = ns.issecretvalue;
 
 -- Only WoW: Forever loads this file. It holds the Skinning range check and the gamepad UI's interact button.
 
@@ -22,12 +22,18 @@ function ns.SpellRangeCheck(cursorName, unit)
   return inRange;
 end
 
+-- Whether Forever's gamepad UI is on. While it is, Blizzard_Gamepad\Core.lua holds the soft target CVars
+-- at its own temporary values.
+function ns.IsGamepadUI()
+  return C_InputInterfaceStyle.GetCurrentStyle() == Enum.InputDeviceInterfaceType.Gamepad;
+end
+
 -- Forever's gamepad UI has a fixed interact button on its action bar, the left face button
 -- (GAMEPAD_FACE_LEFT = PAD3; Blizzard_GamepadActionBars), not a key binding. Its glyph follows the
 -- controller's label style, as Blizzard's InputDeviceIconSetManager picks it.
 local FACE_LEFT_GLYPHS = { Generic = "Gen_3", Letters = "Ltr_X", Shapes = "Shp_Square", Reverse = "Rev_Y" };
 function ns.GamepadInteractGlyph()
-  if C_InputInterfaceStyle.GetCurrentStyle() ~= Enum.InputDeviceInterfaceType.Gamepad then return nil end
+  if not ns.IsGamepadUI() then return nil end
   local mapped = C_GamePad.GetDeviceMappedState(C_GamePad.GetActiveDeviceID());
   local glyph = ("Gamepad_%s_64"):format(FACE_LEFT_GLYPHS[mapped and mapped.labelStyle] or "Gen_3");
   return C_Texture.GetAtlasInfo(glyph) and glyph or nil;

@@ -3,7 +3,7 @@ local frame, media, DEFAULTS, SLIDER_RANGES = ns.frame, ns.media, ns.DEFAULTS, n
 local HUD_DEFAULT_POSITION, Notify = ns.HUD_DEFAULT_POSITION, ns.Notify;
 local SetIconSide, UpdateIcon, UpdateFont = ns.SetIconSide, ns.UpdateIcon, ns.UpdateFont;
 local UpdateKeyCap, UpdateLayout, UpdateHeight = ns.UpdateKeyCap, ns.UpdateLayout, ns.UpdateHeight;
-local PlayInteractPulse = ns.PlayInteractPulse;
+local UpdateColors, PlayInteractPulse = ns.UpdateColors, ns.PlayInteractPulse;
 
 ----
 --  Samples for the HUD in Edit Mode: Classic Era NPCs and game objects (also in WoW: Forever), in three
@@ -142,8 +142,7 @@ local function BuildEditModeSettings()
   -- Game settings the HUD needs, kept by Feat\Persistence.lua.
   Section("persistence", "Persistence");
   local function KeepNow() ns.KeepSettings(true); end
-  Checkbox("Keep Interact Key On", "forceInteractKey", KeepNow);
-  Checkbox("Keep Interact Key Icons on Show All", "forceInteractIcons", KeepNow);
+  for _, kept in ipairs(ns.keptSettings) do Checkbox(kept.checkbox, kept.option, KeepNow); end
 
   Section("icon", "Icon & Key");
   Checkbox("Show Icon", "showIcon", function() UpdateIcon(); UpdateLayout(); end);
@@ -167,7 +166,7 @@ local function BuildEditModeSettings()
   Slider("Name Max Width", "nameMaxWidth", Px, UpdateLayout);
 
   Section("background", "Color & Shadow");
-  Slider("Color Brightness", "colorBrightness", Percent, ns.UpdateColors);
+  Slider("Color Brightness", "colorBrightness", Percent, UpdateColors);
   Slider("Shadow Height", "hudHeight", Px, UpdateHeight);
 
   Section("animation", "Animation");

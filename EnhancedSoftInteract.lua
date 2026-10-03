@@ -108,12 +108,8 @@ local function InInteractRange()
   return UnitIsInInteractRange("softinteract");
 end
 
-local function Notify(msg) print("|cffffd100Enhanced Soft Interact:|r " .. msg) end
-
--- The same setting as Options > Controls > Enable Interact Key.
-local function IsInteractKeyEnabled()
-  return tonumber(GetCVar("softTargetInteract")) == Enum.SoftTargetEnableFlags.Any;
-end
+-- Every chat message of the addon starts with "ESI:".
+local function Notify(msg) print("|cffffd100ESI:|r " .. msg) end
 
 -- Saved-setting defaults. LoadSettings fills in unset keys from here, and the Edit Mode panel resets to them.
 local DEFAULTS = {
@@ -1223,7 +1219,7 @@ end
 -- Shared with the Feat files. The Update functions and ShowSample run on every HUD.
 ns.frame, ns.media, ns.typeColors, ns.AddHUD = frame, media, TYPE_COLORS, AddHUD;
 ns.DEFAULTS, ns.SLIDER_RANGES, ns.HUD_DEFAULT_POSITION = DEFAULTS, SLIDER_RANGES, HUD_DEFAULT_POSITION;
-ns.Notify, ns.IsInteractKeyEnabled, ns.IsUnableKey = Notify, IsInteractKeyEnabled, IsUnableKey;
+ns.Notify, ns.IsUnableKey, ns.issecretvalue = Notify, IsUnableKey, issecretvalue;
 ns.GetTypeColor, ns.RefreshKeyCap = hud.GetTypeColor, RefreshKeyCap;
 for _, name in ipairs({ "ShowSample", "PlayInteractPulse", "UpdateColors", "SetIconSide", "UpdateIcon",
     "UpdateFont", "UpdateHeight", "UpdateKeyCap", "UpdateLayout" }) do

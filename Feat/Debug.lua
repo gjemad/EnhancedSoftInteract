@@ -1,5 +1,5 @@
 local _, ns = ...;
-local issecretvalue = issecretvalue or function() return false end;
+local issecretvalue = ns.issecretvalue;
 local frame = ns.frame;
 
 ----
@@ -47,7 +47,7 @@ function ns.DebugSoftTarget(oldGUID, newGUID, hasCursor, resolvedKey, iconKey, t
       tostring(talkBadge and true or false), frame.iconNudgeX or 0, frame.iconNudgeY or 0, tostring(outOfRange)),
     ("key: bindings=%s gamepadActive=%s gamepadUI=%s glyph=%s"):format(
       #keys > 0 and table.concat(keys, ",") or "none", tostring(ns.gamepadActive),
-      tostring(C_InputInterfaceStyle and C_InputInterfaceStyle.GetCurrentStyle() == Enum.InputDeviceInterfaceType.Gamepad or false),
+      tostring(ns.IsGamepadUI and ns.IsGamepadUI() or false),
       tostring(ns.GamepadInteractGlyph and ns.GamepadInteractGlyph())),
     ("layout: width=%s nameColumn=%s height=%s key=%s keyCap=%s"):format(
       ("%.0f"):format(frame.boxWidth or 0), ("%.0f"):format(frame.nameWidth or 0), tostring(EnhancedSoftInteractDB.hudHeight),

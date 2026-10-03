@@ -1,4 +1,5 @@
 local _, ns = ...;
+local Notify = ns.Notify;
 
 ----
 --  Persistence: game settings the HUD needs, which the addon puts back when something changes them.
@@ -7,12 +8,15 @@ local _, ns = ...;
 --  objects show the plain cog. While the addon is enabled and a setting's Keep option is checked, the
 --  addon sets its CVars back and says so in chat. It checks on every CVar change and once every
 --  CHECK_INTERVAL seconds, in case the game changes a CVar without telling addons. CVars a client
---  doesn't have (GetCVar gives nil) are skipped.
+--  doesn't have (GetCVar gives nil) are skipped. While Forever's gamepad UI is on, Blizzard holds these
+--  CVars at temporary values that SetCVar can't override, so the addon waits. When the gamepad UI ends,
+--  Blizzard removes them, the saved values come back, and the addon corrects those.
 ----
 local CHECK_INTERVAL = 1;
 
--- option: the EnhancedSoftInteractDB key of its Keep checkbox in Edit Mode. cvars: the values to keep,
--- the way Blizzard's settings set them (Show All is Blizzard_SettingsDefinitions_Frame\Accessibility.lua).
+-- option: the EnhancedSoftInteractDB key of its Keep checkbox, which Feat\EditMode.lua builds from this
+-- list with checkbox as its name. cvars: the values to keep, the way Blizzard's settings set them (Show
+-- All is Blizzard_SettingsDefinitions_Frame\Accessibility.lua).
 local KEPT = {
   {
     option = "forceInteractKey", checkbox = "Keep Interact Key On",
@@ -25,12 +29,11 @@ local KEPT = {
     cvars = { SoftTargetIconEnemy = 1, SoftTargetIconInteract = 1, SoftTargetIconGameObject = 1, SoftTargetLowPriorityIcons = 1 },
   },
 };
+ns.keptSettings = KEPT;
 local watched = {}; --lowercase CVar name -> true, for CVAR_UPDATE
 for _, kept in ipairs(KEPT) do
   for cvar in pairs(kept.cvars) do watched[cvar:lower()] = true; end
 end
-
-local function Say(msg) print("|cffffd100ESI:|r " .. msg) end
 
 -- The CVars of a kept setting that differ from the values it keeps.
 local function Changed(kept)
@@ -45,7 +48,7 @@ end
 -- silent: no chat message, for when the player just checked a Keep option or Enabled.
 local function KeepSettings(silent)
   local db = EnhancedSoftInteractDB;
-  if not (db and db.enabled) then return end
+  if not (db and db.enabled) or (ns.IsGamepadUI and ns.IsGamepadUI()) then return end
   for _, kept in ipairs(KEPT) do
     local changed = db[kept.option] and Changed(kept);
     if not changed then
@@ -55,9 +58,9 @@ local function KeepSettings(silent)
       local wasFailed = kept.didFail; --don't repeat the failure every check
       kept.didFail = Changed(kept) ~= nil;
       if not (silent or kept.didFail) then
-        Say(("%s To stop this, type /esi and uncheck %s."):format(kept.restored, kept.checkbox));
+        Notify(("%s To stop this, type /esi and uncheck %s."):format(kept.restored, kept.checkbox));
       elseif not silent and not wasFailed then
-        Say(kept.failed);
+        Notify(kept.failed);
       end
     end
   end
