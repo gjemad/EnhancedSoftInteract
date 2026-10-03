@@ -11,7 +11,7 @@ local function Safe(v)
   return tostring(v);
 end
 
-function ns.DebugSoftTarget(oldGUID, newGUID, hasCursor, rawPath, resolvedKey, iconKey, talkBadge, outOfRange)
+function ns.DebugSoftTarget(oldGUID, newGUID, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange)
   debugCount = debugCount + 1;
   local same = "unknown";
   if not issecretvalue(newGUID) then
@@ -28,8 +28,8 @@ function ns.DebugSoftTarget(oldGUID, newGUID, hasCursor, rawPath, resolvedKey, i
     Safe(UnitName(unit)), Safe(UnitIsPlayer(unit)), Safe(UnitIsGameObject and UnitIsGameObject(unit)),
     Safe(UnitIsInteractable and UnitIsInteractable(unit)), Safe(UnitIsInInteractRange and UnitIsInInteractRange(unit)),
     Safe(UnitCanAttack("player", unit))));
-  print(p .. ("icon: hasCursor=%s path=%s resolved=%s key=%s color=%.2f,%.2f,%.2f%s talkBadge=%s nudge=%d,%d outOfRange=%s"):format(
-    tostring(hasCursor), Safe(rawPath), resolvedKey, iconKey, r, g, b, hasColor and "" or " (default, no entry)",
+  print(p .. ("icon: hasCursor=%s source=%s resolved=%s key=%s color=%.2f,%.2f,%.2f%s talkBadge=%s nudge=%d,%d outOfRange=%s"):format(
+    tostring(hasCursor), Safe(frame.iconSource), resolvedKey, iconKey, r, g, b, hasColor and "" or " (default, no entry)",
     tostring(talkBadge and true or false), frame.iconNudgeX or 0, frame.iconNudgeY or 0, tostring(outOfRange)));
   local keys = { GetBindingKey("INTERACTTARGET") };
   print(p .. ("key: bindings=%s gamepadActive=%s gamepadUI=%s glyph=%s"):format(
@@ -38,7 +38,7 @@ function ns.DebugSoftTarget(oldGUID, newGUID, hasCursor, rawPath, resolvedKey, i
     tostring(ns.GamepadInteractGlyph and ns.GamepadInteractGlyph())));
   local cap = frame.keyCap;
   print(p .. ("layout: width=%s nameColumn=%s height=%s key=%s keyCap=%s"):format(
-    tostring(frame.boxWidth), tostring(frame.nameWidth), tostring(EnhancedSoftInteractDB.bgHeight),
+    tostring(frame.boxWidth), tostring(frame.nameWidth), tostring(EnhancedSoftInteractDB.hudHeight),
     cap:IsShown() and Safe(cap.text:GetText()) or "hidden",
     cap:IsShown() and ("%.0fx%.0f"):format(cap.capWidth or 0, cap.capHeight or 0) or "-"));
 end

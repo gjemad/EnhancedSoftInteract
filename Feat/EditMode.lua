@@ -1,5 +1,5 @@
 local _, ns = ...;
-local frame, media, DEFAULTS, FADE_MIN, FADE_MAX = ns.frame, ns.media, ns.DEFAULTS, ns.FADE_MIN, ns.FADE_MAX;
+local frame, media, DEFAULTS, SLIDER_RANGES = ns.frame, ns.media, ns.DEFAULTS, ns.SLIDER_RANGES;
 local HUD_DEFAULT_POSITION, Notify, IsInteractKeyEnabled = ns.HUD_DEFAULT_POSITION, ns.Notify, ns.IsInteractKeyEnabled;
 local SetIconSide, UpdateIcon, UpdateFont = ns.SetIconSide, ns.UpdateIcon, ns.UpdateFont;
 local UpdateKeyCap, UpdateLayout, UpdateHeight = ns.UpdateKeyCap, ns.UpdateLayout, ns.UpdateHeight;
@@ -120,9 +120,11 @@ local function BuildEditModeSettings()
       get = function() return db[key] end,
       set = function(_, value) db[key] = value; if onChange then onChange(value) end end });
   end
-  local function Slider(name, key, minValue, maxValue, step, formatter, onChange, disabled)
-    Add({ kind = kind.Slider, name = name, default = DEFAULTS[key], minValue = minValue, maxValue = maxValue,
-      valueStep = step, formatter = formatter, disabled = disabled,
+  -- Ranges and steps come from SLIDER_RANGES.
+  local function Slider(name, key, formatter, onChange, disabled)
+    local range = SLIDER_RANGES[key];
+    Add({ kind = kind.Slider, name = name, default = DEFAULTS[key], minValue = range[1], maxValue = range[2],
+      valueStep = range[3], formatter = formatter, disabled = disabled,
       get = function() return db[key] end,
       set = function(_, value) db[key] = value; if onChange then onChange(value) end end });
   end
@@ -145,11 +147,11 @@ local function BuildEditModeSettings()
 
   Section("icon", "Icon & Key");
   Checkbox("Show Icon", "showIcon", function() UpdateIcon(); UpdateLayout(); end);
-  Slider("Icon Size", "iconSize", 15, 50, 1, Px, function() UpdateIcon(); UpdateLayout(); end,
+  Slider("Icon Size", "iconSize", Px, function() UpdateIcon(); UpdateLayout(); end,
     function() return not db.showIcon end);
-  Checkbox("Swap Icon and Key", "flipIconSide", function() SetIconSide(); UpdateLayout(); end);
+  Checkbox("Swap Icon and Key", "swapIconAndKey", function() SetIconSide(); UpdateLayout(); end);
   Checkbox("Show Interact Key", "showKey", function() UpdateKeyCap(); UpdateLayout(); end);
-  Slider("Key Size", "keySize", 75, 150, 5, Percent, function() UpdateKeyCap(); UpdateLayout(); end, KeyHidden);
+  Slider("Key Size", "keySize", Percent, function() UpdateKeyCap(); UpdateLayout(); end, KeyHidden);
 
   Section("text", "Text");
   Add({ kind = kind.Dropdown, name = "Font", default = media:GetDefault("font"), height = 300,
@@ -160,21 +162,21 @@ local function BuildEditModeSettings()
     end,
     get = function() return db.font end,
     set = function(_, value) db.font = value; UpdateFont(); end });
-  Slider("Font Size", "fontSize", 8, 35, 1, nil, UpdateFont);
-  Slider("Name Min Width", "nameMinWidth", 50, 300, 5, Px, UpdateLayout);
-  Slider("Name Max Width", "nameMaxWidth", 50, 400, 5, Px, UpdateLayout);
+  Slider("Font Size", "fontSize", nil, UpdateFont);
+  Slider("Name Min Width", "nameMinWidth", Px, UpdateLayout);
+  Slider("Name Max Width", "nameMaxWidth", Px, UpdateLayout);
 
   Section("background", "Color & Shadow");
-  Slider("Color Brightness", "colorBrightness", 30, 100, 5, Percent, ns.UpdateColors);
-  Slider("Shadow Height", "bgHeight", 15, 75, 1, Px, UpdateHeight);
+  Slider("Color Brightness", "colorBrightness", Percent, ns.UpdateColors);
+  Slider("Shadow Height", "hudHeight", Px, UpdateHeight);
 
   Section("animation", "Animation");
   Checkbox("Interact Animation", "interactAnim", function(on) if on then PlayInteractPulse(); end end);
   Checkbox("Target Switch Animation", "switchAnim");
   Checkbox("Fade Animations", "fadeEnabled");
   local function FadeOff() return not db.fadeEnabled end
-  Slider("Fade In Time", "fadeInTime", FADE_MIN, FADE_MAX, 0.01, Seconds, function(v) db.fadeInTime = RoundTime(v) end, FadeOff);
-  Slider("Fade Out Time", "fadeOutTime", FADE_MIN, FADE_MAX, 0.01, Seconds, function(v) db.fadeOutTime = RoundTime(v) end, FadeOff);
+  Slider("Fade In Time", "fadeInTime", Seconds, function(v) db.fadeInTime = RoundTime(v) end, FadeOff);
+  Slider("Fade Out Time", "fadeOutTime", Seconds, function(v) db.fadeOutTime = RoundTime(v) end, FadeOff);
 
   -- LibEditMode shows a setting's desc as its tooltip.
   local DESCRIPTIONS = {

@@ -10,48 +10,63 @@ ns.onLoad = {};
 ns.slashCommands = {};
 
 -- Colors per icon type, for targets you can interact with. Unable icons always get UNABLE_COLOR or
--- OUT_OF_RANGE_COLOR, so they have no entries.
+-- OUT_OF_RANGE_COLOR, so they have no entries. Each color is an OKLCH hue and chroma picked per family
+-- (related types share a hue band; icons with a strong color of their own, such as quest marks, pawprints
+-- and transmog, use the icon's measured hue), at the lightest lightness sRGB can show, then scaled so the
+-- strongest channel is 1. The lines and glows light at full strength, and colorBrightness dims them.
 local TYPE_COLORS = {
-  ["default"] = {.6,.5,.1}, --unknown or secret icon
-  ["Cursor GatherHerbs"] = {.04,.36,.04}, --herbs
-  ["Cursor PickLock"] = {.35,.38,.45}, --lockpicking (locked chests and footlockers)
-  ["Cursor Skin"] = {.51,.32,.25}, --skinning
-  ["Cursor Mine"] = {.54,.45,.23}, --mining
-  ["Cursor Speak"] = {.4,.39,.38}, --speech bubble
-  ["Cursor LootAll"] = {.36,.3,.2}, --loot corpse
-  ["Cursor Pickup"] = {.43,.32,.23}, --vendor
-  ["Cursor Buy"] = {.43,.32,.23}, --bank
-  ["Cursor Mail"] = {.68,.11,.02}, --mail
-  ["Cursor Innkeeper"] = {.29,.58,.71}, --hearthstone
-  ["Cursor Interact"] = {.61,.48,.23}, --cogwheel
-  ["Cursor Taxi"] = {.49,.4,.16}, --flight point
-  ["Cursor RepairNPC"] = {.4,.4,.4}, --repair anvil
-  ["Cursor Quest"] = {.64,.55,0}, --yellow !
-  ["Cursor QuestRepeatable"] = {0,.42,.87}, --blue ?
-  ["Cursor CampaignQuest"] = {.34,.14,0}, --campaign !
-  ["Cursor CampaignQuestTurnIn"] = {.34,.14,0}, --campaign ?
-  ["Cursor Trainer"] = {.48,.32,.2}, --trainer (book)
-  ["Cursor Inspect"] = {.34,.4,.42}, --inspect (magnifying glass)
-  ["Cursor QuestInteract"] = {.64,.55,0}, --quest object
-  ["Cursor WildPetCapturable"] = {.01,.60,.18}, --green pet battle pawprint
-  ["Cursor WildPet"] = {.67,.47,0}, --yellow pet battle pawprint
-  ["Cursor Directions"] = {.60,.26,.23}, --guard directions
-  ["Cursor VoidStorage"] = {.64,.29,.52}, --void storage
-  ["Cursor Transmogrify"] = {.48,.35,.82}, --transmog
-  ["Cursor OpenHand"] = {.4,.4,.4}, --hand (loot chest, petting an animal)
-  ["Cursor OpenHandGlow"] = {.4,.47,.49}, --glowing hand
-  ["Cursor Missions"] = {.48,.27,.25}, --missions
-  ["Cursor Reforge"] = {0,.49,.49}, --reforge or upgrade NPC
+  ["default"] = {1, 0.83, 0.33}, --unknown or secret icon: plain gold
+  -- Quests: gold for normal quests and quest objects, blue for repeatable ones, amber for the campaign.
+  ["Cursor Quest"] = {1, 0.85, 0.09},
+  ["Cursor QuestInteract"] = {1, 0.85, 0.09},
+  ["Cursor QuestRepeatable"] = {0.05, 0.59, 1},
+  ["Cursor CampaignQuest"] = {1, 0.5, 0.05},
+  ["Cursor CampaignQuestTurnIn"] = {1, 0.5, 0.05},
+  -- Gathering and looting: leaf green, ore copper, hide tan, loot sand, and cool steel for locks and hands.
+  ["Cursor GatherHerbs"] = {0.41, 1, 0.46},
+  ["Cursor Mine"] = {1, 0.74, 0.44},
+  ["Cursor Skin"] = {1, 0.6, 0.49},
+  ["Cursor LootAll"] = {1, 0.83, 0.47},
+  ["Cursor PickLock"] = {0.78, 0.88, 1}, --locked chests and footlockers
+  ["Cursor OpenHand"] = {0.92, 0.95, 1}, --chests, petting animals
+  ["Cursor OpenHandGlow"] = {0.73, 0.96, 1},
+  -- Merchants and services.
+  ["Cursor Pickup"] = {1, 0.73, 0.5}, --vendor: warm brown
+  ["Cursor Buy"] = {1, 0.95, 0.68}, --bank: pale gold
+  ["Cursor RepairNPC"] = {0.86, 0.94, 1}, --steel
+  ["Cursor Reforge"] = {0.35, 0.97, 1}, --reforge and upgrade NPCs: teal
+  ["Cursor Mail"] = {1, 0.29, 0.23}, --mailbox red
+  ["Cursor Innkeeper"] = {0.4, 0.79, 1}, --hearthstone blue
+  ["Cursor Taxi"] = {0.99, 1, 0.62}, --flight masters: pale straw
+  ["Cursor Trainer"] = {1, 0.66, 0.47},
+  ["Cursor Directions"] = {1, 0.55, 0.64}, --guards: rose
+  ["Cursor Missions"] = {1, 0.64, 0.65},
+  ["Cursor VoidStorage"] = {1, 0.54, 0.91}, --magenta
+  ["Cursor Transmogrify"] = {0.69, 0.48, 1}, --violet
+  -- Generic icons stay close to white, with a warm or cool tint.
+  ["Cursor Speak"] = {1, 0.96, 0.91},
+  ["Cursor Inspect"] = {0.81, 0.94, 1},
+  ["Cursor Interact"] = {1, 0.79, 0.41}, --the cog: bronze
+  -- Battle pets: green when you can capture the pet, gold otherwise.
+  ["Cursor WildPetCapturable"] = {0.33, 1, 0.5},
+  ["Cursor WildPet"] = {1, 0.74, 0.19},
 };
 
 -- Cursor textures come in several spellings: plain names ("Cursor Innkeeper"), the crosshair version both
--- clients use ("Cursor Crosshair_Innkeeper_64"), sized ones ("Cursor Cursor_CampaignQuest_32") and file
--- paths ("Interface\Cursor\Innkeeper"). Each one reduces to "cursor innkeeper" for lookups.
+-- clients use ("Cursor Crosshair_Innkeeper_64", or the bare atlas name "Crosshair_Innkeeper_64"), sized
+-- ones ("Cursor Cursor_CampaignQuest_32") and file paths ("Interface\Cursor\Innkeeper"). CursorName
+-- reduces each one to "innkeeper", and returns nil for anything that isn't a cursor.
+local function CursorName(key)
+  local name = key:match("^[Cc]ursor (.+)$") or key:match("[Cc][Uu][Rr][Ss][Oo][Rr][\\/]([%w_]+)[%.%w]*$")
+    or key:match("^[Cc]rosshair_.+$");
+  if not name then return nil end
+  return (name:gsub("^[Cc]rosshair_", ""):gsub("^[Cc]ursor_", ""):gsub("_%d+$", ""):lower());
+end
+
+-- The lookup form of a key: "cursor innkeeper". Other keys (file IDs, "default") stay as they are.
 local function NormalizeCursorKey(key)
-  local name = key:match("^[Cc]ursor (.+)$") or key:match("[Cc][Uu][Rr][Ss][Oo][Rr][\\/]([%w_]+)[%.%w]*$");
-  if not name then return key:lower() end --file IDs and other keys stay as they are
-  name = name:gsub("^[Cc]rosshair_", ""):gsub("^[Cc]ursor_", ""):gsub("_%d+$", "");
-  return ("cursor " .. name):lower();
+  local name = CursorName(key);
+  return name and "cursor " .. name or key:lower();
 end
 
 -- Maps each normalized key to its TYPE_COLORS spelling, and to its Unable version ("Cursor UnableSkin").
@@ -86,6 +101,13 @@ local function IsTalkableNPC(unit)
   return true;
 end
 
+-- Whether the soft target is in interact range, the check Blizzard's gamepad action bar makes. nil on a
+-- client without UnitIsInInteractRange (retail); the cursor's Unable state then decides.
+local function InInteractRange()
+  if not UnitIsInInteractRange then return nil end
+  return UnitIsInInteractRange("softinteract");
+end
+
 local function Notify(msg) print("|cffffd100Enhanced Soft Interact:|r " .. msg) end
 
 -- The same setting as Options > Controls > Enable Interact Key.
@@ -95,18 +117,17 @@ end
 
 -- Saved-setting defaults. LoadSettings fills in unset keys from here, and the Edit Mode panel resets to them.
 local DEFAULTS = {
-  showIcon = true, iconSize = 30, flipIconSide = false, showKey = true, keySize = 130,
-  fontSize = 17, nameMinWidth = 100, nameMaxWidth = 200, bgHeight = 50, colorBrightness = 100,
+  showIcon = true, iconSize = 30, swapIconAndKey = false, showKey = true, keySize = 130,
+  fontSize = 17, nameMinWidth = 100, nameMaxWidth = 200, hudHeight = 50, colorBrightness = 100,
   interactAnim = true, switchAnim = true,
   fadeEnabled = true, fadeInTime = 0.07, fadeOutTime = 0.1,
 };
-local FADE_MIN, FADE_MAX = 0.01, 1; --slider range; the Fade Animations checkbox turns fading off
-
--- Saved keys from older versions that no longer do anything. LoadSettings deletes them.
-local OBSOLETE_KEYS = {
-  "useOnlyDefaultColor", "showNPIcon", "npIconSize", "growth", "bgColor", "keySizeV2", "enableMove", "bgMinWidth",
-  "fadePreset", "anchor", "defaultPosition", "bgStyle", "bgAtlas", "keyCapStyle", "styleSetsDefault",
-  "bgBannerDefault", "bgSparkDefault", "styleSet", "styleEffects", "bgBrightness",
+-- Each Edit Mode slider's {min, max, step}. Fade times start above 0, because the Fade Animations checkbox turns fading off.
+local SLIDER_RANGES = {
+  iconSize = {16, 48, 2}, keySize = {75, 150, 5},
+  fontSize = {10, 32, 1}, nameMinWidth = {50, 300, 5}, nameMaxWidth = {50, 400, 5},
+  colorBrightness = {30, 100, 5}, hudHeight = {20, 80, 2},
+  fadeInTime = {0.01, 1, 0.01}, fadeOutTime = {0.01, 1, 0.01},
 };
 
 ----
@@ -133,7 +154,7 @@ local SHADOW, GLOW = MEDIA .. "SoftShadow", MEDIA .. "SoftGlow";
 local SHADOW_ALPHA = 0.9;
 local LINE_ATLAS = "LevelUp-Bar-White";
 
--- frame.box is the layout box (icon | name | key, bgHeight tall) that everything anchors to. It draws
+-- frame.box is the layout box (icon | name | key, hudHeight tall) that everything anchors to. It draws
 -- nothing itself.
 frame.box = frame:CreateTexture(nil, "BACKGROUND");
 frame.box:SetPoint("CENTER"); --a longer name widens the box equally on both sides
@@ -156,7 +177,7 @@ frame.nameColor = { frame.name:GetTextColor() };
 frame.requirement = frame:CreateFontString(nil, "ARTWORK", NAME_FONT);
 frame.requirement:SetWordWrap(false);
 frame.requirement:SetJustifyH("CENTER");
-frame.requirement:SetTextColor(1, 0.125, 0.125); --RED_FONT_COLOR, Blizzard's color for unmet requirements
+frame.requirement:SetTextColor(RED_FONT_COLOR:GetRGB()); --Blizzard's color for unmet requirements
 frame.requirement:Hide();
 
 -- The shadow reaches SHADOW_PAD_X past both ends of the box and SHADOW_PAD_Y above and below it. The
@@ -197,15 +218,27 @@ local function StyleKeyCap()
     if info and info.width > 0 and info.height > 0 then
       cap.icon:SetAtlas(style.atlas);
       cap.art = { aspect = info.width / info.height, margins = style.margins or NO_MARGINS };
-      cap.text:SetTextColor(unpack(style.textColor));
+      cap.textColor = style.textColor;
       cap.text:SetShadowOffset(style.shadow and 1 or 0, style.shadow and -1 or 0);
       return;
     end
   end
   cap.art = { aspect = 1, margins = NO_MARGINS };
   cap.icon:SetColorTexture(0, 0, 0, 0.6);
-  cap.text:SetTextColor(1, 1, 1);
+  cap.textColor = {1, 1, 1};
   cap.text:SetShadowOffset(1, -1);
+end
+
+-- Out of range, the key label turns RED_FONT_COLOR, the way ActionButton_UpdateRangeIndicator colors an
+-- action button's hotkey. A gamepad glyph has no label, so the glyph itself takes the red tint.
+local function PaintKeyCap()
+  local red = frame.outOfRange and { RED_FONT_COLOR:GetRGB() };
+  if cap.isGlyph then
+    cap.icon:SetVertexColor(unpack(red or {1, 1, 1}));
+  else
+    cap.icon:SetVertexColor(1, 1, 1);
+    cap.text:SetTextColor(unpack(red or cap.textColor));
+  end
 end
 
 ----
@@ -347,7 +380,7 @@ local function UpdateLines()
 end
 
 -- The icon and the key cap sit at opposite ends of the box, EDGE_INSET from the edge. "Swap Icon and
--- Key" (flipIconSide) swaps their ends. The name sits between them (UpdateLayout).
+-- Key" (swapIconAndKey) swaps their ends. The name sits between them (UpdateLayout).
 local EDGE_INSET = 7;
 local function Inset(side) return side == "LEFT" and EDGE_INSET or -EDGE_INSET end
 
@@ -356,7 +389,7 @@ local function Inset(side) return side == "LEFT" and EDGE_INSET or -EDGE_INSET e
 -- rounds the nudge to whole units, because the renderer may snap a fractional nudge away. Unable icons
 -- use their cursor's offset. Icons from a file ID are 32px files that are already centered.
 local function AnchorIcon()
-  local side = EnhancedSoftInteractDB.flipIconSide and "RIGHT" or "LEFT";
+  local side = EnhancedSoftInteractDB.swapIconAndKey and "RIGHT" or "LEFT";
   local key = frame.colorKey and NormalizeCursorKey(frame.colorKey):gsub("^cursor unable", "cursor ");
   local offset = key and not frame.iconFromFileID and ns.iconArtOffsets[key];
   local nudgeX, nudgeY = 0, 0;
@@ -371,7 +404,7 @@ local function AnchorIcon()
 end
 
 local function SetIconSide()
-  local keySide = EnhancedSoftInteractDB.flipIconSide and "LEFT" or "RIGHT";
+  local keySide = EnhancedSoftInteractDB.swapIconAndKey and "LEFT" or "RIGHT";
   AnchorIcon();
   cap:ClearAllPoints();
   cap:SetPoint(keySide, frame.box, keySide, Inset(keySide), 0);
@@ -500,6 +533,7 @@ local function SetKeyCapText(text)
     cap.isGlyph = true;
     cap.capWidth, cap.capHeight = height, height;
     cap:SetSize(height, height);
+    PaintKeyCap();
     return;
   end
   if cap.isGlyph then StyleKeyCap(); end --back from a gamepad glyph
@@ -521,6 +555,7 @@ local function SetKeyCapText(text)
   cap.icon:ClearAllPoints();
   cap.icon:SetPoint("TOPLEFT", -m[1] * artWidth, m[2] * height);
   cap.icon:SetPoint("BOTTOMRIGHT", m[3] * artWidth, -m[4] * height);
+  PaintKeyCap();
 end
 
 local function UpdateKeyCap()
@@ -561,7 +596,7 @@ local function StyleName()
   frame.requirement:SetShown(frame.showRequirement);
 end
 
--- The box is a table of three columns: icon | name | key cap (flipIconSide swaps the outer two). The icon
+-- The box is a table of three columns: icon | name | key cap (swapIconAndKey swaps the outer two). The icon
 -- and key columns are as wide as their contents plus COLUMN_GAP; an empty column takes no room. The name
 -- column fits the name (and the requirement line) between nameMinWidth and nameMaxWidth, and cuts a longer
 -- name short with "...". A secret name has a secret width; its column then takes nameMaxWidth.
@@ -573,7 +608,7 @@ local function UpdateLayout()
   local maxName = math.max(minName, db.nameMaxWidth);
   local function Column(width) return width > 0 and width + COLUMN_GAP or 0 end
   local left, right = Column(db.showIcon and db.iconSize or 0), Column(cap:IsShown() and cap.capWidth or 0);
-  if db.flipIconSide then left, right = right, left; end
+  if db.swapIconAndKey then left, right = right, left; end
   local function FitWidth(text, size, width)
     nameMeasure:SetFont(media:Fetch("font", db.font), size, "");
     nameMeasure:SetText(text);
@@ -607,7 +642,7 @@ local function UpdateFont()
 end
 
 local function UpdateHeight()
-  frame.box:SetHeight(EnhancedSoftInteractDB.bgHeight);
+  frame.box:SetHeight(EnhancedSoftInteractDB.hudHeight);
 end
 
 ----
@@ -615,20 +650,13 @@ end
 ----
 
 -- Only a target you can interact with gets its type's color. In range but unable (such as a herb without
--- Herbalism) is UNABLE_COLOR; out of range is OUT_OF_RANGE_COLOR, and the frame dims to half alpha.
+-- Herbalism) is UNABLE_COLOR. Out of range is OUT_OF_RANGE_COLOR, the frame fades to OUT_OF_RANGE_ALPHA,
+-- and the key label turns red, as an action button's hotkey does when its target is out of range.
 local OUT_OF_RANGE_COLOR = {.35, .35, .35};
 local UNABLE_COLOR = {.5, .5, .5};
+local IN_RANGE_ALPHA, OUT_OF_RANGE_ALPHA = 1, 0.75;
 
--- Type colors light at full strength. Vivid scales each one until its strongest channel is 1, so dark
--- colors such as herb green glow as much as quest yellow and keep their hue. colorBrightness (percent)
--- dims them.
-local function Vivid(color)
-  local m = math.max(color[1], color[2], color[3]);
-  if m <= 0 then return color end
-  return { color[1] / m, color[2] / m, color[3] / m };
-end
-
--- The color for an icon key (frame.colorKey) and range.
+-- The color for an icon key (frame.colorKey) and range, dimmed by colorBrightness (percent).
 local function GetTypeColor(key, outOfRange)
   local color;
   if outOfRange then
@@ -636,10 +664,10 @@ local function GetTypeColor(key, outOfRange)
   elseif IsUnableKey(key) then
     color = UNABLE_COLOR;
   else
-    color = Vivid(TYPE_COLORS[key] or TYPE_COLORS["default"]);
+    color = TYPE_COLORS[key] or TYPE_COLORS["default"];
   end
   local scale = EnhancedSoftInteractDB.colorBrightness / 100;
-  return math.min(1, color[1] * scale), math.min(1, color[2] * scale), math.min(1, color[3] * scale);
+  return color[1] * scale, color[2] * scale, color[3] * scale;
 end
 
 local function PaintColor(r, g, b)
@@ -650,11 +678,12 @@ local function PaintColor(r, g, b)
   frame.flash:SetVertexColor(r, g, b);
 end
 
--- Sets the colors and the glow size from frame.colorKey and frame.outOfRange. With blend (the HUD is
--- visible), the glow animates, and with switchAnim on the color blends over SWITCH_TIME from wherever it
--- is now, also from the middle of a running blend.
+-- Sets the colors, the key label and the glow size from frame.colorKey and frame.outOfRange. With blend
+-- (the HUD is visible), the glow animates, and with switchAnim on the color blends over SWITCH_TIME from
+-- wherever it is now, also from the middle of a running blend.
 local colorTween = CreateTween();
 local function SetTypeColor(blend)
+  PaintKeyCap();
   SetGlowScale(frame.outOfRange and GLOW_OUT_OF_RANGE_SCALE or 1, blend);
   local to = { GetTypeColor(frame.colorKey, frame.outOfRange) };
   if not (blend and EnhancedSoftInteractDB.switchAnim and frame.rgb) then
@@ -704,14 +733,31 @@ local function ShowCursor(name)
   return ColorKeyFor("Cursor " .. name);
 end
 
--- The icon key for the cursor SetUnitCursorTexture just put on the icon. Retail sometimes gives a file ID
--- (ns.cursorFileNames, Feat\Cursors.lua); a secret or unknown icon is "default".
-local function ResolveIconKey(rawPath)
-  if issecretvalue(rawPath) then return "default" end
-  if type(rawPath) == "string" and not rawPath:find("FileData") then return ColorKeyFor(rawPath) end
-  local fileID = frame.icon:GetTextureFileID();
-  if issecretvalue(fileID) then return "default" end
-  local name = ns.cursorFileNames[fileID];
+-- Draws the soft target's cursor on the icon, as Blizzard's nameplates and gamepad action bar do, asking
+-- for the centered crosshair art. Returns false when the target has no cursor.
+local CROSSHAIR_STYLE = Enum.CursorStyle and Enum.CursorStyle.Crosshair;
+local function DrawTargetCursor()
+  return SetUnitCursorTexture(frame.icon, "softinteract", CROSSHAIR_STYLE);
+end
+
+-- Which cursor DrawTargetCursor drew, as a TYPE_COLORS key. It asks the texture in three ways: its atlas
+-- name, the cursor name in its path ("Cursor Crosshair_Mail_64"), then its file ID, because retail draws
+-- some cursors straight from their own files (ns.cursorFileNames, Feat\Cursors.lua). The crosshair atlases
+-- live in those same files, so the file ID only counts when the other two say nothing. A secret icon is
+-- "default", and an unknown file ID stays a number, which has no color. frame.iconSource keeps what
+-- matched, for /esi debug.
+local function IdentifyCursor()
+  local icon = frame.icon;
+  local atlas = icon:GetAtlas();
+  if issecretvalue(atlas) then frame.iconSource = "secret"; return "default" end
+  if atlas and atlas ~= "" then frame.iconSource = "atlas " .. atlas; return ColorKeyFor(atlas) end
+  local path = icon:GetTextureFilePath();
+  if issecretvalue(path) then frame.iconSource = "secret"; return "default" end
+  if type(path) == "string" and CursorName(path) then frame.iconSource = "path " .. path; return ColorKeyFor(path) end
+  local fileID = icon:GetTextureFileID();
+  if issecretvalue(fileID) then frame.iconSource = "secret"; return "default" end
+  frame.iconSource = "file " .. tostring(fileID);
+  local name = fileID and ns.cursorFileNames[fileID];
   if not name then return tostring(fileID) end
   frame.iconFromFileID = true;
   return ColorKeyFor("Cursor " .. name);
@@ -734,11 +780,17 @@ local function OnSoftTargetChanged(oldTarget, newTarget)
   frame.name:SetText(UnitName("softInteract"));
   UpdateKeyCap(); --UpdateLayout runs below, once the requirement line is known
 
-  local hasCursor = SetUnitCursorTexture(frame.icon, "softInteract");
-  if not hasCursor then frame.icon:SetAtlas("mechagon-projects"); end
+  -- A target without a cursor gets the Interact cog, or UnableInteract out of interact range, as on
+  -- Blizzard's gamepad action bar.
   frame.iconFromFileID = false;
-  local rawPath = frame.icon:GetTextureFilePath();
-  local iconKey = ResolveIconKey(rawPath);
+  local hasCursor = DrawTargetCursor();
+  local iconKey;
+  if hasCursor then
+    iconKey = IdentifyCursor();
+  else
+    frame.iconSource = "none";
+    iconKey = ShowCursor(InInteractRange() == false and "UnableInteract" or "Interact");
+  end
   local resolvedKey = iconKey;
 
   -- Range comes from UnitIsInInteractRange, which Blizzard's gamepad action bar also uses for its
@@ -751,7 +803,7 @@ local function OnSoftTargetChanged(oldTarget, newTarget)
   local knownTarget = not issecretvalue(newTarget) and newTarget or nil;
   local unableName = iconKey:match("^Cursor Unable(.+)$");
   local busy = UnitCastingInfo("player") or UnitChannelInfo("player");
-  local canInteract = UnitIsInInteractRange and UnitIsInInteractRange("softInteract");
+  local canInteract = InInteractRange();
   local spellInRange = unableName and ns.SpellRangeCheck and ns.SpellRangeCheck(unableName, "softInteract");
   if spellInRange ~= nil then canInteract = spellInRange end
   if unableName and (canInteract or (busy and knownTarget and knownTarget == frame.inRangeTarget)) then
@@ -772,7 +824,8 @@ local function OnSoftTargetChanged(oldTarget, newTarget)
   -- vendor, quest, ...) always win.
   local talkBadge = (not hasCursor or GENERIC_ICONS[iconKey]) and IsTalkableNPC("softInteract");
   if talkBadge then
-    if UnitIsInInteractRange then inRange = UnitIsInInteractRange("softInteract") end
+    local talkRange = InInteractRange();
+    if talkRange ~= nil then inRange = talkRange end
     iconKey = ShowCursor(inRange and "Speak" or "UnableSpeak");
   end
   local outOfRange = not inRange;
@@ -784,7 +837,7 @@ local function OnSoftTargetChanged(oldTarget, newTarget)
       and frame:IsShown() and not frame.fadingOut then
     -- Debug prints every game event, doubles included; unchanged range checks stay silent.
     if frame.debugIcons and not frame.fromRangeCheck then
-      ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, rawPath, resolvedKey, iconKey, talkBadge, outOfRange);
+      ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange);
     end
     return;
   end
@@ -794,7 +847,7 @@ local function OnSoftTargetChanged(oldTarget, newTarget)
   local switched = visible and (action ~= frame.lastAction or not knownTarget or knownTarget ~= frame.lastTarget);
   frame.lastTarget, frame.lastSignature, frame.lastAction = knownTarget, signature, action;
 
-  FadeTo(outOfRange and 0.5 or 0.9, (GetFadeTimes()), false);
+  FadeTo(outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA, (GetFadeTimes()), false);
 
   frame.colorKey, frame.outOfRange = iconKey, outOfRange;
   frame.requirementText = IsUnableKey(iconKey) and requirement or nil;
@@ -804,7 +857,7 @@ local function OnSoftTargetChanged(oldTarget, newTarget)
   if switched and EnhancedSoftInteractDB.switchAnim then PlaySwitchAnim(); end
 
   if frame.debugIcons then
-    ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, rawPath, resolvedKey, iconKey, talkBadge, outOfRange);
+    ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange);
   end
 end
 
@@ -853,11 +906,10 @@ local function ApplyAllSettings()
   UpdateColors();
 end
 
--- Deletes obsolete saved keys, fills in defaults, applies every setting and runs ns.onLoad.
+-- Fills in defaults, applies every setting and runs ns.onLoad.
 local function LoadSettings()
   local db = EnhancedSoftInteractDB or {};
   EnhancedSoftInteractDB = db;
-  for _, key in ipairs(OBSOLETE_KEYS) do db[key] = nil; end
   for key, value in pairs(DEFAULTS) do
     if db[key] == nil then db[key] = value; end
   end
@@ -913,7 +965,7 @@ end
 
 -- Shared with the Feat files.
 ns.frame, ns.media, ns.typeColors = frame, media, TYPE_COLORS;
-ns.DEFAULTS, ns.FADE_MIN, ns.FADE_MAX, ns.HUD_DEFAULT_POSITION = DEFAULTS, FADE_MIN, FADE_MAX, HUD_DEFAULT_POSITION;
+ns.DEFAULTS, ns.SLIDER_RANGES, ns.HUD_DEFAULT_POSITION = DEFAULTS, SLIDER_RANGES, HUD_DEFAULT_POSITION;
 ns.Notify, ns.IsInteractKeyEnabled, ns.IsUnableKey = Notify, IsInteractKeyEnabled, IsUnableKey;
 ns.ShowCursor, ns.GetTypeColor, ns.SetTypeColor, ns.UpdateColors = ShowCursor, GetTypeColor, SetTypeColor, UpdateColors;
 ns.AnchorIcon, ns.SetIconSide, ns.UpdateIcon, ns.UpdateFont = AnchorIcon, SetIconSide, UpdateIcon, UpdateFont;
