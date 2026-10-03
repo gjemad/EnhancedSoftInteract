@@ -1,5 +1,9 @@
 # Changelog
 
+## 1.1.3-beta (2026-10-04)
+
+- Fixed HUD animations that sometimes looked inconsistent.
+
 ## 1.1.2-beta (2026-10-04)
 
 - The Interact Key now stays on while you use the gamepad UI.
