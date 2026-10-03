@@ -1,0 +1,20 @@
+## Interface: 120000, 120001, 16001
+## Title: Enhanced Soft Interact
+## Notes: Shows the name, icon and interact key of your soft interact target.
+## IconAtlas: Crosshair_interact_64
+## Version: 1.0.0
+## SavedVariables: EnhancedSoftInteractDB
+## X-Credits: Based on Soft Interact HUD by Mattsta.
+
+Libs\LibStub\LibStub.lua
+Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
+Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
+Libs\LibEditMode\embed.xml
+
+EnhancedSoftInteract.lua
+Feat\Cursors.lua
+Feat\Forever.lua [ExcludeLoadGameType standard, classic][AllowLoadGameType camelot]
+Feat\HideBlizzard.lua
+Feat\Debug.lua
+Feat\EditMode.lua
+Feat\Options.lua
