@@ -151,6 +151,10 @@ local KEYCAP_STYLES = { --in order of preference
 };
 local NO_MARGINS = {0, 0, 0, 0};
 
+-- Keeps an animated value inside its range, so no tween or blend can push a glow, color or press depth
+-- past its limits.
+local function Clamp(value, low, high) return math.max(low, math.min(high, value)) end
+
 -- Calls step(t) every frame for duration seconds, with t going from 0 to 1. Playing again replaces the
 -- running tween.
 local function CreateTween()
@@ -410,7 +414,7 @@ local function CreateHUD(frame)
   local function TweenDepth(depth, duration, ease)
     local from = cap.pressDepth;
     depthTween:Play(duration, function(t)
-      cap.pressDepth = from + (depth - from) * ease(t);
+      cap.pressDepth = Clamp(from + (depth - from) * ease(t), 0, 1);
       cap.pressShade = 1 - (1 - PRESS_SHADE) * cap.pressDepth;
       PaintKeyCap();
     end);
@@ -627,7 +631,7 @@ local function CreateHUD(frame)
   local GLOW_OUT_OF_RANGE_SCALE = 0.55;
   local GLOW_TIME = 0.25;
   local function SizeGlow()
-    local size = EnhancedSoftInteractDB.iconSize * (frame.glowScale or 1);
+    local size = EnhancedSoftInteractDB.iconSize * Clamp(frame.glowScale or 1, GLOW_OUT_OF_RANGE_SCALE, 1);
     frame.iconGlow:SetSize(size * GLOW_W, size * GLOW_H);
   end
 
@@ -858,10 +862,20 @@ local function CreateHUD(frame)
     return color[1] * scale, color[2] * scale, color[3] * scale;
   end
 
+  -- A texture's vertex alpha and its own alpha are one value, so an Alpha animation overwrites the
+  -- vertex alpha set here. The switch animation fades the icon glow in to alpha 1, which left it at full
+  -- strength instead of 0.6 until the next repaint (seen in game as a glow that's too strong after a
+  -- target switch). The additive layers keep alpha 1 and carry their strength in the color instead;
+  -- with ADD blending, color times strength at alpha 1 draws the same as color at that alpha. The flash
+  -- keeps its alpha out of this, because the interact animation drives it from 0.
+  local ICON_GLOW_STRENGTH, LINE_GLOW_STRENGTH = 0.6, 0.35;
   local function PaintColor(r, g, b)
-    frame.iconGlow:SetVertexColor(r, g, b, 0.6);
+    r, g, b = Clamp(r, 0, 1), Clamp(g, 0, 1), Clamp(b, 0, 1);
+    local s = ICON_GLOW_STRENGTH;
+    frame.iconGlow:SetVertexColor(r * s, g * s, b * s, 1);
     frame.lineLow:SetVertexColor(r, g, b, 1);
-    frame.lineLowGlow:SetVertexColor(r, g, b, 0.35);
+    s = LINE_GLOW_STRENGTH;
+    frame.lineLowGlow:SetVertexColor(r * s, g * s, b * s, 1);
     frame.lineHigh:SetVertexColor(r, g, b, 0.5);
     frame.flash:SetVertexColor(r, g, b);
   end
@@ -1055,6 +1069,25 @@ local function CreateHUD(frame)
       ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange);
     end
   end
+
+  -- When the HUD hides, every animation stops and its values go back to rest, so nothing half-finished
+  -- carries over to the next target. Without a stored glow size and color, the next target sets both at
+  -- once instead of animating from stale values.
+  local function ResetAnimations()
+    for _, group in ipairs({ frame.pulse, frame.switchAnim, frame.ripple, frame.pressIn, frame.pressOut }) do
+      group:Stop();
+    end
+    glowTween:Stop();
+    colorTween:Stop();
+    depthTween:Stop();
+    tapToken = tapToken + 1; --cancels a pending tap release
+    frame.flash:SetAlpha(0);
+    frame.pulseUntil = 0;
+    frame.glowScale, frame.rgb, glowTarget = nil, nil, nil;
+    cap.isDown, cap.tapping, cap.consumed, cap.releasedAt = false, false, false, nil;
+    cap.pressDepth, cap.pressShade = 0, 1; --the key cap repaints with the next target (SetTypeColor)
+  end
+  frame:HookScript("OnHide", ResetAnimations);
 
   -- Shows a made-up target in Edit Mode: a name, a cursor by name ("Skin", "UnableGatherHerbs") and an
   -- optional requirement line, fully visible and in range.
