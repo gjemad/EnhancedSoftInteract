@@ -1,12 +1,14 @@
 local _, ns = ...;
 
--- The HUD replaces Blizzard's soft target tooltip and nameplate, so the addon turns both off while it
--- runs, and the player's own settings return once it's disabled. On WoW: Forever it sets temp CVars, as
+-- The HUD replaces Blizzard's soft target tooltip and nameplate, and the icon Blizzard's nameplates draw
+-- above the target, so the addon turns them off while it runs, and the player's own settings return once
+-- it's disabled. The nameplate icon only shows while SoftTargetNameplateSize is above 0
+-- (Blizzard_NamePlates.lua); the icon CVars that give the HUD its cursor stay as they are. On WoW: Forever it sets temp CVars, as
 -- Blizzard's gamepad mode does, and the client never saves those. Retail has no temp CVars, so the addon
 -- sets the CVar and puts the player's value back at logout, before the client saves its settings. Both
 -- put the player's value back when you uncheck Enabled in Edit Mode. It skips CVars a client doesn't
 -- have (GetCVar gives nil).
-local HIDDEN_CVARS = { "SoftTargetTooltipInteract", "SoftTargetNameplateInteract" };
+local HIDDEN_CVARS = { "SoftTargetTooltipInteract", "SoftTargetNameplateInteract", "SoftTargetNameplateSize" };
 local SetTempCVar = C_CVar.SetTempCVar;
 local playerValues = {}; --each CVar's value from the player, from before the addon hid it
 

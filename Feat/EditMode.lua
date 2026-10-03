@@ -134,11 +134,16 @@ local function BuildEditModeSettings()
     set = function(_, value)
       db.enabled = value;
       ns.UpdateBlizzardDisplays();
-      ns.KeepInteractKeyOn();
+      ns.KeepSettings(true);
       LibEditMode:RefreshFrameSettings(frame);
     end,
   };
-  Checkbox("Keep Interact Key On", "forceInteractKey", function() ns.KeepInteractKeyOn(true); end);
+
+  -- Game settings the HUD needs, kept by Feat\Persistence.lua.
+  Section("persistence", "Persistence");
+  local function KeepNow() ns.KeepSettings(true); end
+  Checkbox("Keep Interact Key On", "forceInteractKey", KeepNow);
+  Checkbox("Keep Interact Key Icons on Show All", "forceInteractIcons", KeepNow);
 
   Section("icon", "Icon & Key");
   Checkbox("Show Icon", "showIcon", function() UpdateIcon(); UpdateLayout(); end);
@@ -175,8 +180,9 @@ local function BuildEditModeSettings()
 
   -- LibEditMode shows a setting's desc as its tooltip.
   local DESCRIPTIONS = {
-    ["Enabled"] = "Shows the HUD for your soft interact target. Turn off to hide it, bring back Blizzard's soft target tooltip and nameplate, and stop keeping the Interact Key on. The Interact Key keeps its current setting.",
+    ["Enabled"] = "Shows the HUD for your soft interact target. Turn off to hide it, bring back Blizzard's soft target tooltip, nameplate and nameplate icon, and stop keeping the Persistence settings. Those settings keep their current values.",
     ["Keep Interact Key On"] = "Turns Enable Interact Key in Options > Controls back on if anything turns it off, such as turning off the gamepad, and says so in chat. The HUD needs the key. Uncheck this to leave the key alone.",
+    ["Keep Interact Key Icons on Show All"] = "Sets Interact Key Icons in Options > Accessibility back to Show All if anything changes it, and says so in chat. With fewer icons, corpses and objects show a plain cog on the HUD. Uncheck this to leave the setting alone.",
     ["Show Icon"] = "Shows the target's interact icon (talk, quest, vendor, herb, ...) on the HUD.",
     ["Icon Size"] = "Size of the interact icon.\nDefault: 30px",
     ["Swap Icon and Key"] = "Puts the icon on the right end of the HUD and the interact key on the left. The name stays centered.",
