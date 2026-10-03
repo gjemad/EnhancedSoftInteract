@@ -2,14 +2,17 @@
 ## Title: Enhanced Soft Interact
 ## Notes: Shows the name, icon and interact key of your soft interact target.
 ## IconAtlas: Crosshair_interact_64
-## Version: 1.0.0
+## Version: @project-version@
 ## SavedVariables: EnhancedSoftInteractDB
+## OptionalDeps: LibStub, CallbackHandler-1.0, LibSharedMedia-3.0, LibEditMode
 ## X-Credits: Based on Soft Interact HUD by Mattsta.
 
+#@no-lib-strip@
 Libs\LibStub\LibStub.lua
 Libs\CallbackHandler-1.0\CallbackHandler-1.0.lua
 Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 Libs\LibEditMode\embed.xml
+#@end-no-lib-strip@
 
 EnhancedSoftInteract.lua
 Feat\Cursors.lua

@@ -1,0 +1,14 @@
+package-as: EnhancedSoftInteract
+
+enable-nolib-creation: yes
+
+externals:
+  Libs/LibStub: https://repos.wowace.com/wow/libstub/trunk
+  Libs/CallbackHandler-1.0: https://repos.wowace.com/wow/callbackhandler/trunk/CallbackHandler-1.0
+  Libs/LibSharedMedia-3.0: https://repos.curseforge.com/wow/libsharedmedia-3-0/trunk/LibSharedMedia-3.0
+  Libs/LibEditMode:
+    url: https://github.com/p3lim-wow/LibEditMode
+    tag: latest
+
+ignore:
+  - README.md
