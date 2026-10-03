@@ -295,13 +295,17 @@ frame.pulse = AnimationGroup({
 
 -- When the frame changes to another target or another action (skinning, then looting the same corpse),
 -- the icon and name drop 5 units at once, then rise into place and fade in over SWITCH_TIME. Translation
--- steps in one group add up. The type color blends over at the same time (SetTypeColor).
+-- steps in one group add up. The icon glow fades in with them: it moves with the icon at once, so without
+-- the fade it would show the old color at the new spot before the icon arrives. The type color and the
+-- HUD's alpha blend over at the same time (SetTypeColor, FadeOver).
 local SWITCH_TIME = 0.2;
 local switchSteps = {};
 for _, region in ipairs({ frame.icon, frame.name }) do
   table.insert(switchSteps, { "Translation", region, 1, 0, offset = -5 });
-  table.insert(switchSteps, { "Alpha", region, 1, 0, alpha = {0, 0} });
   table.insert(switchSteps, { "Translation", region, 2, SWITCH_TIME, smoothing = "OUT", offset = 5 });
+end
+for _, region in ipairs({ frame.icon, frame.name, frame.iconGlow }) do
+  table.insert(switchSteps, { "Alpha", region, 1, 0, alpha = {0, 0} });
   table.insert(switchSteps, { "Alpha", region, 2, SWITCH_TIME, smoothing = "OUT", alpha = {0, 1} });
 end
 frame.switchAnim = AnimationGroup(switchSteps);
@@ -317,8 +321,8 @@ local function PlayInteractPulse()
 end
 
 -- The HUD fades with its own animation group, not Blizzard's shared fade manager, which risks taint.
--- Durations are for a full fade from 0 to 1 alpha; partial fades (interruptions, range dimming) take
--- proportionally less.
+-- FadeTo's durations are for a full fade from 0 to 1 alpha, so partial fades (interruptions) take
+-- proportionally less. FadeOver takes the given time whatever the distance.
 frame.fader = frame:CreateAnimationGroup();
 frame.fadeAnim = frame.fader:CreateAnimation("Alpha");
 frame.fader:SetToFinalAlpha(true);
@@ -344,7 +348,7 @@ local function CurrentAlpha()
   return frame:GetAlpha();
 end
 
-local function FadeTo(toAlpha, fullDuration, hideWhenDone)
+local function FadeOver(toAlpha, duration, hideWhenDone)
   local fromAlpha = CurrentAlpha();
   frame.fader:Stop();
   frame.fadingOut = hideWhenDone;
@@ -352,8 +356,12 @@ local function FadeTo(toAlpha, fullDuration, hideWhenDone)
   frame:Show();
   frame.fadeAnim:SetFromAlpha(fromAlpha);
   frame.fadeAnim:SetToAlpha(toAlpha);
-  frame.fadeAnim:SetDuration(math.max(0.01, fullDuration * math.abs(toAlpha - fromAlpha)));
+  frame.fadeAnim:SetDuration(math.max(0.01, duration));
   frame.fader:Play();
+end
+
+local function FadeTo(toAlpha, fullDuration, hideWhenDone)
+  FadeOver(toAlpha, fullDuration * math.abs(toAlpha - CurrentAlpha()), hideWhenDone);
 end
 
 ----
@@ -849,7 +857,14 @@ local function OnSoftTargetChanged(oldTarget, newTarget)
   local switched = visible and (action ~= frame.lastAction or not knownTarget or knownTarget ~= frame.lastTarget);
   frame.lastTarget, frame.lastSignature, frame.lastAction = knownTarget, signature, action;
 
-  FadeTo(outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA, (GetFadeTimes()), false);
+  -- A visible HUD dims or brightens over SWITCH_TIME, together with its colors. A short fade-in time
+  -- would otherwise drop it from 1 to 0.75 in about 0.02 seconds while the colors still blend.
+  local toAlpha = outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA;
+  if visible and EnhancedSoftInteractDB.switchAnim then
+    FadeOver(toAlpha, SWITCH_TIME, false);
+  else
+    FadeTo(toAlpha, (GetFadeTimes()), false);
+  end
 
   frame.colorKey, frame.outOfRange = iconKey, outOfRange;
   frame.requirementText = IsUnableKey(iconKey) and requirement or nil;

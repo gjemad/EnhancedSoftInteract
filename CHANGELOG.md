@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- When the target changes, the icon glow fades in with the new icon instead of showing the old color at the new spot first.
+- Going in or out of range, the HUD dims or brightens over 0.2 seconds together with its colors. It used to drop to 75% almost at once while the colors still blended.
 - Out of range, a gamepad button glyph turns a clear red. It used to go nearly black, because the red tint multiplied the glyph's own color.
 
 ## 1.0.3-beta (2026-10-03)
