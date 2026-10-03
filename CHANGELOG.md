@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.0.3-beta (2026-10-03)
 
 - The debug window's portrait shows the cog centered in its ring, at the size Blizzard's bag frames use. The cog used to sit off-center and reach past the ring.
 - The first line of a debug page no longer starts under the portrait.
