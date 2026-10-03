@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- A gamepad button glyph is smaller, so it fits between the HUD's lines instead of running past them.
+- Interacting presses a gamepad button the way Blizzard's gamepad action bar does: it shrinks with its bottom edge in place. Keyboard keys still dip.
 - When the target changes, the icon glow fades in with the new icon instead of showing the old color at the new spot first.
 - Going in or out of range, the HUD dims or brightens over 0.2 seconds together with its colors. It used to drop to 75% almost at once while the colors still blended.
 - Out of range, a gamepad button glyph turns a clear red. It used to go nearly black, because the red tint multiplied the glyph's own color.

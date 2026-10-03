@@ -273,25 +273,40 @@ local function AnimationGroup(steps)
     a:SetDuration(s[4]);
     if s.smoothing then a:SetSmoothing(s.smoothing); end
     if s.alpha then a:SetFromAlpha(s.alpha[1]); a:SetToAlpha(s.alpha[2]); end
-    if s.scale then a:SetScaleFrom(1, 1); a:SetScaleTo(s.scale, s.scale); a:SetOrigin("CENTER", 0, 0); end
+    if s.scale then a:SetScaleFrom(1, 1); a:SetScaleTo(s.scale, s.scale); a:SetOrigin(s.origin or "CENTER", 0, 0); end
     if s.offset then a:SetOffset(0, s.offset); end
   end
   return group;
 end
 
 -- Interact feedback, 0.3 seconds: an additive glow in the target type's color over the HUD, the icon
--- scaling to POP and back, and the key cap dipping 2 units. Only rendering changes; the layout stays.
--- Scale steps in one group multiply, so step 2 scales by 1/POP to end at exactly the icon's size.
+-- scaling to POP and back, and a press of the key. A key cap dips 2 units. A gamepad button is pressed the
+-- way Blizzard's gamepad action bar presses one: it shrinks (4 of its 30 to 38 pixels there, PAD_PRESS)
+-- with its bottom edge in place, so it sinks into the controller instead of sliding down. Only rendering
+-- changes; the layout stays. Scale steps in one group multiply, so step 2 scales by 1/scale to end at
+-- exactly the starting size.
 local PULSE_TIME = 0.3;
 local POP = 1.15;
-frame.pulse = AnimationGroup({
-  { "Alpha", frame.flash, 1, 0.06, smoothing = "OUT", alpha = {0, 0.45} },
-  { "Alpha", frame.flash, 2, 0.24, smoothing = "IN", alpha = {0.45, 0} },
-  { "Scale", frame.icon, 1, 0.08, smoothing = "OUT", scale = POP },
-  { "Scale", frame.icon, 2, 0.2, smoothing = "IN_OUT", scale = 1 / POP },
+local PAD_PRESS = 0.88;
+local function PulseGroup(keySteps)
+  local steps = {
+    { "Alpha", frame.flash, 1, 0.06, smoothing = "OUT", alpha = {0, 0.45} },
+    { "Alpha", frame.flash, 2, 0.24, smoothing = "IN", alpha = {0.45, 0} },
+    { "Scale", frame.icon, 1, 0.08, smoothing = "OUT", scale = POP },
+    { "Scale", frame.icon, 2, 0.2, smoothing = "IN_OUT", scale = 1 / POP },
+  };
+  for _, step in ipairs(keySteps) do table.insert(steps, step); end
+  return AnimationGroup(steps);
+end
+frame.keyPulse = PulseGroup({
   { "Translation", cap, 1, 0.05, smoothing = "OUT", offset = -2 },
   { "Translation", cap, 2, 0.15, smoothing = "IN_OUT", offset = 2 },
 });
+frame.padPulse = PulseGroup({
+  { "Scale", cap.icon, 1, 0.05, smoothing = "OUT", scale = PAD_PRESS, origin = "BOTTOM" },
+  { "Scale", cap.icon, 2, 0.15, smoothing = "IN_OUT", scale = 1 / PAD_PRESS, origin = "BOTTOM" },
+});
+frame.pulse = frame.keyPulse;
 
 -- When the frame changes to another target or another action (skinning, then looting the same corpse),
 -- the icon and name drop 5 units at once, then rise into place and fade in over SWITCH_TIME. Translation
@@ -316,7 +331,9 @@ local function PlaySwitchAnim()
 end
 
 local function PlayInteractPulse()
-  frame.pulse:Stop();
+  frame.keyPulse:Stop();
+  frame.padPulse:Stop();
+  frame.pulse = cap.isGlyph and frame.padPulse or frame.keyPulse;
   frame.pulse:Play();
 end
 
@@ -527,8 +544,12 @@ local KEY_TEXT_NUDGE_X = 0.06;
 -- (capWidth x capHeight, what the layout uses) is the key's face, and the art hangs past it by its
 -- margins. A label too wide for the face widens it to the text plus KEY_TEXT_PAD and stretches the art.
 -- A gamepad button comes from GetBindingText as one atlas markup ("|A:Gamepad_Gen_1_32:14:14|a"); the
--- cap then draws that button's 64px glyph, which fills its square, in place of the key art.
+-- cap then draws that button's 64px glyph, which fills its square, in place of the key art. The glyph is
+-- GLYPH_SHARE of the key art's height: at the default font and key size that is 26 units, between the
+-- lines (30 units apart) and a little larger than the key face (23), because a round button looks smaller
+-- than a square key of the same height.
 local KEY_TEXT_PAD = 10;
+local GLYPH_SHARE = 0.77;
 local function SetKeyCapText(text)
   local db = EnhancedSoftInteractDB;
   local scale = db.keySize / 100;
@@ -541,8 +562,9 @@ local function SetKeyCapText(text)
     cap.icon:SetAllPoints();
     cap.text:SetText("");
     cap.isGlyph = true;
-    cap.capWidth, cap.capHeight = height, height;
-    cap:SetSize(height, height);
+    local size = height * GLYPH_SHARE;
+    cap.capWidth, cap.capHeight = size, size;
+    cap:SetSize(size, size);
     PaintKeyCap();
     return;
   end
