@@ -1,6 +1,6 @@
 ## Interface: 120000, 120001, 16001
 ## Title: Enhanced Soft Interact
-## Notes: Shows the name, icon and interact key of your soft interact target.
+## Notes: Adds a customizable on-screen frame for your soft interact target, displaying its name, available action, and the keybind.
 ## IconAtlas: Crosshair_interact_64
 ## Version: @project-version@
 ## SavedVariables: EnhancedSoftInteractDB
