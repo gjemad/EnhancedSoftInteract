@@ -1,152 +1,207 @@
 local _, ns = ...;
-local issecretvalue = ns.issecretvalue;
-local frame = ns.frame;
+local frame, issecretvalue = ns.frame, ns.issecretvalue;
 
-----
---  Debug window (/esi debug). Every soft target event becomes a page, kept for the last MAX_PAGES events
---  of this session, and the window pages through them like BugSack. Each page holds three views, one per
---  tab:
---  Events: what the game sent and what the HUD did with it.
---  Animations: what each glow layer drew and which animations were playing.
---  Range: everything the range decision used.
---  On the Animations and Range tabs, one page past the newest event shows the same view live, refreshed
---  every LIVE_INTERVAL seconds, to catch what happens between events. Copy highlights the text so Ctrl+C
---  copies it, and while text is selected the window doesn't refresh.
-----
-local MAX_PAGES = 100;
-local LIVE_INTERVAL = 0.25;
-local TABS = { "Events", "Animations", "Range" };
-local EVENTS_TAB = 1;
-local pages = {}; --each page: { [tab] = text }
-local eventCount, lastGUID = 0, nil;
+-- Session-only structured diagnostics. The ring owns at most 2000 records, including live snapshots.
+-- Filters never change capture. JSON lines are escaped before display and contain no secret values.
+local LIMIT, PAGE_SIZE, INTERVAL = 2000, 50, 0.25;
+local started = GetTime();
+local session = date("!%Y-%m-%dT%H:%M:%SZ");
+local records, head, count, sequence, dropped = {}, 1, 0, 0, 0;
+local lastGUID, window, dirty, lastSnapshot;
+local sources = { game = true, range_check = true, snapshot = true };
+local sections = { event = true, animations = true, range = true };
 
--- Secret values (names and GUIDs in combat or instances) become "<secret>". Only tostring, concatenation
--- and string.format touch them, which secrets allow, so no page holds a secret.
 local function Safe(v)
   if issecretvalue(v) then return "<secret>" end
-  return tostring(v);
+  if v == nil then return "<nil>" end
+  return v;
 end
 
-----
---  The Animations and Range views
-----
+local function Number(v)
+  if issecretvalue(v) then return "<secret>" end
+  if type(v) ~= "number" then return "<nil>" end
+  return math.floor(v * 1000 + 0.5) / 1000;
+end
 
--- One glow layer: shown, size, vertex color and alpha, the layer's own alpha and its blend mode.
-local function LayerLine(name, tex)
+local function Quote(s)
+  -- Escape pipes too, so names and atlas markup cannot become WoW color/texture escapes in the edit box.
+  return '"' .. s:gsub('[%z\1-\31\\"|]', function(c)
+    if c == '"' then return '\\"' end
+    if c == '\\' then return '\\\\' end
+    return ("\\u%04x"):format(c:byte());
+  end) .. '"';
+end
+
+local function JSON(v)
+  v = Safe(v);
+  local kind = type(v);
+  if kind == "number" then
+    if v ~= v or v == math.huge or v == -math.huge then return '"<nonfinite>"' end
+    return ("%.3f"):format(v):gsub(",", ".");
+  end
+  if kind == "boolean" then return v and "true" or "false" end
+  if kind ~= "table" then return Quote(tostring(v)); end
+  local keys, fields = {}, {};
+  for key in pairs(v) do keys[#keys + 1] = key; end
+  table.sort(keys);
+  for _, key in ipairs(keys) do fields[#fields + 1] = Quote(key) .. ":" .. JSON(v[key]); end
+  return "{" .. table.concat(fields, ",") .. "}";
+end
+
+local function Layer(tex)
   local r, g, b, a = tex:GetVertexColor();
   local w, h = tex:GetSize();
-  return ("%s: shown=%s size=%.0fx%.0f color=%.2f,%.2f,%.2f vertexAlpha=%.2f alpha=%.2f blend=%s"):format(
-    name, tostring(tex:IsVisible()), w or 0, h or 0, r or 0, g or 0, b or 0, a or 0, tex:GetAlpha(),
-    tostring(tex:GetBlendMode()));
+  return { shown = Safe(tex:IsVisible()), width = Number(w), height = Number(h),
+    red = Number(r), green = Number(g), blue = Number(b), vertex_alpha = Number(a),
+    alpha = Number(tex:GetAlpha()), blend = Safe(tex:GetBlendMode()) };
 end
 
-local function AnimationsText()
-  local cap = frame.keyCap;
-  return table.concat({
-    ("hud: shown=%s alpha=%.2f scale=%.2f target=%s outOfRange=%s"):format(tostring(frame:IsVisible()),
-      frame:GetAlpha(), frame:GetEffectiveScale(), tostring(frame.colorKey), tostring(frame.outOfRange)),
-    ("values: glowScale=%s color=%s pressDepth=%.2f"):format(
-      frame.glowScale and ("%.2f"):format(frame.glowScale) or "-",
-      frame.rgb and ("%.2f,%.2f,%.2f"):format(frame.rgb[1], frame.rgb[2], frame.rgb[3]) or "-", cap.pressDepth or 0),
-    ("playing: fade=%s pulse=%s switch=%s ripple=%s pressIn=%s pressOut=%s"):format(
-      tostring(frame.fader:IsPlaying()), tostring(frame.pulse:IsPlaying()), tostring(frame.switchAnim:IsPlaying()),
-      tostring(frame.ripple:IsPlaying()), tostring(frame.pressIn:IsPlaying()), tostring(frame.pressOut:IsPlaying())),
-    "",
-    LayerLine("iconGlow", frame.iconGlow),
-    LayerLine("lineLow", frame.lineLow),
-    LayerLine("lineLowGlow", frame.lineLowGlow),
-    LayerLine("lineHigh", frame.lineHigh),
-    LayerLine("flash", frame.flash),
-    LayerLine("shadow", frame.shadow),
-  }, "\n");
-end
-
-local function RangeText()
-  local unit = "softinteract";
-  local guid = UnitGUID(unit);
-  local inRangeTarget = "-";
-  if guid and frame.inRangeTarget then
-    inRangeTarget = issecretvalue(guid) and "unknown (secret)" or tostring(guid == frame.inRangeTarget);
+local function Animations()
+  local rgb = frame.rgb or {};
+  local layers = {};
+  for _, name in ipairs({ "iconGlow", "lineLow", "lineLowGlow", "lineHigh", "flash", "shadow" }) do
+    layers[name] = Layer(frame[name]);
   end
-  local unableName = frame.colorKey and frame.colorKey:match("^Cursor Unable(.+)$");
-  local cursorName = unableName or (frame.colorKey and frame.colorKey:match("^Cursor (.+)$"));
-  local spellRange = cursorName and ns.SpellRangeCheck and ns.SpellRangeCheck(cursorName, unit);
-  return table.concat({
-    ("target: name=%s guid=%s"):format(Safe(UnitName(unit)), Safe(guid)),
-    ("cursor: drawn=%s shown=%s"):format(Safe(frame.iconSource), tostring(frame.colorKey)),
-    ("game: inInteractRange=%s"):format(Safe(UnitIsInInteractRange and UnitIsInInteractRange(unit))),
-    ("spell: rangeCheck=%s (for %s)"):format(tostring(spellRange), tostring(cursorName)),
-    ("you: casting=%s channeling=%s"):format(tostring(UnitCastingInfo("player") ~= nil),
-      tostring(UnitChannelInfo("player") ~= nil)),
-    ("hud: outOfRange=%s alpha=%.2f lastInRangeTargetIsThis=%s"):format(tostring(frame.outOfRange),
-      frame:GetAlpha(), inRangeTarget),
-  }, "\n");
+  return { shown = Safe(frame:IsVisible()), alpha = Number(frame:GetAlpha()),
+    scale = Number(frame:GetEffectiveScale()), glow_scale = Number(frame.glowScale),
+    color = { red = Number(rgb[1]), green = Number(rgb[2]), blue = Number(rgb[3]) },
+    press_depth = Number(frame.keyCap.pressDepth), layers = layers,
+    playing = { fade = Safe(frame.fader:IsPlaying()), pulse = Safe(frame.pulse:IsPlaying()),
+      switch = Safe(frame.switchAnim:IsPlaying()), ripple = Safe(frame.ripple:IsPlaying()),
+      press_in = Safe(frame.pressIn:IsPlaying()), press_out = Safe(frame.pressOut:IsPlaying()) } };
 end
 
-local LIVE_TEXT = { [2] = AnimationsText, [3] = RangeText };
+local function Range()
+  local unit, guid = "softinteract", UnitGUID("softinteract");
+  local same = "<nil>";
+  if issecretvalue(guid) or issecretvalue(frame.inRangeTarget) then
+    same = "<secret>";
+  elseif guid and frame.inRangeTarget then
+    same = guid == frame.inRangeTarget;
+  end
+  local key = frame.colorKey;
+  local cursor = key and (key:match("^Cursor Unable(.+)$") or key:match("^Cursor (.+)$"));
+  return { name = Safe(UnitName(unit)), guid = Safe(guid), drawn = Safe(frame.iconSource),
+    shown = Safe(key), cursor = Safe(cursor),
+    interact_range = Safe(UnitIsInInteractRange and UnitIsInInteractRange(unit)),
+    spell_range = Safe(cursor and ns.SpellRangeCheck and ns.SpellRangeCheck(cursor, unit)),
+    casting = Safe(UnitCastingInfo("player")), channeling = Safe(UnitChannelInfo("player")),
+    out_of_range = Safe(frame.outOfRange), last_in_range_target = same };
+end
 
-----
---  The event log
-----
-local window;
-local ShowPage, PageCount;
+local function At(index) return records[(head + index - 2) % LIMIT + 1]; end
+
+local function Append(source, event, animations, range)
+  sequence = sequence + 1;
+  local record = { sequence = sequence, timestamp = date("!%Y-%m-%dT%H:%M:%SZ"),
+    elapsed = Number(GetTime() - started), source = source, event = event,
+    animations = animations, range = range };
+  if count == LIMIT then
+    records[head] = record;
+    head = head % LIMIT + 1;
+    dropped = dropped + 1;
+  else
+    count = count + 1;
+    records[(head + count - 2) % LIMIT + 1] = record;
+  end
+  dirty = true;
+end
 
 function ns.DebugSoftTarget(oldGUID, newGUID, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange)
-  eventCount = eventCount + 1;
-  local same = "unknown";
-  if not issecretvalue(newGUID) then
-    same = (newGUID == lastGUID) and "yes (repeat event)" or "no";
-    lastGUID = newGUID;
-  end
-  local unit = "softinteract";
+  local same = "<secret>";
+  if not issecretvalue(newGUID) and not issecretvalue(lastGUID) then same = newGUID == lastGUID; end
+  lastGUID = newGUID;
+  local unit, cap = "softinteract", frame.keyCap;
   local r, g, b = ns.GetTypeColor(iconKey, outOfRange);
-  local hasColor = outOfRange or ns.IsUnableKey(iconKey) or ns.typeColors[iconKey];
-  local keys = { GetBindingKey("INTERACTTARGET") };
-  local cap = frame.keyCap;
-  local name = Safe(UnitName(unit));
-  local header = ("#%d  %s  %s"):format(eventCount, date("%H:%M:%S"), name);
-  local lines = {
-    header,
-    ("event: old=%s new=%s sameTarget=%s source=%s"):format(Safe(oldGUID), Safe(newGUID), same,
-      frame.fromRangeCheck and "range check" or "game event"),
-    ("unit: name=%s player=%s object=%s interactable=%s inRange=%s attackable=%s"):format(
-      name, Safe(UnitIsPlayer(unit)), Safe(UnitIsGameObject and UnitIsGameObject(unit)),
-      Safe(UnitIsInteractable and UnitIsInteractable(unit)), Safe(UnitIsInInteractRange and UnitIsInInteractRange(unit)),
-      Safe(UnitCanAttack("player", unit))),
-    ("icon: hasCursor=%s source=%s resolved=%s key=%s color=%.2f,%.2f,%.2f%s talkBadge=%s nudge=%d,%d outOfRange=%s"):format(
-      tostring(hasCursor), Safe(frame.iconSource), resolvedKey, iconKey, r, g, b, hasColor and "" or " (default, no entry)",
-      tostring(talkBadge and true or false), frame.iconNudgeX or 0, frame.iconNudgeY or 0, tostring(outOfRange)),
-    ("key: bindings=%s gamepadActive=%s gamepadUI=%s glyph=%s"):format(
-      #keys > 0 and table.concat(keys, ",") or "none", tostring(ns.gamepadActive),
-      tostring(ns.IsGamepadUI and ns.IsGamepadUI() or false),
-      tostring(ns.GamepadInteractGlyph and ns.GamepadInteractGlyph())),
-    ("layout: width=%s nameColumn=%s height=%s key=%s keyCap=%s"):format(
-      ("%.0f"):format(frame.boxWidth or 0), ("%.0f"):format(frame.nameWidth or 0), tostring(EnhancedSoftInteractDB.hudHeight),
-      cap:IsShown() and Safe(cap.text:GetText()) or "hidden",
-      cap:IsShown() and ("%.0fx%.0f"):format(cap.capWidth or 0, cap.capHeight or 0) or "-"),
-  };
-  -- An open window on the newest page (or the live page) follows new events; on an older page it stays
-  -- on that event. While text is selected for copying, the window waits until the next page change.
-  local onNewest = window and window.page and window.page >= #pages;
-  table.insert(pages, {
-    table.concat(lines, "\n"),
-    header .. "\n" .. AnimationsText(),
-    header .. "\n" .. RangeText(),
-  });
-  local dropped = #pages > MAX_PAGES;
-  if dropped then table.remove(pages, 1); end
-  if window and window:IsShown() and not window.text:HasFocus() then
-    ShowPage(onNewest and PageCount() or window.page - (dropped and 1 or 0));
-  end
+  local key1, key2 = GetBindingKey("INTERACTTARGET");
+  local event = { name = "PLAYER_SOFT_INTERACT_CHANGED", old_guid = Safe(oldGUID), new_guid = Safe(newGUID),
+    same_target = same,
+    unit = { name = Safe(UnitName(unit)), player = Safe(UnitIsPlayer(unit)),
+      object = Safe(UnitIsGameObject and UnitIsGameObject(unit)),
+      interactable = Safe(UnitIsInteractable and UnitIsInteractable(unit)),
+      attackable = Safe(UnitCanAttack("player", unit)) },
+    icon = { has_cursor = Safe(hasCursor), source = Safe(frame.iconSource), resolved = Safe(resolvedKey),
+      key = Safe(iconKey), red = Number(r), green = Number(g), blue = Number(b),
+      default_color = not (outOfRange or ns.IsUnableKey(iconKey) or ns.typeColors[iconKey]) and true or false,
+      talk_badge = Safe(talkBadge), nudge_x = Number(frame.iconNudgeX or 0), nudge_y = Number(frame.iconNudgeY or 0) },
+    key = { binding1 = Safe(key1), binding2 = Safe(key2), gamepad_active = Safe(ns.gamepadActive),
+      gamepad_ui = ns.IsGamepadUI and ns.IsGamepadUI() or false,
+      glyph = Safe(ns.GamepadInteractGlyph and ns.GamepadInteractGlyph()) },
+    layout = { width = Number(frame.boxWidth), name_width = Number(frame.nameWidth),
+      height = Number(EnhancedSoftInteractDB.hudHeight), key_shown = Safe(cap:IsShown()),
+      key_text = Safe(cap.text:GetText()), key_width = Number(cap.capWidth), key_height = Number(cap.capHeight) } };
+  Append(frame.fromRangeCheck and "range_check" or "game", event, Animations(), Range());
 end
 
-----
---  The window, built the first time /esi debug opens it.
-----
+-- Keep the triggers for short animations and changes to input/persistence, even with the window closed.
+local watchedCVars = { softtargetinteract = true, softtargeticonenemy = true, softtargeticoninteract = true,
+  softtargeticongameobject = true, softtargetlowpriorityicons = true, softtargettooltipinteract = true,
+  softtargetnameplateinteract = true, softtargetnameplatesize = true, gamepadenable = true };
+local watcher = CreateFrame("Frame");
+watcher:SetScript("OnEvent", function(_, name, arg1, arg2)
+  if name == "CVAR_UPDATE" and (issecretvalue(arg1) or type(arg1) ~= "string" or not watchedCVars[arg1:lower()]) then return end
+  Append("game", { name = name, arg1 = Safe(arg1), arg2 = Safe(arg2) }, Animations(), Range());
+end);
+table.insert(ns.onLoad, function()
+  for _, name in ipairs({ "PLAYER_SOFT_TARGET_INTERACTION", "UPDATE_BINDINGS", "GAME_PAD_ACTIVE_CHANGED", "CVAR_UPDATE" }) do
+    watcher:RegisterEvent(name);
+  end
+  -- This event and gamepad UI belong to Forever; retail still logs GAME_PAD_ACTIVE_CHANGED.
+  if ns.IsGamepadUI then watcher:RegisterEvent("INPUT_DEVICE_INTERFACE_TRANSITION"); end
+end);
+
+-- The time picker uses session seconds, which stay unambiguous across midnight and clock changes.
+-- Recent ranges move with the clock. Freeze fixes their end; Custom uses inclusive From/To bounds.
+local PRESETS = { { "All", false }, { "30 sec", 30 }, { "2 min", 120 }, { "10 min", 600 } };
+local function Bounds(w)
+  if w.custom then return w.fromTime, w.toTime; end
+  local finish = Number(w.frozenAt or GetTime() - started);
+  return w.duration and math.max(0, finish - w.duration) or 0, finish;
+end
+
+local function Matching(w, all)
+  local list = {};
+  local first, last = Bounds(w);
+  for i = 1, count do
+    local record = At(i);
+    local hasSection = sections.animations or sections.range or (sections.event and record.event);
+    if all or (hasSection and sources[record.source] and record.elapsed >= first and record.elapsed <= last) then
+      list[#list + 1] = record;
+    end
+  end
+  return list;
+end
+
+local function ExportRecord(record, all)
+  local result = { sequence = record.sequence, timestamp = record.timestamp, elapsed = record.elapsed,
+    source = record.source };
+  for _, name in ipairs({ "event", "animations", "range" }) do
+    if all or sections[name] then result[name] = record[name]; end
+  end
+  return JSON(result);
+end
+
+local function Export(w, list, first, last, all)
+  local lower, upper = Bounds(w);
+  local version, build, _, interface = GetBuildInfo();
+  local lines = { JSON({ format = "esi-debug-jsonl", schema = 1, session_started = session,
+    client_version = Safe(version), client_build = Safe(build), interface = Safe(interface),
+    retained = count, limit = LIMIT, evicted = dropped, exported = math.max(0, last - first + 1),
+    scope = all and "all_retained" or "filtered", from_elapsed = all and 0 or Number(lower),
+    to_elapsed = all and Number(GetTime() - started) or Number(upper),
+    sources = all and { game = true, range_check = true, snapshot = true } or sources,
+    sections = all and { event = true, animations = true, range = true } or sections,
+    live_capture = w.capture:GetChecked() and true or false,
+    live_interval = INTERVAL, live_scope = "changed snapshots while debug window is open",
+    missing_values = "<nil>", restricted_values = "<secret>", timestamps = "UTC; elapsed is session seconds" }) };
+  for i = first, last do lines[#lines + 1] = ExportRecord(list[i], all); end
+  return table.concat(lines, "\n");
+end
+
 local function CreateWindow()
   local w = CreateFrame("Frame", "EnhancedSoftInteractDebug", UIParent, "PortraitFrameTemplate");
   w:Hide();
-  w:SetSize(720, 300);
+  w:SetSize(940, 580);
   w:SetPoint("CENTER");
   w:SetFrameStrata("DIALOG");
   w:SetToplevel(true);
@@ -157,156 +212,229 @@ local function CreateWindow()
   w:SetScript("OnDragStart", w.StartMoving);
   w:SetScript("OnDragStop", w.StopMovingOrSizing);
   w:SetBorder("HeldBagLayout");
-  -- The bag border's portrait ring is smaller than the template's default, so the icon gets the size and
-  -- place Blizzard's bag frames use (36 at -4, 1), moved against the cog art's off-center body.
-  local PORTRAIT_SIZE = 36;
   local offset = ns.iconArtOffsets["cursor interact"] or {0, 0};
-  local function Round(v) return math.floor(v + 0.5) end
   w:SetPortraitAtlasRaw("Crosshair_interact_64");
-  w:SetPortraitTextureSizeAndOffset(PORTRAIT_SIZE, -4 - Round(offset[1] * PORTRAIT_SIZE / 64),
-    1 + Round(offset[2] * PORTRAIT_SIZE / 64));
-  w:SetTitle("Enhanced Soft Interact Debug");
-  w:SetScript("OnShow", function() PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN); end);
-  w:SetScript("OnHide", function() PlaySound(SOUNDKIT.IG_QUEST_LOG_CLOSE); end);
-  table.insert(UISpecialFrames, w:GetName()); --Esc closes it
+  w:SetPortraitTextureSizeAndOffset(36, -4 - math.floor(offset[1] * 36 / 64 + 0.5),
+    1 + math.floor(offset[2] * 36 / 64 + 0.5));
+  w:SetTitle("Enhanced Soft Interact Debug Log");
+  table.insert(UISpecialFrames, w:GetName());
+  w.pageEnd = nil;
 
-  w.count = w.TitleContainer:CreateFontString(nil, "OVERLAY", "GameFontNormal");
-  w.count:SetPoint("RIGHT", w.CloseButton, "LEFT", -5, 0);
-  w.count:SetJustifyH("RIGHT");
-  w.count:SetTextColor(1, 1, 1);
-
-  local function Button(text, width)
-    local b = CreateFrame("Button", nil, w, "SharedButtonTemplate");
-    b:SetSize(width, 26);
-    b:SetText(text);
-    return b;
+  local function Label(value, x, y)
+    local label = w:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall");
+    label:SetPoint("TOPLEFT", x, y);
+    label:SetText(value);
+    return label;
   end
-  w.prev = Button("< Previous", 140);
-  w.prev:SetPoint("BOTTOMLEFT", 8, 8);
-  w.next = Button("Next >", 140);
-  w.next:SetPoint("BOTTOMRIGHT", -8, 8);
-  w.copy = Button("Copy", 110);
-  w.copyAll = Button("Copy All", 110);
-  w.clear = Button("Clear", 110);
-  w.copyAll:SetPoint("BOTTOM", 0, 8);
-  w.copy:SetPoint("RIGHT", w.copyAll, "LEFT", -6, 0);
-  w.clear:SetPoint("LEFT", w.copyAll, "RIGHT", 6, 0);
+  local function Button(value, width, x, y)
+    local button = CreateFrame("Button", nil, w, "SharedButtonTemplate");
+    button:SetSize(width, 24);
+    button:SetPoint("TOPLEFT", x, y);
+    button:SetText(value);
+    return button;
+  end
+  local Refresh;
+  local function Changed()
+    w.inputError = nil;
+    w.text:ClearFocus();
+    w.pageEnd = nil;
+    dirty = true;
+    Refresh();
+  end
+  local function Check(value, x, y, enabled, callback)
+    local button = CreateFrame("CheckButton", nil, w, "UICheckButtonTemplate");
+    button:SetSize(24, 24);
+    button:SetPoint("TOPLEFT", x, y);
+    button.Text:SetText(value);
+    button:SetChecked(enabled);
+    button:SetScript("OnClick", function(self) callback(self:GetChecked() and true or false); Changed(); end);
+    return button;
+  end
+  -- Three columns keep each group on its own alignment, with matching checkbox rows.
+  local DATA_X, SOURCE_X, TIME_X = 18, 214, 430;
+  local function Heading(value, x)
+    local label = Label(value, x, -51);
+    label:SetFontObject("GameFontNormal");
+  end
+  Heading("Include data", DATA_X);
+  Heading("Include sources", SOURCE_X);
+  Heading("Timespan", TIME_X);
+  for _, x in ipairs({ 190, 406 }) do
+    local divider = w:CreateTexture(nil, "ARTWORK");
+    divider:SetTexture("Interface\\Buttons\\WHITE8X8");
+    divider:SetVertexColor(1, 0.82, 0, 0.2);
+    divider:SetSize(1, 123);
+    divider:SetPoint("TOPLEFT", x, -48);
+  end
+  w.eventFilter = Check("Events", DATA_X, -73, true, function(v) sections.event = v; end);
+  w.animationsFilter = Check("Animations", DATA_X, -101, true, function(v) sections.animations = v; end);
+  w.rangeFilter = Check("Range", DATA_X, -129, true, function(v) sections.range = v; end);
+  w.gameFilter = Check("Game events", SOURCE_X, -73, true, function(v) sources.game = v; end);
+  w.checkFilter = Check("Range checks", SOURCE_X, -101, true, function(v) sources.range_check = v; end);
+  w.liveFilter = Check("Live snapshots", SOURCE_X, -129, true, function(v) sources.snapshot = v; end);
+  w.presets = {};
+  for i, preset in ipairs(PRESETS) do
+    local duration = preset[2];
+    local button = Button(preset[1], 72, TIME_X + (i - 1) * 78, -73);
+    button:SetScript("OnClick", function()
+      w.custom, w.duration = false, duration;
+      Changed();
+    end);
+    w.presets[i] = button;
+  end
+  w.freeze = Check("Freeze time", TIME_X, -145, false, function(v)
+    w.frozenAt = v and GetTime() - started or nil;
+  end);
+  w.capture = Check("Record live changes", 610, -145, true, function() lastSnapshot = nil; end);
+  local function Input(x)
+    local input = CreateFrame("EditBox", nil, w, "InputBoxTemplate");
+    input:SetSize(85, 22);
+    input:SetPoint("TOPLEFT", x, -111);
+    input:SetAutoFocus(false);
+    input:SetMaxLetters(12);
+    input:SetScript("OnEscapePressed", input.ClearFocus);
+    return input;
+  end
+  Label("From", TIME_X, -119);
+  w.from = Input(470);
+  Label("To", 570, -119);
+  w.to = Input(600);
+  w.apply = Button("Apply", 72, 704, -111);
+  Label("Session seconds", 788, -119);
+  w.apply:SetScript("OnClick", function()
+    local first, last = tonumber(w.from:GetText()), tonumber(w.to:GetText());
+    local now = GetTime() - started;
+    if not first or not last or first < 0 or last < first or last > now + 0.001 then
+      w.inputError = "Enter session seconds with 0 <= From <= To <= current time.";
+      w.status:SetText(w.inputError);
+      return;
+    end
+    w.from:ClearFocus(); w.to:ClearFocus();
+    w.custom, w.fromTime, w.toTime = true, first, last;
+    Changed();
+  end);
+  w.from:SetScript("OnEnterPressed", function() w.apply:Click(); end);
+  w.to:SetScript("OnEnterPressed", function() w.apply:Click(); end);
+  w.status = Label("", 18, -183);
+  w.status:SetWidth(900);
+  w.status:SetJustifyH("LEFT");
 
-  -- A read-only edit box, so the text can be selected and copied. Typing puts the shown text back.
   local scroll = CreateFrame("ScrollFrame", nil, w, "ScrollFrameTemplate");
-  scroll:SetPoint("TOPLEFT", 12, -44); --below the portrait ring
-  scroll:SetPoint("BOTTOMRIGHT", -30, 40);
+  scroll:SetPoint("TOPLEFT", 18, -205);
+  scroll:SetPoint("BOTTOMRIGHT", -32, 78);
   local text = CreateFrame("EditBox", nil, scroll);
   text:SetMultiLine(true);
   text:SetAutoFocus(false);
   text:SetMaxLetters(0);
   text:SetFontObject("GameFontHighlightSmall");
   text:SetWidth(scroll:GetWidth());
-  text:SetScript("OnEscapePressed", text.ClearFocus);
+  text:SetScript("OnEscapePressed", function(self) self:ClearFocus(); dirty = true; end);
   text:SetScript("OnTextChanged", function(self, userInput)
     if userInput then self:SetText(w.shownText or ""); self:HighlightText(); end
   end);
   scroll:SetScrollChild(text);
-  scroll:SetScript("OnSizeChanged", function(self, width) text:SetWidth(width); end);
+  scroll:SetScript("OnSizeChanged", function(_, width) text:SetWidth(width); end);
   w.text = text;
-
-  local function Show(textToShow, countText)
-    w.shownText = textToShow;
-    text:SetText(textToShow);
+  local function Show(value)
+    w.shownText = value;
+    text:SetText(value);
     text:SetCursorPosition(0);
-    text:ClearFocus();
-    w.count:SetText(countText);
+    scroll:SetVerticalScroll(0);
   end
+  w.count = Label("", 18, -513);
+  w.prev = Button("< Older", 90, 18, -544);
+  w.next = Button("Newer >", 90, 114, -544);
+  w.latest = Button("Latest", 80, 210, -544);
+  w.copy = Button("Copy filtered", 130, 440, -544);
+  w.copyAll = Button("Copy all retained", 150, 576, -544);
+  w.clear = Button("Clear", 90, 832, -544);
 
-  -- The Animations and Range tabs have one more page than there are events: the live view.
-  local function HasLivePage() return w.tab ~= EVENTS_TAB end
-  function PageCount() return #pages + (HasLivePage() and 1 or 0) end
-  local function OnLivePage() return HasLivePage() and w.page == #pages + 1 end
-
-  function ShowPage(index)
-    local count = PageCount();
-    if count == 0 then
-      w.page = 0;
-      Show("No soft target events yet. Look at something you can interact with.", "0 / 0");
-    else
-      w.page = math.max(1, math.min(index, count));
-      if OnLivePage() then
-        Show(LIVE_TEXT[w.tab](), ("live  %d / %d"):format(w.page, count));
-      else
-        Show(pages[w.page][w.tab], ("%d / %d"):format(w.page, count));
+  function Refresh()
+    if text:HasFocus() then return end
+    local list = Matching(w);
+    local last = #list;
+    if w.pageEnd then
+      last = 0;
+      for i, record in ipairs(list) do if record.sequence <= w.pageEnd then last = i; end end
+      if last == 0 and #list > 0 then last = math.min(PAGE_SIZE, #list); end
+    end
+    local first = math.max(1, last - PAGE_SIZE + 1);
+    w.first, w.last, w.matches = first, last, #list;
+    Show(Export(w, list, first, last));
+    local lower, upper = Bounds(w);
+    if not w.inputError and not w.from:HasFocus() and not w.to:HasFocus() then
+      w.from:SetText(("%.3f"):format(lower));
+      w.to:SetText(("%.3f"):format(upper));
+    end
+    w.status:SetText(w.inputError or ("%s | Session now %.3fs | UTC timestamps | Live changes captured only while this window is open"):format(
+      w.custom and "Custom range" or (w.frozenAt and "Frozen range" or "Following time"), GetTime() - started));
+    w.count:SetText(("Showing %d-%d of %d matches | %d / %d retained | %d evicted | 50 records per view"):format(
+      last > 0 and first or 0, last, #list, count, LIMIT, dropped));
+    w.prev:SetEnabled(first > 1);
+    w.next:SetEnabled(last < #list);
+    w.copy:SetEnabled(#list > 0);
+    w.copyAll:SetEnabled(count > 0);
+    w.clear:SetEnabled(count > 0);
+    dirty = false;
+  end
+  w.Refresh = Refresh;
+  w.prev:SetScript("OnClick", function()
+    local list = Matching(w);
+    local finish = math.max(1, (w.first or 1) - 1);
+    if list[finish] then w.pageEnd = list[finish].sequence; end
+    text:ClearFocus(); Refresh();
+  end);
+  w.next:SetScript("OnClick", function()
+    local list = Matching(w);
+    local finish = math.min(#list, (w.last or 0) + PAGE_SIZE);
+    w.pageEnd = finish < #list and list[finish].sequence or nil;
+    text:ClearFocus(); Refresh();
+  end);
+  w.latest:SetScript("OnClick", Changed);
+  local function Copy(all)
+    local list = Matching(w, all);
+    Show(Export(w, list, 1, #list, all));
+    w.count:SetText(("%d records selected. Press Ctrl+C to copy; Esc resumes the view."):format(#list));
+    text:SetFocus(); text:HighlightText();
+    dirty = true;
+  end
+  w.copy:SetScript("OnClick", function() Copy(false); end);
+  w.copyAll:SetScript("OnClick", function() Copy(true); end);
+  w.clear:SetScript("OnClick", function()
+    wipe(records);
+    head, count, dropped, lastSnapshot = 1, 0, 0, nil;
+    Changed();
+  end);
+  w:SetScript("OnShow", function()
+    PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN);
+    lastSnapshot = nil;
+    text:ClearFocus(); dirty = true;
+    Refresh();
+  end);
+  w:SetScript("OnHide", function()
+    PlaySound(SOUNDKIT.IG_QUEST_LOG_CLOSE);
+    text:ClearFocus(); text:SetText(""); w.shownText = nil;
+  end);
+  local elapsed = 0;
+  w:SetScript("OnUpdate", function(_, dt)
+    if not w:IsShown() then return end
+    elapsed = elapsed + dt;
+    if elapsed < INTERVAL then return end
+    elapsed = 0;
+    if w.capture:GetChecked() then
+      local animations, range = Animations(), Range();
+      local signature = JSON({ animations = animations, range = range });
+      if signature ~= lastSnapshot then
+        lastSnapshot = signature;
+        Append("snapshot", nil, animations, range);
       end
     end
-    w.prev:SetEnabled(w.page > 1);
-    w.next:SetEnabled(w.page < count);
-    w.copy:SetEnabled(count > 0);
-    w.copyAll:SetEnabled(#pages > 0);
-    w.clear:SetEnabled(#pages > 0);
-  end
-
-  -- Addons can't write to the clipboard, so Copy selects the text and Ctrl+C does the rest.
-  local function SelectForCopy(countText)
-    w.count:SetText(countText .. "  |cff20ff20Ctrl+C to copy|r");
-    text:SetFocus();
-    text:HighlightText();
-  end
-
-  -- Shift-click jumps to the first or last page.
-  w.prev:SetScript("OnClick", function() ShowPage(IsShiftKeyDown() and 1 or w.page - 1); end);
-  w.next:SetScript("OnClick", function() ShowPage(IsShiftKeyDown() and PageCount() or w.page + 1); end);
-  w.copy:SetScript("OnClick", function()
-    ShowPage(w.page);
-    SelectForCopy(w.count:GetText());
-  end);
-  w.copyAll:SetScript("OnClick", function()
-    local all = {};
-    for i, page in ipairs(pages) do all[i] = page[w.tab]; end
-    Show(table.concat(all, "\n\n"), ("all %d"):format(#pages));
-    SelectForCopy(w.count:GetText());
-  end);
-  w.clear:SetScript("OnClick", function()
-    wipe(pages);
-    ShowPage(PageCount());
-  end);
-
-  -- Bottom tabs, as on Blizzard's Group Finder. The template adds each tab to w.Tabs, which the
-  -- PanelTemplates functions read. On an older page a tab change keeps the event, so each tab shows the
-  -- same event; on the newest page it goes to the new tab's newest page (the live view there).
-  local function SelectTab(index)
-    local following = not w.page or w.page >= #pages;
-    w.tab = index;
-    PanelTemplates_SetTab(w, index);
-    ShowPage(following and PageCount() or w.page);
-  end
-  w.Tabs = w.Tabs or {};
-  for index, name in ipairs(TABS) do
-    local tab = CreateFrame("Button", nil, w, "PanelTabButtonTemplate");
-    tab:SetID(index);
-    tab:SetText(name);
-    tab:SetScript("OnClick", function() PlaySound(SOUNDKIT.IG_CHARACTER_INFO_TAB); SelectTab(index); end);
-    w.Tabs[index] = tab;
-  end
-  w.Tabs[1]:SetPoint("TOPLEFT", w, "BOTTOMLEFT", 11, 2);
-  PanelTemplates_SetNumTabs(w, #TABS);
-  w.SelectTab = SelectTab;
-
-  local sinceRefresh = 0;
-  w:SetScript("OnUpdate", function(_, elapsed)
-    if not OnLivePage() or text:HasFocus() then return end
-    sinceRefresh = sinceRefresh + elapsed;
-    if sinceRefresh < LIVE_INTERVAL then return end
-    sinceRefresh = 0;
-    ShowPage(w.page);
+    if dirty or (w.duration and not w.frozenAt and not w.custom) then Refresh(); end
   end);
   return w;
 end
 
 ns.slashCommands.debug = function()
   window = window or CreateWindow();
-  if window:IsShown() then
-    window:Hide();
-  else
-    window:Show();
-    window.page = nil; --opens on the newest page, or the live view on the Animations and Range tabs
-    window.SelectTab(window.tab or EVENTS_TAB);
-  end
+  window:SetShown(not window:IsShown());
 end

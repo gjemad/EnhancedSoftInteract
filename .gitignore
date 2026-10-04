@@ -3,3 +3,6 @@ Libs/
 *.md
 !README.md
 !CHANGELOG.md
+
+# Local Lua smoke-test dependency, downloaded for the agent runtime.
+.debug-test-deps/
