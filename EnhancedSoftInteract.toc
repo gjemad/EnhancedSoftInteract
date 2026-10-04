@@ -20,6 +20,7 @@ Helpers\Input.lua
 Helpers\Text.lua
 Helpers\Tween.lua
 Helpers\StyleRegistry.lua
+Helpers\CastBar.lua
 Styles\LevelUpLine.lua
 Styles\FloatingText.lua
 Styles\PlainBar.lua
@@ -30,6 +31,7 @@ Feat\Target.lua
 Feat\HideBlizzard.lua
 Feat\Persistence.lua
 Feat\DebugLog.lua
+Feat\InteractionCast.lua
 Feat\Debug.lua
 Feat\EditMode.lua
 Feat\EditModeLayout.lua

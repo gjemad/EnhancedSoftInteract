@@ -12,6 +12,7 @@ externals:
 
 ignore:
   - README.md
+  - Assets
 
 manual-changelog:
   filename: CHANGELOG.md

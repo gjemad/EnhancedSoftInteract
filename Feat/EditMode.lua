@@ -148,6 +148,7 @@ local function BuildEditModeSettings()
     end });
   Checkbox("Hide Blizzard's Soft Target Displays", "hideBlizzard", ns.UpdateBlizzardDisplays);
   Checkbox("Enable Animations", "animationsEnabled", ns.UpdateAnimations);
+  Checkbox("Enable Cast Bar", "castBarEnabled", ns.RefreshInteractionCastBar);
   Add({ kind = kind.Divider, hideLabel = true });
   Checkbox("Show Icon", "showIcon", function() UpdateIcon(); UpdateLayout(); end);
   Slider("Icon Size", "iconSize", Px, function() UpdateIcon(); UpdateLayout(); end,
@@ -199,6 +200,7 @@ local function BuildEditModeSettings()
     ["Shadow Height"] = "Adjusts the height of the shadow behind the name.",
     ["Shadow Strength"] = "Adjusts how dark the shadow behind the name appears.",
     ["Enable Animations"] = "Adds movement and fades to the target display.",
+    ["Enable Cast Bar"] = "Shows progress while gathering or opening objects.",
   };
   for _, setting in ipairs(settings) do setting.desc = DESCRIPTIONS[setting.name]; end
 

@@ -61,6 +61,11 @@ local function Animations()
   local rgb = frame.rgb or {};
   local r, g, b = frame.name:GetTextColor();
   local layers = {};
+  local cast = frame.castBar;
+  for _, name in ipairs({ "fill1", "fill2", "track1", "track2", "end1", "end2" }) do
+    layers["cast_" .. name] = Layer(cast[name]);
+  end
+  layers.cast_runeGlow = Layer(cast.runeGlow);
     for _, name in ipairs({ "iconGlow", "lineLow", "lineLowGlow", "lineHigh", "flash", "shadow", "stylePlate", "rune",
         "levelupNameGlow", "runicNameGlow", "statusShadow", "icon" }) do
       layers[name] = Layer(frame[name]);
@@ -73,6 +78,10 @@ local function Animations()
     scale = Number(frame:GetEffectiveScale()), glow_scale = Number(frame.glowScale),
     color = { red = Number(rgb[1]), green = Number(rgb[2]), blue = Number(rgb[3]) },
     flash_opacity = Number(frame.flashHolder:GetAlpha()),
+    cast_bar = { shown = Safe(cast:IsVisible()), progress = Number(cast.progress),
+      width = Number(cast.width), height = Number(cast.height), split = cast.split,
+      center_bright = cast.centerBright, color = { red = Number(cast.red), green = Number(cast.green), blue = Number(cast.blue) },
+      rune_amount = Number(cast.runeAmount) },
     status = { text = Safe(frame.requirement:GetText()), shown = Safe(frame.requirement:IsVisible()),
       alpha = Number(frame.requirement:GetAlpha()), height = Number(frame.requirement:GetHeight()),
       amount = Number(frame.statusAmount), target = Number(frame.statusTarget) },
@@ -99,7 +108,8 @@ local function Range(evidence)
     shown = Safe(frame.colorKey), cursor = Safe(evidence.cursor),
     interact_range = Safe(evidence.interactRange), spell_range = Safe(evidence.spellRange),
     casting = Safe(evidence.casting), channeling = Safe(evidence.channeling),
-    out_of_range = Safe(frame.outOfRange), last_in_range_target = same };
+    out_of_range = Safe(frame.outOfRange), last_in_range_target = same,
+    interaction_cast = ns.InteractionCastSnapshot and ns.InteractionCastSnapshot() or nil };
 end
 
 local function At(index) return records[(head + index - 2) % LIMIT + 1]; end
@@ -118,6 +128,10 @@ local function Append(source, event, animations, range)
     records[(head + count - 2) % LIMIT + 1] = record;
   end
   log.revision = log.revision + 1;
+end
+
+function ns.DebugInteractionCast(reason, state)
+  Append("game", { name = "INTERACTION_CAST_STATE", reason = reason, interaction_cast = state }, Animations(), Range());
 end
 
 function ns.DebugSoftTarget(oldGUID, newGUID, target, mode)
@@ -155,15 +169,66 @@ for _, kept in ipairs(ns.keptSettings) do
   for cvar in pairs(kept.cvars) do watchedCVars[cvar:lower()] = true; end
 end
 for _, cvar in ipairs(ns.hiddenCVars) do watchedCVars[cvar:lower()] = true; end
+-- Keep payloads as evidence; a cast GUID identifies a cast, not its target object.
+local CAST_FIELDS = { "unit", "cast_guid", "spell_id", "cast_bar_id" };
+local INTERRUPTED_FIELDS = { "unit", "cast_guid", "spell_id", "interrupted_by", "cast_bar_id" };
+local castEvents = {
+  UNIT_SPELLCAST_SENT = { "unit", "target", "cast_guid", "spell_id" },
+  UNIT_SPELLCAST_START = CAST_FIELDS,
+  UNIT_SPELLCAST_DELAYED = CAST_FIELDS,
+  UNIT_SPELLCAST_STOP = CAST_FIELDS,
+  UNIT_SPELLCAST_SUCCEEDED = CAST_FIELDS,
+  UNIT_SPELLCAST_FAILED = CAST_FIELDS,
+  UNIT_SPELLCAST_FAILED_QUIET = CAST_FIELDS,
+  UNIT_SPELLCAST_INTERRUPTED = INTERRUPTED_FIELDS,
+  UNIT_SPELLCAST_CHANNEL_START = CAST_FIELDS,
+  UNIT_SPELLCAST_CHANNEL_UPDATE = CAST_FIELDS,
+  UNIT_SPELLCAST_CHANNEL_STOP = INTERRUPTED_FIELDS,
+};
+
+local function PlayerCast()
+  local name, display, _, startMS, endMS, tradeskill, guid, uninterruptible, spellID, barID, delayMS = UnitCastingInfo("player");
+  local channel, channelDisplay, _, channelStart, channelEnd, channelTrade, channelUninterruptible,
+    channelSpell, empowered, stages, channelBar = UnitChannelInfo("player");
+  return {
+    cast = { name = Safe(name), display = Safe(display), guid = Safe(guid), spell_id = Number(spellID),
+      start_ms = Number(startMS), end_ms = Number(endMS), tradeskill = Safe(tradeskill),
+      not_interruptible = Safe(uninterruptible), cast_bar_id = Safe(barID), delay_ms = Number(delayMS) },
+    channel = { name = Safe(channel), display = Safe(channelDisplay), spell_id = Number(channelSpell),
+      start_ms = Number(channelStart), end_ms = Number(channelEnd), tradeskill = Safe(channelTrade),
+      not_interruptible = Safe(channelUninterruptible), empowered = Safe(empowered),
+      empower_stages = Number(stages), cast_bar_id = Safe(channelBar) },
+    target_name = Safe(UnitSpellTargetName("player")),
+  };
+end
+
+local function CastTargets()
+  return { soft_guid = Safe(UnitGUID("softinteract")), soft_name = Safe(UnitName("softinteract")),
+    soft_object = Safe(UnitIsGameObject and UnitIsGameObject("softinteract")),
+    mouseover_guid = Safe(UnitGUID("mouseover")), mouseover_name = Safe(UnitName("mouseover")),
+    hud_guid = Safe(frame.lastTarget), hud_action = Safe(frame.lastAction), hud_cursor = Safe(frame.colorKey) };
+end
+
 local watcher = CreateFrame("Frame");
-watcher:SetScript("OnEvent", function(_, name, arg1, arg2)
+watcher:SetScript("OnEvent", function(_, name, ...)
+  local arg1, arg2 = ...;
   if name == "CVAR_UPDATE" and (issecretvalue(arg1) or type(arg1) ~= "string" or not watchedCVars[arg1:lower()]) then return end
-  Append("game", { name = name, arg1 = Safe(arg1), arg2 = Safe(arg2) }, Animations(), Range());
+  local event = { name = name, arg1 = Safe(arg1), arg2 = Safe(arg2) };
+  local fields = castEvents[name];
+  if fields then
+    event.payload = {};
+    for i, field in ipairs(fields) do event.payload[field] = Safe(select(i, ...)); end
+  end
+  if fields or name == "PLAYER_SOFT_TARGET_INTERACTION" then
+    event.player_cast, event.targets = PlayerCast(), CastTargets();
+  end
+  Append("game", event, Animations(), Range());
 end);
 table.insert(ns.onLoad, function()
   for _, name in ipairs({ "PLAYER_SOFT_TARGET_INTERACTION", "UPDATE_BINDINGS", "GAME_PAD_ACTIVE_CHANGED", "CVAR_UPDATE" }) do
     watcher:RegisterEvent(name);
   end
+  for name in pairs(castEvents) do watcher:RegisterUnitEvent(name, "player"); end
   -- This event and gamepad UI belong to Forever; retail still logs GAME_PAD_ACTIVE_CHANGED.
   if ns.IsGamepadUI then watcher:RegisterEvent("INPUT_DEVICE_INTERFACE_TRANSITION"); end
 end);

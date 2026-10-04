@@ -18,8 +18,8 @@ local function Notify(msg) print("|cffffd100ESI:|r " .. msg) end
 local DEFAULTS = {
   enabled = true, hideBlizzard = true, forceInteractKey = true, forceInteractIcons = true, previewMinimized = true,
   showIcon = true, iconSize = 30, swapIconAndKey = false, showKey = true, keyScale = 100,
-  fontSize = 17, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 50, colorBrightness = 100,
-  animationsEnabled = true, hudStyle = "levelup", shadowStrength = 90,
+  fontSize = 16, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 50, colorBrightness = 100,
+  animationsEnabled = true, castBarEnabled = true, hudStyle = "levelup", shadowStrength = 90,
 };
 -- Each Edit Mode slider's {min, max, step}.
 local SLIDER_RANGES = {
@@ -118,6 +118,7 @@ local function CreateHUD(frame)
   frame.statusShadow:SetTexture(SHADOW);
   frame.statusShadow:SetVertexColor(0, 0, 0, 0.35);
   frame.statusShadow:Hide();
+  ns.CastBar.Create(frame);
 
   -- The shadow reaches SHADOW_PAD_X past both ends of the box and SHADOW_PAD_Y above and below it. The
   -- interact flash covers the box and 20 units past its ends. The icon glow follows the icon.
@@ -344,8 +345,16 @@ local function CreateHUD(frame)
   end
   frame.switchAnim = AnimationGroup(switchSteps);
 
-  local function PlaySwitchAnim()
+  -- Stop before changing status opacity: native animation restoration can otherwise bring back
+  -- the previous target's normal/compact text. Start only after the new layout is ready.
+  local function StopSwitchAnim()
     frame.switchAnim:Stop();
+    frame.icon:SetAlpha(1);
+    frame.nameHolder:SetAlpha(1);
+    frame.iconGlow:SetAlpha(1);
+  end
+
+  local function PlaySwitchAnim()
     frame.switchAnim:Play();
   end
 
@@ -714,6 +723,7 @@ local function CreateHUD(frame)
     frame.nameLeft = EDGE_INSET + left;
     StyleName(animate);
     ns.styles.Layout(frame);
+    ns.CastBar.Layout(frame);
     if frame.onLayout then frame.onLayout(width); end --the preview widens its window to fit the HUD
   end
 
@@ -815,6 +825,7 @@ local function CreateHUD(frame)
   end
 
   local function OnSoftTargetCleared()
+    ns.CastBar.Hide(frame);
     frame.lastTarget, frame.lastSignature, frame.lastAction = nil, nil, nil;
     -- A running interact pulse finishes before the fade-out (looting clears the target at once).
     local wait = frame.pulseUntil - GetTime();
@@ -852,6 +863,7 @@ local function CreateHUD(frame)
     local fromAlpha = CurrentAlpha();
     rangeFade:Stop();
     frame.fader:Stop(); --settle native animation state before painting the new status
+    StopSwitchAnim();
     frame.fadingOut = false;
     frame.colorKey, frame.outOfRange = iconKey, outOfRange;
     frame.requirementText = target.requirementText;
@@ -936,8 +948,10 @@ local function CreateHUD(frame)
   -- Shows a made-up target in Edit Mode: a name, a cursor by name ("Skin", "UnableGatherHerbs") and an
   -- optional requirement line, fully visible and in range.
   local function ShowSample(name, cursor, requirementText)
+    ns.CastBar.Hide(frame);
     rangeFade:Stop();
     frame.fader:Stop();
+    StopSwitchAnim();
     frame.fadingOut = false;
     frame:SetAlpha(1);
     frame:Show();
@@ -946,10 +960,10 @@ local function CreateHUD(frame)
     frame.requirementText = requirementText;
     frame.colorKey, frame.outOfRange = ShowCursor(cursor), false;
     SetTypeColor(true);
-    if EnhancedSoftInteractDB.animationsEnabled then PlaySwitchAnim(); end
     AnchorIcon();
     UpdateKeyCap();
     UpdateLayout();
+    if EnhancedSoftInteractDB.animationsEnabled then PlaySwitchAnim(); end
   end
 
   -- Applies every setting to the HUD (on load, and when the preview is built).
@@ -1003,6 +1017,7 @@ local function OnSoftInteractChanged(oldTarget, newTarget)
     frame.inRangeTarget = nil;
     if frame:IsShown() and not frame.fadingOut then hud.OnSoftTargetCleared(); end
   end
+  if ns.RefreshInteractionCastBar then ns.RefreshInteractionCastBar(); end
   -- Always retain game events, including clears and repeats; unchanged range polls stay silent.
   if ns.DebugSoftTarget and (not frame.fromRangeCheck or changed) then
     ns.DebugSoftTarget(oldTarget, newTarget, target, EnhancedSoftInteractDB.enabled and "active" or "disabled");

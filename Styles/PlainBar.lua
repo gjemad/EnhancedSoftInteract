@@ -1,6 +1,7 @@
 local _, ns = ...;
 ns.styles.Register("plain", {
   name = "Plain Bar", shadow = false, layers = { lineLow = true }, flashStrength = 0.6,
+  castBar = { height = 1.7, offset = 6.5 },
   Create = function(frame)
     frame.stylePlate = frame:CreateTexture(nil, "BACKGROUND");
     frame.stylePlate:SetColorTexture(14 / 255, 13 / 255, 12 / 255, 0.84);

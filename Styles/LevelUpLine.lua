@@ -3,6 +3,7 @@ local ATLAS = "LevelUp-Bar-White";
 local FLASH_ATLAS = "AftLevelup-GlowLine";
 ns.styles.Register("levelup", {
   name = "Level-Up Line", shadow = true,
+  castBar = { height = 1.2, offset = 6.5, centerBright = true },
   layers = { iconGlow = true, lineLowGlow = true, lineLow = true, lineHigh = true },
   Create = function(frame)
     frame.levelupBloom = ns.styles.CreateBloom(frame);

@@ -2,6 +2,7 @@ local ADDON_NAME, ns = ...;
 local DIAMOND = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\RunicDiamond]];
 ns.styles.Register("runic", {
   name = "Runic Line", shadow = true,
+  castBar = { height = 1.2, offset = 6.5, split = true },
   layers = { lineLow = true, lineHigh = true }, highLineAlpha = 1,
   flashStrength = 0.8,
   Create = function(frame, media)
