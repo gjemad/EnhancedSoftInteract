@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.2 (2026-10-04)
+
+### Features
+
+- Replaced the red keybind indicator with a "Move closer" message when out of range.
+
 ## 0.2.1-beta (2026-10-04)
 
 - Updated and included project license.
