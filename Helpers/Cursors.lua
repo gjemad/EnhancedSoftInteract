@@ -1,5 +1,101 @@
 local _, ns = ...;
 
+-- Colors per icon type, for targets you can interact with. Unable icons always get UNABLE_COLOR or
+-- OUT_OF_RANGE_COLOR, so they have no entries. Each color is an OKLCH hue and chroma picked per family
+-- (related types share a hue band; icons with a strong color of their own, such as quest marks, pawprints
+-- and transmog, use the icon's measured hue), at the lightest lightness sRGB can show, then scaled so the
+-- strongest channel is 1. The lines and glows light at full strength, and colorBrightness dims them.
+local TYPE_COLORS = {
+  ["default"] = {1, 0.83, 0.33}, --unknown or secret icon: plain gold
+  -- Quests: gold for normal quests and quest objects, blue for repeatable ones, amber for the campaign.
+  ["Cursor Quest"] = {1, 0.85, 0.09},
+  ["Cursor QuestInteract"] = {1, 0.85, 0.09},
+  ["Cursor QuestRepeatable"] = {0.05, 0.59, 1},
+  ["Cursor CampaignQuest"] = {1, 0.5, 0.05},
+  ["Cursor CampaignQuestTurnIn"] = {1, 0.5, 0.05},
+  -- Gathering and looting: leaf green, ore copper, hide tan, loot sand, and cool steel for locks and hands.
+  ["Cursor GatherHerbs"] = {0.41, 1, 0.46},
+  ["Cursor Mine"] = {1, 0.74, 0.44},
+  ["Cursor Skin"] = {1, 0.6, 0.49},
+  ["Cursor LootAll"] = {1, 0.83, 0.47},
+  ["Cursor PickLock"] = {0.78, 0.88, 1}, --locked chests and footlockers
+  ["Cursor OpenHand"] = {0.92, 0.95, 1}, --chests, petting animals
+  ["Cursor OpenHandGlow"] = {0.73, 0.96, 1},
+  -- Merchants and services.
+  ["Cursor Pickup"] = {1, 0.73, 0.5}, --vendor: warm brown
+  ["Cursor Buy"] = {1, 0.95, 0.68}, --bank: pale gold
+  ["Cursor RepairNPC"] = {0.86, 0.94, 1}, --steel
+  ["Cursor Reforge"] = {0.35, 0.97, 1}, --reforge and upgrade NPCs: teal
+  ["Cursor Mail"] = {1, 0.29, 0.23}, --mailbox red
+  ["Cursor Innkeeper"] = {0.4, 0.79, 1}, --hearthstone blue
+  ["Cursor Taxi"] = {0.99, 1, 0.62}, --flight masters: pale straw
+  ["Cursor Trainer"] = {1, 0.66, 0.47},
+  ["Cursor Directions"] = {1, 0.55, 0.64}, --guards: rose
+  ["Cursor Missions"] = {1, 0.64, 0.65},
+  ["Cursor VoidStorage"] = {1, 0.54, 0.91}, --magenta
+  ["Cursor Transmogrify"] = {0.69, 0.48, 1}, --violet
+  -- Generic icons stay close to white, with a warm or cool tint.
+  ["Cursor Speak"] = {1, 0.96, 0.91},
+  ["Cursor Inspect"] = {0.81, 0.94, 1},
+  ["Cursor Interact"] = {1, 0.79, 0.41}, --the cog: bronze
+  -- Battle pets: green when you can capture the pet, gold otherwise.
+  ["Cursor WildPetCapturable"] = {0.33, 1, 0.5},
+  ["Cursor WildPet"] = {1, 0.74, 0.19},
+};
+
+-- Cursor textures come in several spellings: plain names ("Cursor Innkeeper"), the crosshair version both
+-- clients use ("Cursor Crosshair_Innkeeper_64", or the bare atlas name "Crosshair_Innkeeper_64"), sized
+-- ones ("Cursor Cursor_CampaignQuest_32") and file paths ("Interface\Cursor\Innkeeper"). CursorName
+-- reduces each one to "innkeeper", and returns nil for anything that isn't a cursor.
+local function CursorName(key)
+  local name = key:match("^[Cc]ursor (.+)$") or key:match("[Cc][Uu][Rr][Ss][Oo][Rr][\\/]([%w_]+)[%.%w]*$")
+    or key:match("^[Cc]rosshair_.+$");
+  if not name then return nil end
+  return (name:gsub("^[Cc]rosshair_", ""):gsub("^[Cc]ursor_", ""):gsub("_%d+$", ""):lower());
+end
+
+-- The lookup form of a key: "cursor innkeeper". Other keys (file IDs, "default") stay as they are.
+local function NormalizeCursorKey(key)
+  local name = CursorName(key);
+  return name and "cursor " .. name or key:lower();
+end
+
+-- Maps each normalized key to its TYPE_COLORS spelling, and to its Unable version ("Cursor UnableSkin").
+local COLOR_KEY_BY_LOWER = {};
+for key in pairs(TYPE_COLORS) do
+  COLOR_KEY_BY_LOWER[NormalizeCursorKey(key)] = key;
+  local name = key:match("^Cursor (.+)$");
+  if name then COLOR_KEY_BY_LOWER[NormalizeCursorKey("Cursor Unable" .. name)] = "Cursor Unable" .. name; end
+end
+local function ColorKeyFor(cursorKey)
+  return COLOR_KEY_BY_LOWER[NormalizeCursorKey(cursorKey)] or cursorKey;
+end
+
+local function IsUnableKey(key)
+  return key ~= nil and key:lower():find("unable") ~= nil;
+end
+
+local OUT_OF_RANGE_COLOR = {.35, .35, .35};
+local UNABLE_COLOR = {.5, .5, .5};
+
+-- The color for an icon key (frame.colorKey) and range, dimmed by colorBrightness (percent).
+local function GetTypeColor(key, outOfRange)
+  local color;
+  if outOfRange then
+    color = OUT_OF_RANGE_COLOR;
+  elseif IsUnableKey(key) then
+    color = UNABLE_COLOR;
+  else
+    color = TYPE_COLORS[key] or TYPE_COLORS["default"];
+  end
+  local scale = EnhancedSoftInteractDB.colorBrightness / 100;
+  return color[1] * scale, color[2] * scale, color[3] * scale;
+end
+
+ns.typeColors = TYPE_COLORS;
+ns.CursorName, ns.NormalizeCursorKey, ns.ColorKeyFor = CursorName, NormalizeCursorKey, ColorKeyFor;
+ns.IsUnableKey, ns.GetTypeColor = IsUnableKey, GetTypeColor;
+
 -- What the addon knows about cursor types: their crosshair art, how far that art sits off-center, retail's
 -- cursor file IDs, and which gather cursors need a profession.
 

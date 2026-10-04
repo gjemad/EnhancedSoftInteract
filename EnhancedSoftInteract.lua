@@ -8,80 +8,8 @@ local issecretvalue = issecretvalue or function() return false end;
 ns.onLoad = {};
 ns.slashCommands = {};
 
--- Colors per icon type, for targets you can interact with. Unable icons always get UNABLE_COLOR or
--- OUT_OF_RANGE_COLOR, so they have no entries. Each color is an OKLCH hue and chroma picked per family
--- (related types share a hue band; icons with a strong color of their own, such as quest marks, pawprints
--- and transmog, use the icon's measured hue), at the lightest lightness sRGB can show, then scaled so the
--- strongest channel is 1. The lines and glows light at full strength, and colorBrightness dims them.
-local TYPE_COLORS = {
-  ["default"] = {1, 0.83, 0.33}, --unknown or secret icon: plain gold
-  -- Quests: gold for normal quests and quest objects, blue for repeatable ones, amber for the campaign.
-  ["Cursor Quest"] = {1, 0.85, 0.09},
-  ["Cursor QuestInteract"] = {1, 0.85, 0.09},
-  ["Cursor QuestRepeatable"] = {0.05, 0.59, 1},
-  ["Cursor CampaignQuest"] = {1, 0.5, 0.05},
-  ["Cursor CampaignQuestTurnIn"] = {1, 0.5, 0.05},
-  -- Gathering and looting: leaf green, ore copper, hide tan, loot sand, and cool steel for locks and hands.
-  ["Cursor GatherHerbs"] = {0.41, 1, 0.46},
-  ["Cursor Mine"] = {1, 0.74, 0.44},
-  ["Cursor Skin"] = {1, 0.6, 0.49},
-  ["Cursor LootAll"] = {1, 0.83, 0.47},
-  ["Cursor PickLock"] = {0.78, 0.88, 1}, --locked chests and footlockers
-  ["Cursor OpenHand"] = {0.92, 0.95, 1}, --chests, petting animals
-  ["Cursor OpenHandGlow"] = {0.73, 0.96, 1},
-  -- Merchants and services.
-  ["Cursor Pickup"] = {1, 0.73, 0.5}, --vendor: warm brown
-  ["Cursor Buy"] = {1, 0.95, 0.68}, --bank: pale gold
-  ["Cursor RepairNPC"] = {0.86, 0.94, 1}, --steel
-  ["Cursor Reforge"] = {0.35, 0.97, 1}, --reforge and upgrade NPCs: teal
-  ["Cursor Mail"] = {1, 0.29, 0.23}, --mailbox red
-  ["Cursor Innkeeper"] = {0.4, 0.79, 1}, --hearthstone blue
-  ["Cursor Taxi"] = {0.99, 1, 0.62}, --flight masters: pale straw
-  ["Cursor Trainer"] = {1, 0.66, 0.47},
-  ["Cursor Directions"] = {1, 0.55, 0.64}, --guards: rose
-  ["Cursor Missions"] = {1, 0.64, 0.65},
-  ["Cursor VoidStorage"] = {1, 0.54, 0.91}, --magenta
-  ["Cursor Transmogrify"] = {0.69, 0.48, 1}, --violet
-  -- Generic icons stay close to white, with a warm or cool tint.
-  ["Cursor Speak"] = {1, 0.96, 0.91},
-  ["Cursor Inspect"] = {0.81, 0.94, 1},
-  ["Cursor Interact"] = {1, 0.79, 0.41}, --the cog: bronze
-  -- Battle pets: green when you can capture the pet, gold otherwise.
-  ["Cursor WildPetCapturable"] = {0.33, 1, 0.5},
-  ["Cursor WildPet"] = {1, 0.74, 0.19},
-};
-
--- Cursor textures come in several spellings: plain names ("Cursor Innkeeper"), the crosshair version both
--- clients use ("Cursor Crosshair_Innkeeper_64", or the bare atlas name "Crosshair_Innkeeper_64"), sized
--- ones ("Cursor Cursor_CampaignQuest_32") and file paths ("Interface\Cursor\Innkeeper"). CursorName
--- reduces each one to "innkeeper", and returns nil for anything that isn't a cursor.
-local function CursorName(key)
-  local name = key:match("^[Cc]ursor (.+)$") or key:match("[Cc][Uu][Rr][Ss][Oo][Rr][\\/]([%w_]+)[%.%w]*$")
-    or key:match("^[Cc]rosshair_.+$");
-  if not name then return nil end
-  return (name:gsub("^[Cc]rosshair_", ""):gsub("^[Cc]ursor_", ""):gsub("_%d+$", ""):lower());
-end
-
--- The lookup form of a key: "cursor innkeeper". Other keys (file IDs, "default") stay as they are.
-local function NormalizeCursorKey(key)
-  local name = CursorName(key);
-  return name and "cursor " .. name or key:lower();
-end
-
--- Maps each normalized key to its TYPE_COLORS spelling, and to its Unable version ("Cursor UnableSkin").
-local COLOR_KEY_BY_LOWER = {};
-for key in pairs(TYPE_COLORS) do
-  COLOR_KEY_BY_LOWER[NormalizeCursorKey(key)] = key;
-  local name = key:match("^Cursor (.+)$");
-  if name then COLOR_KEY_BY_LOWER[NormalizeCursorKey("Cursor Unable" .. name)] = "Cursor Unable" .. name; end
-end
-local function ColorKeyFor(cursorKey)
-  return COLOR_KEY_BY_LOWER[NormalizeCursorKey(cursorKey)] or cursorKey;
-end
-
-local function IsUnableKey(key)
-  return key ~= nil and key:lower():find("unable") ~= nil;
-end
+local NormalizeCursorKey, ColorKeyFor = ns.NormalizeCursorKey, ns.ColorKeyFor;
+local GetTypeColor = ns.GetTypeColor;
 
 -- Every chat message of the addon starts with "ESI:".
 local function Notify(msg) print("|cffffd100ESI:|r " .. msg) end
@@ -91,13 +19,13 @@ local DEFAULTS = {
   enabled = true, hideBlizzard = true, forceInteractKey = true, forceInteractIcons = true, previewMinimized = true,
   showIcon = true, iconSize = 30, swapIconAndKey = false, showKey = true, keyScale = 100,
   fontSize = 17, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 50, colorBrightness = 100,
-  animationsEnabled = true,
+  animationsEnabled = true, hudStyle = "levelup", shadowStrength = 90,
 };
 -- Each Edit Mode slider's {min, max, step}.
 local SLIDER_RANGES = {
   iconSize = {16, 48, 2}, keyScale = {60, 150, 5},
   fontSize = {10, 32, 1}, nameMinWidth = {50, 300, 5}, nameMaxWidth = {50, 400, 5},
-  colorBrightness = {30, 100, 5}, hudHeight = {20, 80, 2},
+  colorBrightness = {30, 100, 5}, hudHeight = {20, 80, 2}, shadowStrength = {0, 100, 5},
 };
 
 -- Animation timings match the user's chosen settings.
@@ -105,14 +33,9 @@ local FADE_IN_TIME, FADE_OUT_TIME = 0.18, 0.22;
 
 local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
 
--- The look follows Blizzard's level-up banner. There is no plate, only a soft shadow (Media\SoftShadow.tga,
--- white with a Gaussian alpha falloff that reaches zero at every edge, drawn black) that keeps the text
--- readable. The target type's color lights the lines (LevelUp-Bar-White) and a glow behind the icon
--- (Media\SoftGlow.tga, same falloff, additive). The interact flash is the same glow over the whole HUD.
+-- Common shadow and glow textures; style-specific artwork lives in Styles/.
 local SHADOW, GLOW = MEDIA .. "SoftShadow", MEDIA .. "SoftGlow";
-local SHADOW_ALPHA = 0.9;
 ns.HUD_SHADOW_PADDING = { x = 75, y = 16 };
-local LINE_ATLAS = "LevelUp-Bar-White";
 
 ----
 --  Interact key cap, on Blizzard's key art: the plunderstorm key, else the tutorial key, else a plain
@@ -132,117 +55,20 @@ local NO_MARGINS = {0, 0, 0, 0};
 -- past its limits.
 local function Clamp(value, low, high) return math.max(low, math.min(high, value)) end
 
--- Calls step(t) every frame for duration seconds, with t going from 0 to 1. Playing again replaces the
--- running tween.
-local function CreateTween()
-  local driver = CreateFrame("Frame");
-  function driver:Play(duration, step)
-    local elapsed = 0;
-    self:SetScript("OnUpdate", function(_, dt)
-      elapsed = elapsed + dt;
-      local t = math.min(1, elapsed / duration);
-      step(t);
-      if t == 1 then self:SetScript("OnUpdate", nil); end
-    end);
-  end
-  function driver:Stop() self:SetScript("OnUpdate", nil); end
-  return driver;
-end
+local CreateTween = ns.CreateTween;
 
 ----
 --  Interact key
 ----
 
--- The interact key's text ("F", "s-F"), or nil when it's unbound. While a controller is the active input
--- (GAME_PAD_ACTIVE_CHANGED), a gamepad binding ("PAD1", "PADLTRIGGER-PAD1") wins over a keyboard one.
--- WoW: Forever's gamepad UI has a fixed interact button instead of a binding; ns.GamepadInteractGlyph
--- (Feat\Forever.lua) returns its glyph while that UI is on.
-ns.gamepadActive = false;
-local function IsPadKey(key) return key:find("^PAD") ~= nil or key:find("%-PAD") ~= nil end
--- Also returns the key itself ("F", "SHIFT-F", "PAD3"), which KeyWatcher checks. The gamepad UI's
--- interact button is the left face button, GAMEPAD_FACE_LEFT.
-local function GetInteractKeyText()
-  local glyph = ns.GamepadInteractGlyph and ns.GamepadInteractGlyph();
-  if glyph then return "|A:" .. glyph .. ":14:14|a", GAMEPAD_FACE_LEFT or "PAD3" end
-  local keys = { GetBindingKey("INTERACTTARGET") };
-  local key = keys[1];
-  for _, k in ipairs(keys) do
-    if IsPadKey(k) == ns.gamepadActive then key = k; break end
-  end
-  if not key then return nil end
-  local text = GetBindingText(key, 1);
-  if not text or text == "" then return nil end
-  return text, key;
-end
+local GetInteractKeyText, IsChordDown = ns.GetInteractKeyText, ns.IsChordDown;
 
--- Whether a key chord is held: its key and every modifier in it ("SHIFT-F", "PADLTRIGGER-PAD1"). A chord
--- whose key is the minus key ends in "-" ("SHIFT--").
-local MODIFIER_DOWN = { ALT = IsAltKeyDown, CTRL = IsControlKeyDown, SHIFT = IsShiftKeyDown, META = IsMetaKeyDown };
-local function IsChordDown(chord)
-  local key = chord:match("%-(%-)$") or chord:match("([^%-]+)$") or chord;
-  for modifier in chord:sub(1, #chord - #key):gmatch("([^%-]+)%-") do
-    local isDown = MODIFIER_DOWN[modifier];
-    if isDown then
-      if not isDown() then return false end
-    elseif not IsKeyDown(modifier) then
-      return false;
-    end
-  end
-  return IsKeyDown(key) and true or false;
-end
+local InkOffset = ns.InkOffset;
+local keyTextMeasure, nameMeasure = ns.CreateMeasure(), ns.CreateMeasure();
 
--- UpdateKeyCap and UpdateLayout measure text on hidden font strings that aren't anchored to the HUD.
--- GetStringWidth is SecretWhenAnchoringSecret, so a region anchored to the NPC name, which is secret in
--- instances and combat, returns secret sizes.
-local function CreateMeasure()
-  local fs = UIParent:CreateFontString(nil, "BACKGROUND", "GameFontHighlight");
-  fs:SetPoint("TOPLEFT", UIParent, "BOTTOMRIGHT"); --off-screen
-  fs:Hide();
-  return fs;
-end
-local keyTextMeasure, nameMeasure = CreateMeasure(), CreateMeasure();
-
--- A font string centers text by the letters' advance widths, but in Friz Quadrata (the default font) the
--- ink of some letters sits off-center in that width; an "R" leans 0.05 font sizes right because of its
--- leg. FRIZ_BEARINGS has each character's left and right side bearing in 1/1000 font sizes, read from
--- Fonts\FRIZQT__.TTF. InkOffset returns how far right of center a label's ink sits, in font sizes, and 0
--- for other fonts and unknown characters.
-local FRIZ_BEARINGS = {
-  ["A"]={9,2}, ["B"]={52,44}, ["C"]={40,13}, ["D"]={52,40}, ["E"]={52,9}, ["F"]={52,26}, ["G"]={40,69},
-  ["H"]={52,53}, ["I"]={52,52}, ["J"]={-37,45}, ["K"]={52,-19}, ["L"]={52,13}, ["M"]={26,27}, ["N"]={44,40},
-  ["O"]={40,41}, ["P"]={52,27}, ["Q"]={40,-118}, ["R"]={52,-43}, ["S"]={37,39}, ["T"]={-7,-7}, ["U"]={49,52},
-  ["V"]={-5,7}, ["W"]={-6,12}, ["X"]={5,6}, ["Y"]={-7,4}, ["Z"]={25,16}, ["a"]={35,6}, ["b"]={35,41},
-  ["c"]={40,-4}, ["d"]={40,36}, ["e"]={40,40}, ["f"]={34,-53}, ["g"]={15,3}, ["h"]={38,39}, ["i"]={42,39},
-  ["j"]={-26,64}, ["k"]={38,-12}, ["l"]={38,39}, ["m"]={42,37}, ["n"]={42,38}, ["o"]={40,40}, ["p"]={35,40},
-  ["q"]={41,39}, ["r"]={42,9}, ["s"]={30,26}, ["t"]={27,9}, ["u"]={38,39}, ["v"]={-12,2}, ["w"]={-8,2},
-  ["x"]={-5,-5}, ["y"]={-21,5}, ["z"]={11,-1}, ["0"]={39,40}, ["1"]={157,201}, ["2"]={53,43}, ["3"]={61,78},
-  ["4"]={13,24}, ["5"]={71,70}, ["6"]={45,48}, ["7"]={80,57}, ["8"]={39,36}, ["9"]={47,44}, ["-"]={35,34},
-};
-local function InkOffset(text, fontPath)
-  if not fontPath:lower():find("frizqt__") then return 0 end
-  local first, last = FRIZ_BEARINGS[text:sub(1, 1)], FRIZ_BEARINGS[text:sub(-1)];
-  if not (first and last) then return 0 end
-  return (first[1] - last[2]) / 2000;
-end
-
--- Type colors and range opacity are shared by every HUD and the debug recorder.
-local OUT_OF_RANGE_COLOR = {.35, .35, .35};
-local UNABLE_COLOR = {.5, .5, .5};
+-- Range opacity is shared by every HUD.
 local IN_RANGE_ALPHA, OUT_OF_RANGE_ALPHA = 1, 0.75;
 
--- The color for an icon key (frame.colorKey) and range, dimmed by colorBrightness (percent).
-local function GetTypeColor(key, outOfRange)
-  local color;
-  if outOfRange then
-    color = OUT_OF_RANGE_COLOR;
-  elseif IsUnableKey(key) then
-    color = UNABLE_COLOR;
-  else
-    color = TYPE_COLORS[key] or TYPE_COLORS["default"];
-  end
-  local scale = EnhancedSoftInteractDB.colorBrightness / 100;
-  return color[1] * scale, color[2] * scale, color[3] * scale;
-end
 ----
 --  CreateHUD builds the real HUD and the Edit Mode preview. Each owns its textures, animations and state.
 ----
@@ -258,9 +84,14 @@ local function CreateHUD(frame)
   frame.lineLowGlow:SetBlendMode("ADD");
   frame.lineLow = frame:CreateTexture(nil, "BORDER");
   frame.lineHigh = frame:CreateTexture(nil, "BORDER");
-  frame.flash = frame:CreateTexture(nil, "BORDER");
+  -- Keep pulse opacity on a frame: texture tint/atlas setup cannot overwrite this alpha.
+  frame.flashHolder = CreateFrame("Frame", nil, frame);
+  frame.flashHolder:SetAllPoints(frame);
+  frame.flashHolder:SetFrameLevel(frame:GetFrameLevel());
+  frame.flashHolder:SetAlpha(0);
+  frame.flash = frame.flashHolder:CreateTexture(nil, "BORDER");
   frame.flash:SetBlendMode("ADD");
-  frame.flash:SetAlpha(0);
+  ns.styles.Create(frame);
   frame.icon = frame:CreateTexture(nil, "ARTWORK");
   local NAME_FONT = _G.Game17Font_Shadow and "Game17Font_Shadow" or "GameFontNormalLarge";
   frame.name = frame:CreateFontString(nil, "ARTWORK", NAME_FONT);
@@ -353,12 +184,24 @@ local function CreateHUD(frame)
   local PULSE_TIME = 0.35;
   local POP = 1.15;
   frame.pulseUntil = 0;
-  frame.pulse = AnimationGroup({
-    { "Alpha", frame.flash, 1, 0.06, smoothing = "OUT", alpha = {0, 0.45} },
-    { "Alpha", frame.flash, 2, 0.24, smoothing = "IN", alpha = {0.45, 0} },
+  local pulseSteps = {
+    { "Alpha", frame.flashHolder, 1, 0.06, smoothing = "OUT", alpha = {0, 0.45} },
+    { "Alpha", frame.flashHolder, 2, 0.24, smoothing = "IN", alpha = {0.45, 0} },
     { "Scale", frame.icon, 1, 0.08, smoothing = "OUT", scale = POP },
     { "Scale", frame.icon, 2, 0.2, smoothing = "IN_OUT", scale = 1 / POP },
-  });
+  };
+  for _, glow in ipairs(frame.stylePulseLayers) do
+    pulseSteps[#pulseSteps + 1] = { "Alpha", glow, 1, 0.06, smoothing = "OUT", alpha = {0, 0.45} };
+    pulseSteps[#pulseSteps + 1] = { "Alpha", glow, 2, 0.24, smoothing = "IN", alpha = {0.45, 0} };
+  end
+  frame.pulse = AnimationGroup(pulseSteps);
+  -- Return every pulse layer to its idle opacity on completion, interruption or hide.
+  local function ClearPulseLight()
+    frame.flashHolder:SetAlpha(0);
+    for _, glow in ipairs(frame.stylePulseLayers) do glow:SetAlpha(0); end
+  end
+  frame.pulse:SetScript("OnFinished", ClearPulseLight);
+  frame.pulse:SetScript("OnStop", ClearPulseLight);
 
   ----
   --  The key cap follows the interact key itself (KeyWatcher): up, held down, and released.
@@ -501,8 +344,16 @@ local function CreateHUD(frame)
   --  Otherwise a whole tap: a press KeyWatcher didn't see, another binding, the Edit Mode preview, or the
   --  game interacting again while the key stays held.
   local RELEASE_GRACE = 0.15;
-  local function PlayInteractPulse()
+  local samplePulseAt;
+  local function PlayInteractPulse(source)
     if not EnhancedSoftInteractDB.animationsEnabled then return end
+    -- A sample can animate key-up before the game sends its interaction event in the same frame.
+    -- Keep that pulse instead of restarting it and pressing the key cap a second time.
+    if source == "game" and samplePulseAt and GetTime() - samplePulseAt < RELEASE_GRACE then
+      samplePulseAt = nil;
+      return;
+    end
+    samplePulseAt = source == "sample_release" and GetTime() or nil;
     frame.pulse:Stop();
     frame.pulse:Play();
     frame.pulseUntil = GetTime() + PULSE_TIME;
@@ -570,33 +421,12 @@ local function CreateHUD(frame)
   --  Layout
   ----
 
-  -- Lines in the target type's color: a strong one under the name, 5 units wider than the box on each
-  -- side, with an additive glow, and a fainter one above the name, 20 units shorter on each side. They sit
-  -- LINE_GAP beyond the name's letters, so they move apart as the font grows.
-  -- The level-up bar art is a 7-pixel strip whose stroke is its bottom row, so a texture draws its line
-  -- near its bottom edge. frame.lineStrokeShift (3/7 for that art, 0 for the plain fallback) raises each
-  -- texture by that share of its height, which puts the middle of the stroke on the line's position.
-  local LINE_GAP = 6.5;
-  local function UpdateLines()
-    local y = EnhancedSoftInteractDB.fontSize * 0.5 + LINE_GAP;
-    local function Line(tex, inset, offsetY, height)
-      offsetY = offsetY + height * (frame.lineStrokeShift or 0);
-      tex:ClearAllPoints();
-      tex:SetPoint("LEFT", frame.box, "LEFT", inset, offsetY);
-      tex:SetPoint("RIGHT", frame.box, "RIGHT", -inset, offsetY);
-      tex:SetHeight(height);
-    end
-    Line(frame.lineLow, -5, -y, 4);
-    Line(frame.lineLowGlow, -5, -y, 10);
-    Line(frame.lineHigh, 20, y, 3);
-  end
-
   -- The icon and the key cap sit at opposite ends of the box, EDGE_INSET from the edge. "Swap Icon and
   -- Key" (swapIconAndKey) swaps their ends. The name sits between them (UpdateLayout).
   local EDGE_INSET = 7;
   local function Inset(side) return side == "LEFT" and EDGE_INSET or -EDGE_INSET end
 
-  -- Most cursor art isn't centered in its image. ns.iconArtOffsets (Feat\Cursors.lua) has how far each
+  -- Most cursor art isn't centered in its image. ns.iconArtOffsets (Helpers\Cursors.lua) has how far each
   -- one's art sits right of and below center, in 64px units; the icon moves the other way. AnchorIcon
   -- rounds the nudge to whole units, because the renderer may snap a fractional nudge away. Unable icons
   -- use their cursor's offset. Icons from a file ID are 32px files that are already centered.
@@ -655,7 +485,8 @@ local function CreateHUD(frame)
     local db = EnhancedSoftInteractDB;
     frame.icon:SetSize(db.iconSize, db.iconSize);
     frame.icon:SetShown(db.showIcon);
-    frame.iconGlow:SetShown(db.showIcon);
+    local style = ns.styles.Get();
+    frame.iconGlow:SetShown(db.showIcon and style.layers and style.layers.iconGlow or false);
     SizeGlow();
     AnchorIcon(); --the nudge scales with the icon size
   end
@@ -751,7 +582,7 @@ local function CreateHUD(frame)
     elseif isDown and not cap.isDown then
       KeyDown();
     elseif not isDown and cap.isDown then
-      if frame.sampleName then PlayInteractPulse(); else KeyUp(false); end
+      if frame.sampleName then PlayInteractPulse("sample_release"); else KeyUp(false); end
     end
   end);
 
@@ -759,7 +590,7 @@ local function CreateHUD(frame)
   --  Name, requirement line and columns
   ----
 
-  -- In range but unable (the character lacks the profession; ns.RequirementFor in Feat\Cursors.lua), a red
+  -- In range but unable (the character lacks the profession; ns.RequirementFor in Helpers\Cursors.lua), a red
   -- line under the name says why, in Blizzard's tooltip wording ("Requires Herbalism"). The HUD keeps its
   -- height: the name shrinks to REQ_NAME_SCALE of the font size, turns grey and moves up REQ_NAME_Y, and the
   -- requirement sits REQ_TEXT_Y below center at REQ_TEXT_SCALE. All of these are shares of the font size.
@@ -821,6 +652,9 @@ local function CreateHUD(frame)
     local width = EDGE_INSET + left + nameWidth + right + EDGE_INSET;
     frame.box:SetWidth(width);
     frame.boxWidth, frame.nameWidth = width, nameWidth; --for /esi debug; reading them back could be secret
+    frame.nameLeft = EDGE_INSET + left;
+    frame.nameOffsetY = nameY;
+    ns.styles.Layout(frame);
     if frame.onLayout then frame.onLayout(width); end --the preview widens its window to fit the HUD
   end
 
@@ -829,7 +663,6 @@ local function CreateHUD(frame)
     frame.name:SetText(frame.sampleName or UnitName("softInteract"));
     UpdateKeyCap();
     UpdateLayout();
-    UpdateLines();
   end
 
   local function UpdateHeight()
@@ -848,7 +681,7 @@ local function CreateHUD(frame)
   -- strength instead of 0.6 until the next repaint (seen in game as a glow that's too strong after a
   -- target switch). The additive layers keep alpha 1 and carry their strength in the color instead;
   -- with ADD blending, color times strength at alpha 1 draws the same as color at that alpha. The flash
-  -- keeps its alpha out of this, because the interact animation drives it from 0.
+  -- uses a separate holder for animation alpha, so repainting cannot change its pulse opacity.
   local ICON_GLOW_STRENGTH, LINE_GLOW_STRENGTH = 0.6, 0.35;
   local function PaintColor(r, g, b)
     r, g, b = Clamp(r, 0, 1), Clamp(g, 0, 1), Clamp(b, 0, 1);
@@ -857,8 +690,7 @@ local function CreateHUD(frame)
     frame.lineLow:SetVertexColor(r, g, b, 1);
     s = LINE_GLOW_STRENGTH;
     frame.lineLowGlow:SetVertexColor(r * s, g * s, b * s, 1);
-    frame.lineHigh:SetVertexColor(r, g, b, 0.5);
-    frame.flash:SetVertexColor(r, g, b);
+    ns.styles.Paint(frame, r, g, b);
   end
 
   -- Sets the colors, the key label and the glow size from frame.colorKey and frame.outOfRange. With blend
@@ -885,24 +717,30 @@ local function CreateHUD(frame)
 
   local function UpdateColors() SetTypeColor(false); end
 
-  -- Textures for the shadow, glows and lines. A client without the level-up bar art gets plain lines.
+  local function UpdateShadow()
+    frame.shadow:SetVertexColor(0, 0, 0, Clamp(EnhancedSoftInteractDB.shadowStrength / 100, 0, 1));
+    frame.shadow:SetShown(ns.styles.Get().shadow == true);
+  end
+
+  -- Each style owns its appearance; targeting, columns and animations stay shared.
   local function ApplyTextures()
-    local hasLineArt = C_Texture.GetAtlasInfo(LINE_ATLAS) ~= nil;
     frame.shadow:SetTexture(SHADOW);
-    frame.shadow:SetVertexColor(0, 0, 0, SHADOW_ALPHA);
+    UpdateShadow();
     frame.iconGlow:SetTexture(GLOW);
-    frame.flash:SetTexture(GLOW);
-    for _, line in ipairs({ frame.lineLow, frame.lineLowGlow, frame.lineHigh }) do
-      if hasLineArt then line:SetAtlas(LINE_ATLAS); else line:SetTexture([[Interface\Buttons\WHITE8X8]]); end
-    end
-    frame.lineStrokeShift = hasLineArt and 3 / 7 or 0; --see UpdateLines
+    ns.styles.Apply(frame);
+  end
+
+  local function UpdateStyle()
+    ApplyTextures();
+    UpdateLayout();
+    UpdateColors();
   end
 
   ----
   --  Showing a cursor and the soft target handler
   ----
 
-  -- Shows a cursor by name ("Skin", "UnableSpeak") on the icon and returns its key in the TYPE_COLORS
+  -- Shows a cursor by name ("Skin", "UnableSpeak") on the icon and returns its key in the type-color
   -- spelling. It uses the crosshair atlas (ns.CrosshairAtlasFor), the centered art SetUnitCursorTexture
   -- uses too, else the classic Interface\Cursor file, whose art sits in the top-left corner (the mouse
   -- hotspot).
@@ -978,8 +816,9 @@ local function CreateHUD(frame)
     colorTween:Stop();
     depthTween:Stop();
     tapToken = tapToken + 1; --cancels a pending tap release
-    frame.flash:SetAlpha(0);
+    ClearPulseLight();
     frame.pulseUntil = 0;
+    samplePulseAt = nil;
     frame.glowScale, frame.rgb, glowTarget = nil, nil, nil;
     cap.isDown, cap.tapping, cap.consumed, cap.releasedAt = false, false, false, nil;
     cap.pressDepth, cap.pressShade = 0, 1; --the key cap repaints with the next target (SetTypeColor)
@@ -1036,7 +875,7 @@ local function CreateHUD(frame)
     OnSoftTargetChanged = OnSoftTargetChanged, OnSoftTargetCleared = OnSoftTargetCleared,
     PlayInteractPulse = PlayInteractPulse, UpdateColors = UpdateColors, UpdateAnimations = UpdateAnimations,
     SetIconSide = SetIconSide, UpdateIcon = UpdateIcon, UpdateFont = UpdateFont, UpdateHeight = UpdateHeight,
-    UpdateKeyCap = UpdateKeyCap, UpdateLayout = UpdateLayout,
+    UpdateKeyCap = UpdateKeyCap, UpdateLayout = UpdateLayout, UpdateStyle = UpdateStyle, UpdateShadow = UpdateShadow,
   };
 end
 
@@ -1154,8 +993,8 @@ frame:SetScript("OnEvent", function(_, event, ...)
   elseif event == "PLAYER_SOFT_INTERACT_CHANGED" then
     OnSoftInteractChanged(...);
   elseif event == "PLAYER_SOFT_TARGET_INTERACTION" then
-    if EnhancedSoftInteractDB.animationsEnabled and frame:IsShown() and not frame.fadingOut then
-      hud.PlayInteractPulse();
+    for _, h in ipairs(huds) do
+      if h.frame:IsShown() and not h.frame.fadingOut then h.PlayInteractPulse("game"); end
     end
   elseif event == "GAME_PAD_ACTIVE_CHANGED" then
     ns.gamepadActive = (...) and true or false; --payload: isActive
@@ -1173,12 +1012,11 @@ function SlashCmdList.ENHANCEDSOFTINTERACT(msg)
 end
 
 -- Shared with the Feat files. The Update functions and ShowSample run on every HUD.
-ns.frame, ns.media, ns.typeColors, ns.AddHUD = frame, media, TYPE_COLORS, AddHUD;
+ns.frame, ns.media, ns.AddHUD = frame, media, AddHUD;
 ns.DEFAULTS, ns.SLIDER_RANGES, ns.HUD_DEFAULT_POSITION = DEFAULTS, SLIDER_RANGES, HUD_DEFAULT_POSITION;
-ns.Notify, ns.IsUnableKey, ns.issecretvalue = Notify, IsUnableKey, issecretvalue;
-ns.GetTypeColor, ns.RefreshKeyCap = GetTypeColor, RefreshKeyCap;
-ns.CursorName, ns.ColorKeyFor = CursorName, ColorKeyFor;
+ns.Notify, ns.issecretvalue = Notify, issecretvalue;
+ns.RefreshKeyCap = RefreshKeyCap;
 for _, name in ipairs({ "ShowSample", "PlayInteractPulse", "UpdateColors", "SetIconSide", "UpdateIcon",
-    "UpdateFont", "UpdateHeight", "UpdateKeyCap", "UpdateLayout", "UpdateAnimations" }) do
+    "UpdateFont", "UpdateHeight", "UpdateKeyCap", "UpdateLayout", "UpdateAnimations", "UpdateStyle", "UpdateShadow" }) do
   ns[name] = OnEveryHUD(name);
 end

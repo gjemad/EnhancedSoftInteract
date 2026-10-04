@@ -138,6 +138,14 @@ local function BuildEditModeSettings()
   };
 
   Section("appearance", "Appearance");
+  Add({ kind = kind.Dropdown, name = "Style", default = DEFAULTS.hudStyle,
+    values = function() return ns.HUD_STYLES end,
+    get = function() return db.hudStyle end,
+    set = function(_, value)
+      db.hudStyle = value;
+      ns.UpdateStyle();
+      LibEditMode:RefreshFrameSettings(frame);
+    end });
   Checkbox("Hide Blizzard's Soft Target Displays", "hideBlizzard", ns.UpdateBlizzardDisplays);
   Checkbox("Enable Animations", "animationsEnabled", ns.UpdateAnimations);
   Add({ kind = kind.Divider, hideLabel = true });
@@ -163,7 +171,9 @@ local function BuildEditModeSettings()
 
 
   Slider("Color Brightness", "colorBrightness", Percent, UpdateColors);
-  Slider("Shadow Height", "hudHeight", Px, UpdateHeight);
+  local function NoShadow() return not ns.styles.Get().shadow end
+  Slider("Shadow Strength", "shadowStrength", Percent, ns.UpdateShadow, NoShadow);
+  Slider("Shadow Height", "hudHeight", Px, UpdateHeight, NoShadow);
 
   -- Game settings the HUD needs, kept by Feat\Persistence.lua.
   Section("persistence", "Persistence");
@@ -171,6 +181,7 @@ local function BuildEditModeSettings()
 
   -- LibEditMode adds desc without word wrapping, so keep tooltip lines short with explicit breaks.
   local DESCRIPTIONS = {
+    ["Style"] = "Chooses the look of the target display.",
     ["Enabled"] = "Shows the target's name, icon and interact key.",
     ["Hide Blizzard's Soft Target Displays"] = "Hides the game's own labels for your interact target.\nTurn off to show them alongside this addon.",
     ["Keep Interact Key On"] = "Keeps the Interact Key enabled\nso you can use it to interact with nearby targets.",
@@ -186,6 +197,7 @@ local function BuildEditModeSettings()
     ["Font Size"] = "Adjusts the size of the target's name.",
     ["Color Brightness"] = "Adjusts how bright the colored lines and glow appear.",
     ["Shadow Height"] = "Adjusts the height of the shadow behind the name.",
+    ["Shadow Strength"] = "Adjusts how dark the shadow behind the name appears.",
     ["Enable Animations"] = "Adds movement and fades to the target display.",
   };
   for _, setting in ipairs(settings) do setting.desc = DESCRIPTIONS[setting.name]; end

@@ -52,6 +52,7 @@ local function Layer(tex)
   local r, g, b, a = tex:GetVertexColor();
   local w, h = tex:GetSize();
   return { shown = Safe(tex:IsVisible()), width = Number(w), height = Number(h),
+    atlas = Safe(tex:GetAtlas()), texture = Safe(tex:GetTextureFilePath()), file_id = Safe(tex:GetTextureFileID()),
     red = Number(r), green = Number(g), blue = Number(b), vertex_alpha = Number(a),
     alpha = Number(tex:GetAlpha()), blend = Safe(tex:GetBlendMode()) };
 end
@@ -59,12 +60,18 @@ end
 local function Animations()
   local rgb = frame.rgb or {};
   local layers = {};
-  for _, name in ipairs({ "iconGlow", "lineLow", "lineLowGlow", "lineHigh", "flash", "shadow" }) do
-    layers[name] = Layer(frame[name]);
-  end
-  return { shown = Safe(frame:IsVisible()), alpha = Number(frame:GetAlpha()),
+    for _, name in ipairs({ "iconGlow", "lineLow", "lineLowGlow", "lineHigh", "flash", "shadow", "stylePlate", "rune",
+        "levelupNameGlow", "runicNameGlow" }) do
+      layers[name] = Layer(frame[name]);
+    end
+    for _, name in ipairs({ "levelupBloom", "runicBloom" }) do
+      for i, region in ipairs(frame[name] or {}) do layers[name .. i] = Layer(region); end
+    end
+    return { shown = Safe(frame:IsVisible()), alpha = Number(frame:GetAlpha()),
+      style = EnhancedSoftInteractDB.hudStyle, shadow_strength = Number(EnhancedSoftInteractDB.shadowStrength),
     scale = Number(frame:GetEffectiveScale()), glow_scale = Number(frame.glowScale),
     color = { red = Number(rgb[1]), green = Number(rgb[2]), blue = Number(rgb[3]) },
+    flash_opacity = Number(frame.flashHolder:GetAlpha()),
     press_depth = Number(frame.keyCap.pressDepth), layers = layers,
     playing = { fade = Safe(frame.fader:IsPlaying()), pulse = Safe(frame.pulse:IsPlaying()),
       switch = Safe(frame.switchAnim:IsPlaying()), ripple = Safe(frame.ripple:IsPlaying()),
