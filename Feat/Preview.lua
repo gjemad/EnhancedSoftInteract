@@ -110,7 +110,7 @@ local function CreateWindow(dialog)
   content:SetScript("OnMouseUp", function(_, button)
     if button ~= "LeftButton" then return end
     ns.ShowNextEditModeSample();
-    if EnhancedSoftInteractDB.interactAnim then ns.PlayInteractPulse(); end
+    if EnhancedSoftInteractDB.animationsEnabled then ns.PlayInteractPulse(); end
   end);
 
   -- The window widens to fit the HUD at its widest, with the name column at Name Max Width, so the

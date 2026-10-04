@@ -88,19 +88,20 @@ local function Notify(msg) print("|cffffd100ESI:|r " .. msg) end
 
 -- Saved-setting defaults. LoadSettings fills in unset keys from here, and the Edit Mode panel resets to them.
 local DEFAULTS = {
-  enabled = true, hideBlizzard = true, forceInteractKey = true, forceInteractIcons = true, previewMinimized = false,
-  showIcon = true, iconSize = 30, swapIconAndKey = false, showKey = true, keySize = 130,
-  fontSize = 17, nameMinWidth = 100, nameMaxWidth = 200, hudHeight = 50, colorBrightness = 100,
-  interactAnim = true, switchAnim = true,
-  fadeEnabled = true, fadeInTime = 0.07, fadeOutTime = 0.1,
+  enabled = true, hideBlizzard = true, forceInteractKey = true, forceInteractIcons = true, previewMinimized = true,
+  showIcon = true, iconSize = 30, swapIconAndKey = false, showKey = true, keyScale = 100,
+  fontSize = 17, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 50, colorBrightness = 100,
+  animationsEnabled = true,
 };
--- Each Edit Mode slider's {min, max, step}. Fade times start above 0, because the Fade Animations checkbox turns fading off.
+-- Each Edit Mode slider's {min, max, step}.
 local SLIDER_RANGES = {
-  iconSize = {16, 48, 2}, keySize = {75, 150, 5},
+  iconSize = {16, 48, 2}, keyScale = {60, 150, 5},
   fontSize = {10, 32, 1}, nameMinWidth = {50, 300, 5}, nameMaxWidth = {50, 400, 5},
   colorBrightness = {30, 100, 5}, hudHeight = {20, 80, 2},
-  fadeInTime = {0.01, 1, 0.01}, fadeOutTime = {0.01, 1, 0.01},
 };
+
+-- Animation timings match the user's chosen settings.
+local FADE_IN_TIME, FADE_OUT_TIME = 0.18, 0.22;
 
 local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
 
@@ -501,6 +502,7 @@ local function CreateHUD(frame)
   --  game interacting again while the key stays held.
   local RELEASE_GRACE = 0.15;
   local function PlayInteractPulse()
+    if not EnhancedSoftInteractDB.animationsEnabled then return end
     frame.pulse:Stop();
     frame.pulse:Play();
     frame.pulseUntil = GetTime() + PULSE_TIME;
@@ -531,8 +533,8 @@ local function CreateHUD(frame)
 
   -- Returns the fade-in and fade-out durations, or 0 (instant) when fade animations are off.
   local function GetFadeTimes()
-    if not EnhancedSoftInteractDB.fadeEnabled then return 0, 0 end
-    return EnhancedSoftInteractDB.fadeInTime, EnhancedSoftInteractDB.fadeOutTime;
+    if not EnhancedSoftInteractDB.animationsEnabled then return 0, 0 end
+    return FADE_IN_TIME, FADE_OUT_TIME;
   end
 
   local function CurrentAlpha()
@@ -665,7 +667,7 @@ local function CreateHUD(frame)
   -- so a letter can still land half a pixel off.
   local KEY_TEXT_NUDGE_X = 0.06;
 
-  -- The whole key art is max(24, fontSize + 9) x keySize% tall and keeps its proportions. The cap frame
+  -- At 100%, the whole key art is max(24, fontSize + 9) x 1.3 tall and keeps its proportions. The cap frame
   -- (capWidth x capHeight, what the layout uses) is the key's face, and the art hangs past it by its
   -- margins. A label too wide for the face widens it to the text plus KEY_TEXT_PAD and stretches the art.
   -- A gamepad button comes from GetBindingText as one atlas markup ("|A:Gamepad_Gen_1_32:14:14|a"); the
@@ -677,7 +679,7 @@ local function CreateHUD(frame)
   local GLYPH_SHARE = 0.77;
   local function SetKeyCapText(text)
     local db = EnhancedSoftInteractDB;
-    local scale = db.keySize / 100;
+    local scale = db.keyScale / 100 * 1.3;
     local height = math.max(24, db.fontSize + 9) * scale;
     local glyph = text:match("^|A:([^:|]+):[^|]*|a$");
     glyph = glyph and glyph:gsub("_32$", "_64");
@@ -729,13 +731,13 @@ local function CreateHUD(frame)
   -- Watches the interact key every frame while the key cap is showing, and presses the cap with it. Letting
   -- go comes up without a ripple; the interaction adds that (PlayInteractPulse). A key whose hold already
   -- interacted (cap.consumed) stays up until it's let go. While a text box has the keyboard (typing in
-  -- chat), the key types instead, so the cap stays up. With interactAnim off, or when the HUD goes away, a
+  -- chat), the key types instead, so the cap stays up. With animations off, or when the HUD goes away, a
   -- held cap comes up. An Edit Mode sample has no target for the game to interact with, so letting go of
   -- the key plays the whole interaction there, ripple, flash and icon pop included.
   local keyWatcher = CreateFrame("Frame");
   keyWatcher:SetScript("OnUpdate", function()
     local watching = cap.key and frame:IsShown() and not frame.fadingOut and cap:IsShown()
-      and EnhancedSoftInteractDB.interactAnim
+      and EnhancedSoftInteractDB.animationsEnabled
       and not (GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus());
     if not watching then
       if cap.isDown and not cap.tapping then KeyUp(false); end
@@ -860,14 +862,15 @@ local function CreateHUD(frame)
   end
 
   -- Sets the colors, the key label and the glow size from frame.colorKey and frame.outOfRange. With blend
-  -- (the HUD is visible), the glow animates, and with switchAnim on the color blends over SWITCH_TIME from
+  -- (the HUD is visible), the glow animates, and with animations on the color blends over SWITCH_TIME from
   -- wherever it is now, also from the middle of a running blend.
   local colorTween = CreateTween();
   local function SetTypeColor(blend)
+    blend = blend and EnhancedSoftInteractDB.animationsEnabled;
     PaintKeyCap();
     SetGlowScale(frame.outOfRange and GLOW_OUT_OF_RANGE_SCALE or 1, blend);
     local to = { GetTypeColor(frame.colorKey, frame.outOfRange) };
-    if not (blend and EnhancedSoftInteractDB.switchAnim and frame.rgb) then
+    if not (blend and EnhancedSoftInteractDB.animationsEnabled and frame.rgb) then
       colorTween:Stop();
       frame.rgb = to;
       PaintColor(unpack(to));
@@ -948,7 +951,7 @@ local function CreateHUD(frame)
     -- A visible HUD dims or brightens over SWITCH_TIME, together with its colors. A short fade-in time
     -- would otherwise drop it from 1 to 0.75 in about 0.02 seconds while the colors still blend.
     local toAlpha = outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA;
-    if visible and EnhancedSoftInteractDB.switchAnim and EnhancedSoftInteractDB.fadeEnabled then
+    if visible and EnhancedSoftInteractDB.animationsEnabled then
       FadeOver(toAlpha, SWITCH_TIME, false);
     else
       FadeTo(toAlpha, (GetFadeTimes()), false);
@@ -959,7 +962,7 @@ local function CreateHUD(frame)
     UpdateLayout();
     AnchorIcon();
     SetTypeColor(visible); --blend while the frame is up, set at once when it fades in
-    if switched and EnhancedSoftInteractDB.switchAnim then PlaySwitchAnim(); end
+    if switched and EnhancedSoftInteractDB.animationsEnabled then PlaySwitchAnim(); end
 
     return target, true;
   end
@@ -983,6 +986,22 @@ local function CreateHUD(frame)
   end
   frame:HookScript("OnHide", ResetAnimations);
 
+  -- Turning animations off also settles effects that are already playing on either HUD.
+  local function UpdateAnimations()
+    if EnhancedSoftInteractDB.animationsEnabled then return end
+    local hiding = frame.fadingOut or (not frame.sampleName and not frame.targetState);
+    frame.fadeToken = (frame.fadeToken or 0) + 1;
+    ResetAnimations();
+    frame.fader:Stop();
+    frame.fadingOut = false;
+    if hiding then
+      frame:Hide();
+    else
+      frame:SetAlpha(frame.sampleName and 1 or (frame.outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA));
+      SetTypeColor(false);
+    end
+  end
+
   -- Shows a made-up target in Edit Mode: a name, a cursor by name ("Skin", "UnableGatherHerbs") and an
   -- optional requirement line, fully visible and in range.
   local function ShowSample(name, cursor, requirementText)
@@ -995,7 +1014,7 @@ local function CreateHUD(frame)
     frame.requirementText = requirementText;
     frame.colorKey, frame.outOfRange = ShowCursor(cursor), false;
     SetTypeColor(true);
-    if EnhancedSoftInteractDB.switchAnim then PlaySwitchAnim(); end
+    if EnhancedSoftInteractDB.animationsEnabled then PlaySwitchAnim(); end
     AnchorIcon();
     UpdateKeyCap();
     UpdateLayout();
@@ -1015,7 +1034,7 @@ local function CreateHUD(frame)
   return {
     frame = frame, ApplyAllSettings = ApplyAllSettings, ShowSample = ShowSample,
     OnSoftTargetChanged = OnSoftTargetChanged, OnSoftTargetCleared = OnSoftTargetCleared,
-    PlayInteractPulse = PlayInteractPulse, UpdateColors = UpdateColors,
+    PlayInteractPulse = PlayInteractPulse, UpdateColors = UpdateColors, UpdateAnimations = UpdateAnimations,
     SetIconSide = SetIconSide, UpdateIcon = UpdateIcon, UpdateFont = UpdateFont, UpdateHeight = UpdateHeight,
     UpdateKeyCap = UpdateKeyCap, UpdateLayout = UpdateLayout,
   };
@@ -1135,7 +1154,7 @@ frame:SetScript("OnEvent", function(_, event, ...)
   elseif event == "PLAYER_SOFT_INTERACT_CHANGED" then
     OnSoftInteractChanged(...);
   elseif event == "PLAYER_SOFT_TARGET_INTERACTION" then
-    if EnhancedSoftInteractDB.interactAnim and frame:IsShown() and not frame.fadingOut then
+    if EnhancedSoftInteractDB.animationsEnabled and frame:IsShown() and not frame.fadingOut then
       hud.PlayInteractPulse();
     end
   elseif event == "GAME_PAD_ACTIVE_CHANGED" then
@@ -1160,6 +1179,6 @@ ns.Notify, ns.IsUnableKey, ns.issecretvalue = Notify, IsUnableKey, issecretvalue
 ns.GetTypeColor, ns.RefreshKeyCap = GetTypeColor, RefreshKeyCap;
 ns.CursorName, ns.ColorKeyFor = CursorName, ColorKeyFor;
 for _, name in ipairs({ "ShowSample", "PlayInteractPulse", "UpdateColors", "SetIconSide", "UpdateIcon",
-    "UpdateFont", "UpdateHeight", "UpdateKeyCap", "UpdateLayout" }) do
+    "UpdateFont", "UpdateHeight", "UpdateKeyCap", "UpdateLayout", "UpdateAnimations" }) do
   ns[name] = OnEveryHUD(name);
 end

@@ -3,7 +3,7 @@ local frame, media, DEFAULTS, SLIDER_RANGES = ns.frame, ns.media, ns.DEFAULTS, n
 local HUD_DEFAULT_POSITION, Notify = ns.HUD_DEFAULT_POSITION, ns.Notify;
 local SetIconSide, UpdateIcon, UpdateFont = ns.SetIconSide, ns.UpdateIcon, ns.UpdateFont;
 local UpdateKeyCap, UpdateLayout, UpdateHeight = ns.UpdateKeyCap, ns.UpdateLayout, ns.UpdateHeight;
-local UpdateColors, PlayInteractPulse = ns.UpdateColors, ns.PlayInteractPulse;
+local UpdateColors = ns.UpdateColors;
 
 ----
 --  Samples for the HUD in Edit Mode: Classic Era NPCs and game objects (also in WoW: Forever), in three
@@ -123,8 +123,6 @@ local function BuildEditModeSettings()
   end
   local function Px(value) return ("%dpx"):format(value) end
   local function Percent(value) return ("%d%%"):format(value) end
-  local function Seconds(value) return ("%.2fs"):format(value) end
-  local function RoundTime(value) return math.floor(value * 100 + 0.5) / 100 end
   local function KeyHidden() return not db.showKey end
 
   -- Outside the sections and never disabled, because it enables the rest.
@@ -139,21 +137,18 @@ local function BuildEditModeSettings()
     end,
   };
 
+  Section("appearance", "Appearance");
   Checkbox("Hide Blizzard's Soft Target Displays", "hideBlizzard", ns.UpdateBlizzardDisplays);
-
-  -- Game settings the HUD needs, kept by Feat\Persistence.lua.
-  Section("persistence", "Persistence");
-  for _, kept in ipairs(ns.keptSettings) do Checkbox(kept.checkbox, kept.option, ns.KeepSettings); end
-
-  Section("icon", "Icon & Key");
+  Checkbox("Enable Animations", "animationsEnabled", ns.UpdateAnimations);
+  Add({ kind = kind.Divider, hideLabel = true });
   Checkbox("Show Icon", "showIcon", function() UpdateIcon(); UpdateLayout(); end);
   Slider("Icon Size", "iconSize", Px, function() UpdateIcon(); UpdateLayout(); end,
     function() return not db.showIcon end);
   Checkbox("Swap Icon and Key", "swapIconAndKey", function() SetIconSide(); UpdateLayout(); end);
   Checkbox("Show Interact Key", "showKey", function() UpdateKeyCap(); UpdateLayout(); end);
-  Slider("Key Size", "keySize", Percent, function() UpdateKeyCap(); UpdateLayout(); end, KeyHidden);
+  Slider("Key Size", "keyScale", Percent, function() UpdateKeyCap(); UpdateLayout(); end, KeyHidden);
 
-  Section("text", "Text");
+  Add({ kind = kind.Divider, hideLabel = true });
   Add({ kind = kind.Dropdown, name = "Font", default = media:GetDefault("font"), height = 300,
     values = function()
       local values = {};
@@ -166,40 +161,32 @@ local function BuildEditModeSettings()
   Slider("Name Min Width", "nameMinWidth", Px, UpdateLayout);
   Slider("Name Max Width", "nameMaxWidth", Px, UpdateLayout);
 
-  Section("background", "Color & Shadow");
+
   Slider("Color Brightness", "colorBrightness", Percent, UpdateColors);
   Slider("Shadow Height", "hudHeight", Px, UpdateHeight);
 
-  Section("animation", "Animation");
-  Checkbox("Interact Animation", "interactAnim", function(on) if on then PlayInteractPulse(); end end);
-  Checkbox("Target Switch Animation", "switchAnim");
-  Checkbox("Fade Animations", "fadeEnabled");
-  local function FadeOff() return not db.fadeEnabled end
-  Slider("Fade In Time", "fadeInTime", Seconds, function(v) db.fadeInTime = RoundTime(v) end, FadeOff);
-  Slider("Fade Out Time", "fadeOutTime", Seconds, function(v) db.fadeOutTime = RoundTime(v) end, FadeOff);
+  -- Game settings the HUD needs, kept by Feat\Persistence.lua.
+  Section("persistence", "Persistence");
+  for _, kept in ipairs(ns.keptSettings) do Checkbox(kept.checkbox, kept.option, ns.KeepSettings); end
 
-  -- LibEditMode shows a setting's desc as its tooltip.
+  -- LibEditMode adds desc without word wrapping, so keep tooltip lines short with explicit breaks.
   local DESCRIPTIONS = {
-    ["Enabled"] = "Shows the HUD for your soft interact target. Turn off to hide it, bring back Blizzard's soft target tooltip, nameplate and nameplate icon, and stop keeping the Persistence settings. Those settings keep their current values.",
-    ["Hide Blizzard's Soft Target Displays"] = "Hides Blizzard's tooltip, nameplate and nameplate icon for your soft interact target, which show the same target as the HUD. Uncheck to see them next to the HUD. The change shows from your next target on.",
-    ["Keep Interact Key On"] = "Turns Enable Interact Key in Options > Controls back on if anything turns it off, such as turning off the gamepad. The HUD needs the key. Uncheck this to leave the key alone.",
-    ["Keep Interact Key Icons on Show All"] = "Sets Interact Key Icons in Options > Accessibility back to Show All if anything changes it. With fewer icons, corpses and objects show a plain cog on the HUD. Uncheck this to leave the setting alone.",
-    ["Show Icon"] = "Shows the target's interact icon (talk, quest, vendor, herb, ...) on the HUD.",
-    ["Icon Size"] = "Size of the interact icon.\nDefault: 30px",
-    ["Swap Icon and Key"] = "Puts the icon on the right end of the HUD and the interact key on the left. The name stays centered.",
-    ["Show Interact Key"] = "Shows the key bound to Interact With Target at the end of the HUD opposite the icon. While you use a controller it shows the gamepad button instead. It hides while the action is unbound.",
-    ["Key Size"] = "Size of the interact key, relative to the font size.\nDefault: 130%",
-    ["Font"] = "Font of the target name and the key.",
-    ["Name Min Width"] = "Narrowest the name column gets, for short names.\nDefault: 100px",
-    ["Name Max Width"] = "Widest the name column gets. Longer names end in \"...\".\nDefault: 200px",
-    ["Font Size"] = "Font size of the target name.\nDefault: 17",
-    ["Color Brightness"] = "Brightness of the target type's color in the lines and the glow behind the icon.\nDefault: 100%",
-    ["Target Switch Animation"] = "When the frame changes to another target or action (skinning, then looting), the icon and name slide in and the color blends over. Click the preview to see it.",
-    ["Shadow Height"] = "Height of the HUD. The soft shadow behind it reaches a little past this.\nDefault: 50px",
-    ["Interact Animation"] = "Plays a 0.3 second glow in the target type's color on the HUD when you press the interact key. Click the preview to see it.",
-    ["Fade Animations"] = "Fades the HUD in and out. Turn off to show and hide it instantly.",
-    ["Fade In Time"] = ("Seconds for the HUD to fade in.\nDefault: %.2fs"):format(DEFAULTS.fadeInTime),
-    ["Fade Out Time"] = ("Seconds for the HUD to fade out.\nDefault: %.2fs"):format(DEFAULTS.fadeOutTime),
+    ["Enabled"] = "Shows the target's name, icon and interact key.",
+    ["Hide Blizzard's Soft Target Displays"] = "Hides the game's own labels for your interact target.\nTurn off to show them alongside this addon.",
+    ["Keep Interact Key On"] = "Keeps the Interact Key enabled\nso you can use it to interact with nearby targets.",
+    ["Keep Interact Key Icons on Show All"] = "Keeps all interact icons enabled\nso the addon can show the right icon for each target.",
+    ["Show Icon"] = "Shows an icon for what you can do with the target.",
+    ["Icon Size"] = "Adjusts the size of the target icon.",
+    ["Swap Icon and Key"] = "Switches the sides of the icon and interact key.",
+    ["Show Interact Key"] = "Shows your interact key or controller button.",
+    ["Key Size"] = "Adjusts the size of the key or controller button.\n100% is the normal size.",
+    ["Font"] = "Chooses the lettering for the name and key.",
+    ["Name Min Width"] = "Sets the space reserved for short names.",
+    ["Name Max Width"] = "Limits the space used by long names.\nNames that don't fit end in \"...\".",
+    ["Font Size"] = "Adjusts the size of the target's name.",
+    ["Color Brightness"] = "Adjusts how bright the colored lines and glow appear.",
+    ["Shadow Height"] = "Adjusts the height of the shadow behind the name.",
+    ["Enable Animations"] = "Adds movement and fades to the target display.",
   };
   for _, setting in ipairs(settings) do setting.desc = DESCRIPTIONS[setting.name]; end
 

@@ -24,4 +24,5 @@ Feat\Persistence.lua
 Feat\DebugLog.lua
 Feat\Debug.lua
 Feat\EditMode.lua
+Feat\EditModeLayout.lua
 Feat\Preview.lua
