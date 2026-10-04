@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.5-beta (2026-10-04)
+
+- The debug window keeps your scroll position and logs when a target clears.
+- Turning off Fade Animations now stops HUD fading immediately.
+
 ## 0.1.4-beta (2026-10-04)
 
 - The debug window now has timestamped logs, filters and a selectable time range for troubleshooting.
