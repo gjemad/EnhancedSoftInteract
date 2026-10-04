@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.0-beta (2026-10-04)
+
+### Features
+
+- Added Floating Text, Plain Bar and Runic Line styles.
+- Added a Shadow Strength slider.
+
+### Bug fixes
+
+- Fixed HUD and preview animations that sometimes looked inconsistent.
+
 ## 0.1.6-beta (2026-10-04)
 
 ### Features
