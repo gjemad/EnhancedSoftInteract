@@ -5,8 +5,7 @@
 ## Version: @project-version@
 ## SavedVariables: EnhancedSoftInteractDB
 ## OptionalDeps: LibStub, CallbackHandler-1.0, LibSharedMedia-3.0, LibEditMode
-## X-Credits: Based on Soft Interact HUD by Mattsta.
-## X-Curse-Project-ID: 1723137
+## X-Curse-Project-ID: 1726408
 
 #@no-lib-strip@
 Libs\LibStub\LibStub.lua
