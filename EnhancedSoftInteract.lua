@@ -3,7 +3,6 @@ local media = LibStub:GetLibrary("LibSharedMedia-3.0", true);
 
 -- Fallbacks for APIs that some clients lack.
 local issecretvalue = issecretvalue or function() return false end;
-local SetUnitCursorTexture = SetUnitCursorTexture or function() return false end;
 
 -- The Feat files add functions to run once the saved settings are ready, and /esi subcommands.
 ns.onLoad = {};
@@ -84,30 +83,6 @@ local function IsUnableKey(key)
   return key ~= nil and key:lower():find("unable") ~= nil;
 end
 
--- Icons that say "you can interact" without saying how. A talkable NPC with one of them gets the
--- speech bubble.
-local GENERIC_ICONS = {
-  ["Cursor Interact"] = true, --cogwheel
-  ["Cursor UnableInteract"] = true,
-  ["default"] = true, --secret or unknown icon
-};
-
--- Friendly creature you can interact with: not a player, not attackable, not a game object such as a
--- herb or mailbox.
-local function IsTalkableNPC(unit)
-  if not UnitExists(unit) or UnitIsPlayer(unit) or UnitCanAttack("player", unit) then return false end
-  if UnitIsGameObject and UnitIsGameObject(unit) then return false end
-  if UnitIsInteractable and not UnitIsInteractable(unit) then return false end
-  return true;
-end
-
--- Whether the soft target is in interact range, the check Blizzard's gamepad action bar makes. nil on a
--- client without UnitIsInInteractRange (retail); the cursor's Unable state then decides.
-local function InInteractRange()
-  if not UnitIsInInteractRange then return nil end
-  return UnitIsInInteractRange("softinteract");
-end
-
 -- Every chat message of the addon starts with "ESI:".
 local function Notify(msg) print("|cffffd100ESI:|r " .. msg) end
 
@@ -135,6 +110,7 @@ local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
 -- (Media\SoftGlow.tga, same falloff, additive). The interact flash is the same glow over the whole HUD.
 local SHADOW, GLOW = MEDIA .. "SoftShadow", MEDIA .. "SoftGlow";
 local SHADOW_ALPHA = 0.9;
+ns.HUD_SHADOW_PADDING = { x = 75, y = 16 };
 local LINE_ATLAS = "LevelUp-Bar-White";
 
 ----
@@ -248,9 +224,26 @@ local function InkOffset(text, fontPath)
   return (first[1] - last[2]) / 2000;
 end
 
+-- Type colors and range opacity are shared by every HUD and the debug recorder.
+local OUT_OF_RANGE_COLOR = {.35, .35, .35};
+local UNABLE_COLOR = {.5, .5, .5};
+local IN_RANGE_ALPHA, OUT_OF_RANGE_ALPHA = 1, 0.75;
+
+-- The color for an icon key (frame.colorKey) and range, dimmed by colorBrightness (percent).
+local function GetTypeColor(key, outOfRange)
+  local color;
+  if outOfRange then
+    color = OUT_OF_RANGE_COLOR;
+  elseif IsUnableKey(key) then
+    color = UNABLE_COLOR;
+  else
+    color = TYPE_COLORS[key] or TYPE_COLORS["default"];
+  end
+  local scale = EnhancedSoftInteractDB.colorBrightness / 100;
+  return color[1] * scale, color[2] * scale, color[3] * scale;
+end
 ----
---  CreateHUD builds a HUD on frame: the real one (EnhancedSoftInteractHUD) and the Edit Mode preview
---  (Feat\EditMode.lua). Each HUD has its own textures, animations and state, and returns its functions.
+--  CreateHUD builds the real HUD and the Edit Mode preview. Each owns its textures, animations and state.
 ----
 local function CreateHUD(frame)
   -- frame.box is the layout box (icon | name | key, hudHeight tall) that everything anchors to. It draws
@@ -281,7 +274,7 @@ local function CreateHUD(frame)
 
   -- The shadow reaches SHADOW_PAD_X past both ends of the box and SHADOW_PAD_Y above and below it. The
   -- interact flash covers the box and 20 units past its ends. The icon glow follows the icon.
-  local SHADOW_PAD_X, SHADOW_PAD_Y = 75, 16;
+  local SHADOW_PAD_X, SHADOW_PAD_Y = ns.HUD_SHADOW_PADDING.x, ns.HUD_SHADOW_PADDING.y;
   frame.shadow:SetPoint("TOPLEFT", frame.box, "TOPLEFT", -SHADOW_PAD_X, SHADOW_PAD_Y);
   frame.shadow:SetPoint("BOTTOMRIGHT", frame.box, "BOTTOMRIGHT", SHADOW_PAD_X, -SHADOW_PAD_Y);
   frame.flash:SetPoint("TOPLEFT", frame.box, "TOPLEFT", -20, 0);
@@ -556,10 +549,14 @@ local function CreateHUD(frame)
     frame.fader:Stop();
     frame.fadingOut = hideWhenDone;
     frame:SetAlpha(toAlpha);
+    if duration <= 0 then
+      if hideWhenDone then frame.fadingOut = false; frame:Hide(); else frame:Show(); end
+      return;
+    end
     frame:Show();
     frame.fadeAnim:SetFromAlpha(fromAlpha);
     frame.fadeAnim:SetToAlpha(toAlpha);
-    frame.fadeAnim:SetDuration(math.max(0.01, duration));
+    frame.fadeAnim:SetDuration(duration);
     frame.fader:Play();
   end
 
@@ -822,7 +819,7 @@ local function CreateHUD(frame)
     local width = EDGE_INSET + left + nameWidth + right + EDGE_INSET;
     frame.box:SetWidth(width);
     frame.boxWidth, frame.nameWidth = width, nameWidth; --for /esi debug; reading them back could be secret
-    if frame.onLayout then frame.onLayout(width); end --the preview scales itself to fit its window
+    if frame.onLayout then frame.onLayout(width); end --the preview widens its window to fit the HUD
   end
 
   -- After a font or font size change, the name, key cap, columns and lines follow.
@@ -844,24 +841,6 @@ local function CreateHUD(frame)
   -- Only a target you can interact with gets its type's color. In range but unable (such as a herb without
   -- Herbalism) is UNABLE_COLOR. Out of range is OUT_OF_RANGE_COLOR, the frame fades to OUT_OF_RANGE_ALPHA,
   -- and the key label turns red, as an action button's hotkey does when its target is out of range.
-  local OUT_OF_RANGE_COLOR = {.35, .35, .35};
-  local UNABLE_COLOR = {.5, .5, .5};
-  local IN_RANGE_ALPHA, OUT_OF_RANGE_ALPHA = 1, 0.75;
-
-  -- The color for an icon key (frame.colorKey) and range, dimmed by colorBrightness (percent).
-  local function GetTypeColor(key, outOfRange)
-    local color;
-    if outOfRange then
-      color = OUT_OF_RANGE_COLOR;
-    elseif IsUnableKey(key) then
-      color = UNABLE_COLOR;
-    else
-      color = TYPE_COLORS[key] or TYPE_COLORS["default"];
-    end
-    local scale = EnhancedSoftInteractDB.colorBrightness / 100;
-    return color[1] * scale, color[2] * scale, color[3] * scale;
-  end
-
   -- A texture's vertex alpha and its own alpha are one value, so an Alpha animation overwrites the
   -- vertex alpha set here. The switch animation fades the icon glow in to alpha 1, which left it at full
   -- strength instead of 0.6 until the next repaint (seen in game as a glow that's too strong after a
@@ -935,36 +914,6 @@ local function CreateHUD(frame)
     return ColorKeyFor("Cursor " .. name);
   end
 
-  -- Draws the soft target's cursor on the icon, as Blizzard's nameplates and gamepad action bar do, asking
-  -- for the centered crosshair art. Returns false when the target has no cursor.
-  local CROSSHAIR_STYLE = Enum.CursorStyle and Enum.CursorStyle.Crosshair;
-  local function DrawTargetCursor()
-    return SetUnitCursorTexture(frame.icon, "softinteract", CROSSHAIR_STYLE);
-  end
-
-  -- Which cursor DrawTargetCursor drew, as a TYPE_COLORS key. It asks the texture in three ways: its atlas
-  -- name, the cursor name in its path ("Cursor Crosshair_Mail_64"), then its file ID, because retail draws
-  -- some cursors straight from their own files (ns.cursorFileNames, Feat\Cursors.lua). The crosshair atlases
-  -- live in those same files, so the file ID only counts when the other two say nothing. A secret icon is
-  -- "default", and an unknown file ID stays a number, which has no color. frame.iconSource keeps what
-  -- matched, for /esi debug.
-  local function IdentifyCursor()
-    local icon = frame.icon;
-    local atlas = icon:GetAtlas();
-    if issecretvalue(atlas) then frame.iconSource = "secret"; return "default" end
-    if atlas and atlas ~= "" then frame.iconSource = "atlas " .. atlas; return ColorKeyFor(atlas) end
-    local path = icon:GetTextureFilePath();
-    if issecretvalue(path) then frame.iconSource = "secret"; return "default" end
-    if type(path) == "string" and CursorName(path) then frame.iconSource = "path " .. path; return ColorKeyFor(path) end
-    local fileID = icon:GetTextureFileID();
-    if issecretvalue(fileID) then frame.iconSource = "secret"; return "default" end
-    frame.iconSource = "file " .. tostring(fileID);
-    local name = fileID and ns.cursorFileNames[fileID];
-    if not name then return tostring(fileID) end
-    frame.iconFromFileID = true;
-    return ColorKeyFor("Cursor " .. name);
-  end
-
   local function OnSoftTargetCleared()
     frame.lastTarget, frame.lastSignature, frame.lastAction = nil, nil, nil;
     -- A running interact pulse finishes before the fade-out (looting clears the target at once).
@@ -978,73 +927,20 @@ local function CreateHUD(frame)
     if wait > 0 then C_Timer.After(wait, FadeOut); else FadeOut(); end
   end
 
-  local function OnSoftTargetChanged(oldTarget, newTarget)
-    frame.name:SetText(UnitName("softInteract"));
-    UpdateKeyCap(); --UpdateLayout runs below, once the requirement line is known
-
-    -- A target without a cursor gets the Interact cog, or UnableInteract out of interact range, as on
-    -- Blizzard's gamepad action bar.
-    frame.iconFromFileID = false;
-    local hasCursor = DrawTargetCursor();
-    local iconKey;
-    if hasCursor then
-      iconKey = IdentifyCursor();
-    else
-      frame.iconSource = "none";
-      iconKey = ShowCursor(InInteractRange() == false and "UnableInteract" or "Interact");
-    end
-    local resolvedKey = iconKey;
-
-    -- Range comes from UnitIsInInteractRange, which Blizzard's gamepad action bar also uses for its
-    -- Interact and UnableInteract icons. The soft-target cursor can stay on an Unable icon in interact
-    -- range (seen with skinnable corpses). While you cast or channel (skinning, gathering), the game reports
-    -- the target as Unable and out of range, because you can't interact while busy. The target that was in
-    -- range keeps its in-range look, and the range check restores the real state after the cast. A spell's
-    -- range check overrules both where the game gets a cursor wrong (ns.SpellRangeCheck in
-    -- Feat\Forever.lua, for skinnable corpses).
-    local knownTarget = not issecretvalue(newTarget) and newTarget or nil;
-    local unableName = iconKey:match("^Cursor Unable(.+)$");
-    local busy = UnitCastingInfo("player") or UnitChannelInfo("player");
-    local canInteract = InInteractRange();
-    local spellInRange = unableName and ns.SpellRangeCheck and ns.SpellRangeCheck(unableName, "softInteract");
-    if spellInRange ~= nil then canInteract = spellInRange end
-    if unableName and (canInteract or (busy and knownTarget and knownTarget == frame.inRangeTarget)) then
-      iconKey = ShowCursor(unableName);
-    end
-
-    -- The range is final here, but the next steps can still make an in-range target Unable.
-    local inRange = not IsUnableKey(iconKey);
-    if inRange then frame.inRangeTarget = knownTarget; end
-
-    -- The game shows the gather cursor even to characters who can't gather. Without the profession, the
-    -- HUD shows the Unable icon and a requirement line.
-    local cursorName = iconKey:match("^Cursor (.+)$");
-    local requirement = cursorName and ns.RequirementFor(cursorName);
-    if requirement then iconKey = ShowCursor("Unable" .. cursorName); end
-
-    -- A talkable NPC with only a generic icon gets the speech bubble. Specific icons (trainer, transmog,
-    -- vendor, quest, ...) always win.
-    local talkBadge = (not hasCursor or GENERIC_ICONS[iconKey]) and IsTalkableNPC("softInteract");
-    if talkBadge then
-      local talkRange = InInteractRange();
-      if talkRange ~= nil then inRange = talkRange end
-      iconKey = ShowCursor(inRange and "Speak" or "UnableSpeak");
-    end
-    local outOfRange = not inRange;
-
-    -- The game re-sends this event for the same target, when you step into range (the icon changes from
-    -- Unable) and sometimes with nothing changed. The handler skips identical repeats.
-    local signature = iconKey .. "|" .. tostring(talkBadge and true or false) .. "|" .. tostring(outOfRange);
+  local function OnSoftTargetChanged(newTarget)
+    local target = ns.ResolveTarget(frame.icon, newTarget, frame.inRangeTarget);
+    frame.targetState = target;
+    frame.iconSource, frame.iconFromFileID = target.iconSource, target.iconFromFileID;
+    frame.inRangeTarget = target.inRangeTarget;
+    if target.overrideCursor then ShowCursor(target.overrideCursor); end
+    frame.name:SetText(target.name);
+    local knownTarget, iconKey, outOfRange = target.knownTarget, target.iconKey, target.outOfRange;
+    local signature = target.signature;
     if knownTarget and knownTarget == frame.lastTarget and signature == frame.lastSignature
-        and frame:IsShown() and not frame.fadingOut then
-      -- The debug log keeps every game event, doubles included; unchanged range checks aren't logged.
-      if ns.DebugSoftTarget and not frame.fromRangeCheck then
-        ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange);
-      end
-      return;
-    end
+        and frame:IsShown() and not frame.fadingOut then return target, false; end
+    UpdateKeyCap(); --bindings and text measurement are unchanged during repeat range checks
     -- It's a switch when the visible frame changes to another target or another action, not only its range.
-    local action = iconKey:lower():gsub("unable", "");
+    local action = target.action;
     local visible = frame:IsShown() and not frame.fadingOut;
     local switched = visible and (action ~= frame.lastAction or not knownTarget or knownTarget ~= frame.lastTarget);
     frame.lastTarget, frame.lastSignature, frame.lastAction = knownTarget, signature, action;
@@ -1052,22 +948,20 @@ local function CreateHUD(frame)
     -- A visible HUD dims or brightens over SWITCH_TIME, together with its colors. A short fade-in time
     -- would otherwise drop it from 1 to 0.75 in about 0.02 seconds while the colors still blend.
     local toAlpha = outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA;
-    if visible and EnhancedSoftInteractDB.switchAnim then
+    if visible and EnhancedSoftInteractDB.switchAnim and EnhancedSoftInteractDB.fadeEnabled then
       FadeOver(toAlpha, SWITCH_TIME, false);
     else
       FadeTo(toAlpha, (GetFadeTimes()), false);
     end
 
     frame.colorKey, frame.outOfRange = iconKey, outOfRange;
-    frame.requirementText = IsUnableKey(iconKey) and requirement or nil;
+    frame.requirementText = target.requirementText;
     UpdateLayout();
     AnchorIcon();
     SetTypeColor(visible); --blend while the frame is up, set at once when it fades in
     if switched and EnhancedSoftInteractDB.switchAnim then PlaySwitchAnim(); end
 
-    if ns.DebugSoftTarget then
-      ns.DebugSoftTarget(oldTarget, newTarget, hasCursor, resolvedKey, iconKey, talkBadge, outOfRange);
-    end
+    return target, true;
   end
 
   -- When the HUD hides, every animation stops and its values go back to rest, so nothing half-finished
@@ -1121,7 +1015,7 @@ local function CreateHUD(frame)
   return {
     frame = frame, ApplyAllSettings = ApplyAllSettings, ShowSample = ShowSample,
     OnSoftTargetChanged = OnSoftTargetChanged, OnSoftTargetCleared = OnSoftTargetCleared,
-    PlayInteractPulse = PlayInteractPulse, GetTypeColor = GetTypeColor, UpdateColors = UpdateColors,
+    PlayInteractPulse = PlayInteractPulse, UpdateColors = UpdateColors,
     SetIconSide = SetIconSide, UpdateIcon = UpdateIcon, UpdateFont = UpdateFont, UpdateHeight = UpdateHeight,
     UpdateKeyCap = UpdateKeyCap, UpdateLayout = UpdateLayout,
   };
@@ -1145,12 +1039,22 @@ frame.editModeName = "Enhanced Soft Interact";
 
 -- With the addon disabled (Enabled in Edit Mode), every target counts as none.
 local function OnSoftInteractChanged(oldTarget, newTarget)
-  if frame.inEditMode then return end --Edit Mode shows a sample instead (Feat\EditMode.lua)
-  frame.fadeToken = (frame.fadeToken or 0) + 1; --cancels a delayed fade-out
+  if frame.inEditMode then
+    if ns.DebugSoftTarget then ns.DebugSoftTarget(oldTarget, newTarget, nil, "edit_mode"); end
+    return;
+  end
+  frame.fadeToken = (frame.fadeToken or 0) + 1;
+  local target, changed;
   if newTarget and EnhancedSoftInteractDB.enabled then
-    hud.OnSoftTargetChanged(oldTarget, newTarget);
-  elseif frame:IsShown() and not frame.fadingOut then
-    hud.OnSoftTargetCleared();
+    target, changed = hud.OnSoftTargetChanged(newTarget);
+  else
+    frame.targetState = nil;
+    frame.inRangeTarget = nil;
+    if frame:IsShown() and not frame.fadingOut then hud.OnSoftTargetCleared(); end
+  end
+  -- Always retain game events, including clears and repeats; unchanged range polls stay silent.
+  if ns.DebugSoftTarget and (not frame.fromRangeCheck or changed) then
+    ns.DebugSoftTarget(oldTarget, newTarget, target, EnhancedSoftInteractDB.enabled and "active" or "disabled");
   end
 end
 ns.OnSoftInteractChanged = OnSoftInteractChanged;
@@ -1253,7 +1157,8 @@ end
 ns.frame, ns.media, ns.typeColors, ns.AddHUD = frame, media, TYPE_COLORS, AddHUD;
 ns.DEFAULTS, ns.SLIDER_RANGES, ns.HUD_DEFAULT_POSITION = DEFAULTS, SLIDER_RANGES, HUD_DEFAULT_POSITION;
 ns.Notify, ns.IsUnableKey, ns.issecretvalue = Notify, IsUnableKey, issecretvalue;
-ns.GetTypeColor, ns.RefreshKeyCap = hud.GetTypeColor, RefreshKeyCap;
+ns.GetTypeColor, ns.RefreshKeyCap = GetTypeColor, RefreshKeyCap;
+ns.CursorName, ns.ColorKeyFor = CursorName, ColorKeyFor;
 for _, name in ipairs({ "ShowSample", "PlayInteractPulse", "UpdateColors", "SetIconSide", "UpdateIcon",
     "UpdateFont", "UpdateHeight", "UpdateKeyCap", "UpdateLayout" }) do
   ns[name] = OnEveryHUD(name);

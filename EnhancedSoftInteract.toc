@@ -18,8 +18,10 @@ Libs\LibEditMode\embed.xml
 EnhancedSoftInteract.lua
 Feat\Cursors.lua
 Feat\Forever.lua [ExcludeLoadGameType standard, classic][AllowLoadGameType camelot]
+Feat\Target.lua
 Feat\HideBlizzard.lua
 Feat\Persistence.lua
+Feat\DebugLog.lua
 Feat\Debug.lua
 Feat\EditMode.lua
 Feat\Preview.lua

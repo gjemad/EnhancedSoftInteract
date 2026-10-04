@@ -10,7 +10,7 @@ local LibEditMode = LibStub("LibEditMode", true);
 ----
 local WINDOW_WIDTH, WINDOW_HEIGHT = 380, 170; --the narrowest the window gets; a wide HUD widens it
 local CONTENT_INSET = 14; --between the window's edge and the clipped area that holds the HUD
-local SHADOW_REACH = 75; --how far the HUD's shadow reaches past its box (SHADOW_PAD_X in the core)
+local SHADOW_REACH = ns.HUD_SHADOW_PADDING.x; --how far the HUD's shadow reaches past its box (SHADOW_PAD_X in the core)
 local TAB_OVERLAP = 4; --the tab tucks this far under the dialog's border, plus one screen pixel (Dock)
 
 local window, tab;

@@ -10,6 +10,7 @@ local _, ns = ...;
 -- nameplates read their CVars again on the next soft target change, so a toggle shows from the next
 -- target on. It skips CVars a client doesn't have (GetCVar gives nil).
 local HIDDEN_CVARS = { "SoftTargetTooltipInteract", "SoftTargetNameplateInteract", "SoftTargetNameplateSize" };
+ns.hiddenCVars = HIDDEN_CVARS;
 local SetTempCVar, RemoveTempCVar = C_CVar.SetTempCVar, C_CVar.RemoveTempCVar;
 local playerValues = {}; --retail: each CVar's value from the player, from before the addon hid it
 local hidden = {}; --Forever: the CVars the addon holds at a temp value
@@ -58,7 +59,10 @@ local watcher = CreateFrame("Frame");
 watcher:RegisterEvent("PLAYER_ENTERING_WORLD");
 watcher:RegisterEvent("CVAR_UPDATE");
 watcher:RegisterEvent("PLAYER_LOGOUT");
-watcher:SetScript("OnEvent", function(_, event)
+local watched = {};
+for _, cvar in ipairs(HIDDEN_CVARS) do watched[cvar:lower()] = true; end
+watcher:SetScript("OnEvent", function(_, event, name)
+  if event == "CVAR_UPDATE" and (ns.issecretvalue(name) or type(name) ~= "string" or not watched[name:lower()]) then return end
   if event ~= "PLAYER_LOGOUT" then
     HideBlizzardDisplays();
   elseif not SetTempCVar then
