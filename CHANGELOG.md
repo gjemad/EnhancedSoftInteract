@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.2.1-beta (2026-10-04)
+
+- Updated and included project license.
+
 ## 0.2.0-beta (2026-10-04)
 
 ### Features
