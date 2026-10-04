@@ -1,0 +1,19 @@
+EnhancedSoftInteract
+Copyright (c) 2026 the EnhancedSoftInteract authors. All rights reserved.
+
+Permission is granted to download, install, and use this addon for personal use.
+
+Except as necessary for that use, no permission is granted to copy, modify,
+redistribute, sublicense, or sell this addon's original code or assets without
+prior written permission from the respective copyright holders.
+
+This notice applies only to original EnhancedSoftInteract code and assets.
+Bundled third-party libraries and other third-party materials remain subject to
+their own licenses and copyright notices. This notice does not replace or limit
+the rights granted under those licenses.
+
+THE ADDON IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED,
+INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
+PARTICULAR PURPOSE, AND NONINFRINGEMENT. TO THE EXTENT PERMITTED BY LAW, THE
+COPYRIGHT HOLDERS SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY
+ARISING FROM THE ADDON OR ITS USE.

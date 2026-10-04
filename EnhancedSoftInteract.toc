@@ -6,6 +6,7 @@
 ## SavedVariables: EnhancedSoftInteractDB
 ## OptionalDeps: LibStub, CallbackHandler-1.0, LibSharedMedia-3.0, LibEditMode
 ## X-Curse-Project-ID: 1726408
+## X-License: All rights reserved
 
 #@no-lib-strip@
 Libs\LibStub\LibStub.lua
