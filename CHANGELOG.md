@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4-beta (2026-10-04)
+
+- The debug window now has timestamped logs, filters and a selectable time range for troubleshooting.
+- The debug log now keeps up to 2,000 events.
+
 ## 0.1.3-beta (2026-10-04)
 
 - Fixed HUD animations that sometimes looked inconsistent.
