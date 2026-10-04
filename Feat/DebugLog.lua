@@ -59,9 +59,10 @@ end
 
 local function Animations()
   local rgb = frame.rgb or {};
+  local r, g, b = frame.name:GetTextColor();
   local layers = {};
     for _, name in ipairs({ "iconGlow", "lineLow", "lineLowGlow", "lineHigh", "flash", "shadow", "stylePlate", "rune",
-        "levelupNameGlow", "runicNameGlow" }) do
+        "levelupNameGlow", "runicNameGlow", "statusShadow", "icon" }) do
       layers[name] = Layer(frame[name]);
     end
     for _, name in ipairs({ "levelupBloom", "runicBloom" }) do
@@ -72,6 +73,12 @@ local function Animations()
     scale = Number(frame:GetEffectiveScale()), glow_scale = Number(frame.glowScale),
     color = { red = Number(rgb[1]), green = Number(rgb[2]), blue = Number(rgb[3]) },
     flash_opacity = Number(frame.flashHolder:GetAlpha()),
+    status = { text = Safe(frame.requirement:GetText()), shown = Safe(frame.requirement:IsVisible()),
+      alpha = Number(frame.requirement:GetAlpha()), height = Number(frame.requirement:GetHeight()),
+      amount = Number(frame.statusAmount), target = Number(frame.statusTarget) },
+    name = { red = Number(r), green = Number(g), blue = Number(b),
+      alpha = Number(frame.name:GetAlpha()), compact_alpha = Number(frame.compactName:GetAlpha()),
+      holder_alpha = Number(frame.nameHolder:GetAlpha()) },
     press_depth = Number(frame.keyCap.pressDepth), layers = layers,
     playing = { fade = Safe(frame.fader:IsPlaying()), pulse = Safe(frame.pulse:IsPlaying()),
       switch = Safe(frame.switchAnim:IsPlaying()), ripple = Safe(frame.ripple:IsPlaying()),

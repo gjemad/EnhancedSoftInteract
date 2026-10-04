@@ -70,7 +70,7 @@ end
 
 function ns.styles.NameBloom(frame, texture, db)
   texture:ClearAllPoints();
-  texture:SetPoint("CENTER", frame.box, "LEFT", frame.nameLeft + frame.nameWidth * 0.5, frame.nameOffsetY);
+  texture:SetPoint("CENTER", frame.name, "CENTER");
   texture:SetSize(frame.nameWidth + 24, db.fontSize + 16);
 end
 

@@ -94,15 +94,30 @@ local function CreateHUD(frame)
   ns.styles.Create(frame);
   frame.icon = frame:CreateTexture(nil, "ARTWORK");
   local NAME_FONT = _G.Game17Font_Shadow and "Game17Font_Shadow" or "GameFontNormalLarge";
-  frame.name = frame:CreateFontString(nil, "ARTWORK", NAME_FONT);
+  frame.nameHolder = CreateFrame("Frame", nil, frame);
+  frame.nameHolder:SetAllPoints(frame);
+  frame.nameHolder:SetFrameLevel(frame:GetFrameLevel());
+  frame.name = frame.nameHolder:CreateFontString(nil, "ARTWORK", NAME_FONT);
   frame.name:SetWordWrap(false); --one line; a name wider than its column ends in "..."
   frame.name:SetJustifyH("CENTER");
   frame.nameColor = { frame.name:GetTextColor() };
+  frame.compactName = frame.nameHolder:CreateFontString(nil, "ARTWORK", NAME_FONT);
+  frame.compactName:SetWordWrap(false);
+  frame.compactName:SetJustifyH("CENTER");
+  frame.compactName:SetAlpha(0);
+  local function SetName(text)
+    frame.name:SetText(text);
+    frame.compactName:SetText(text);
+  end
   frame.requirement = frame:CreateFontString(nil, "ARTWORK", NAME_FONT);
   frame.requirement:SetWordWrap(false);
   frame.requirement:SetJustifyH("CENTER");
   frame.requirement:SetTextColor(RED_FONT_COLOR:GetRGB()); --Blizzard's color for unmet requirements
   frame.requirement:Hide();
+  frame.statusShadow = frame:CreateTexture(nil, "BACKGROUND", nil, -1);
+  frame.statusShadow:SetTexture(SHADOW);
+  frame.statusShadow:SetVertexColor(0, 0, 0, 0.35);
+  frame.statusShadow:Hide();
 
   -- The shadow reaches SHADOW_PAD_X past both ends of the box and SHADOW_PAD_Y above and below it. The
   -- interact flash covers the box and 20 units past its ends. The icon glow follows the icon.
@@ -139,21 +154,19 @@ local function CreateHUD(frame)
     cap.text:SetShadowOffset(1, -1);
   end
 
-  -- Out of range, the key label turns RED_FONT_COLOR, the way ActionButton_UpdateRangeIndicator colors an
-  -- action button's hotkey. A gamepad glyph has no label, so the glyph itself turns red. It loses its own
-  -- colors first, because red over a colored glyph (Xbox's blue X) comes out nearly black. While the key is
-  -- pressed in (KeyDown), cap.pressShade darkens all of it.
+  -- A blocked interaction dims the input; the status line explains why. Press shading still applies.
   local WHITE = {1, 1, 1};
   local function PaintKeyCap()
     local shade = cap.pressShade or 1;
     local function Shaded(c) return c[1] * shade, c[2] * shade, c[3] * shade end
-    local red = frame.outOfRange and { RED_FONT_COLOR:GetRGB() };
-    cap.icon:SetDesaturated(cap.isGlyph and red and true or false);
+    local blocked = frame.outOfRange or frame.requirementText ~= nil;
+    local neutral = blocked and {0.75, 0.75, 0.75};
+    cap.icon:SetDesaturated(cap.isGlyph and blocked and true or false);
     if cap.isGlyph then
-      cap.icon:SetVertexColor(Shaded(red or WHITE));
+      cap.icon:SetVertexColor(Shaded(neutral or WHITE));
     else
-      cap.icon:SetVertexColor(Shaded(WHITE));
-      cap.text:SetTextColor(Shaded(red or cap.textColor));
+      cap.icon:SetVertexColor(Shaded(blocked and {0.7, 0.7, 0.7} or WHITE));
+      cap.text:SetTextColor(Shaded(neutral or cap.textColor));
     end
   end
 
@@ -321,11 +334,11 @@ local function CreateHUD(frame)
   -- HUD's alpha blend over at the same time (SetTypeColor, FadeOver).
   local SWITCH_TIME = 0.2;
   local switchSteps = {};
-  for _, region in ipairs({ frame.icon, frame.name }) do
+  for _, region in ipairs({ frame.icon, frame.nameHolder }) do
     table.insert(switchSteps, { "Translation", region, 1, 0, offset = -5 });
     table.insert(switchSteps, { "Translation", region, 2, SWITCH_TIME, smoothing = "OUT", offset = 5 });
   end
-  for _, region in ipairs({ frame.icon, frame.name, frame.iconGlow }) do
+  for _, region in ipairs({ frame.icon, frame.nameHolder, frame.iconGlow }) do
     table.insert(switchSteps, { "Alpha", region, 1, 0, alpha = {0, 0} });
     table.insert(switchSteps, { "Alpha", region, 2, SWITCH_TIME, smoothing = "OUT", alpha = {0, 1} });
   end
@@ -415,6 +428,17 @@ local function CreateHUD(frame)
 
   local function FadeTo(toAlpha, fullDuration, hideWhenDone)
     FadeOver(toAlpha, fullDuration * math.abs(toAlpha - CurrentAlpha()), hideWhenDone);
+  end
+
+  -- Range changes share the status timing, without a native fade restoring child opacity.
+  local rangeFade = CreateTween();
+  local function FadeRange(toAlpha, fromAlpha)
+    rangeFade:Stop();
+    frame:SetAlpha(fromAlpha);
+    rangeFade:Play(0.25, function(t)
+      t = t * t * (3 - 2 * t);
+      frame:SetAlpha(fromAlpha + (toAlpha - fromAlpha) * t);
+    end);
   end
 
   ----
@@ -590,31 +614,50 @@ local function CreateHUD(frame)
   --  Name, requirement line and columns
   ----
 
-  -- In range but unable (the character lacks the profession; ns.RequirementFor in Helpers\Cursors.lua), a red
-  -- line under the name says why, in Blizzard's tooltip wording ("Requires Herbalism"). The HUD keeps its
-  -- height: the name shrinks to REQ_NAME_SCALE of the font size, turns grey and moves up REQ_NAME_Y, and the
-  -- requirement sits REQ_TEXT_Y below center at REQ_TEXT_SCALE. All of these are shares of the font size.
+  -- Range and profession messages share the compact name layout. Availability fades the message and
+  -- restores the name's size and position without changing the HUD's height or measuring a secret region.
   local REQ_NAME_SCALE, REQ_TEXT_SCALE = 0.82, 0.65;
   local REQ_NAME_Y, REQ_TEXT_Y = 0.26, -0.41;
   local REQ_NAME_GREY = 0.8;
-  local function NameFontSize()
-    local size = EnhancedSoftInteractDB.fontSize;
-    return frame.showRequirement and size * REQ_NAME_SCALE or size;
+  local statusTween = CreateTween();
+  local function PaintStatus(amount)
+    local db = EnhancedSoftInteractDB;
+    frame.statusAmount = amount;
+    local c = frame.nameColor;
+    frame.name:SetTextColor(c[1], c[2], c[3]);
+    frame.compactName:SetTextColor(REQ_NAME_GREY, REQ_NAME_GREY, REQ_NAME_GREY);
+    frame.nameOffsetY = db.fontSize * REQ_NAME_Y * amount;
+    frame.name:SetPoint("CENTER", frame.box, "LEFT",
+      frame.nameLeft + frame.nameWidth * 0.5, frame.nameOffsetY);
+    frame.compactName:SetPoint("CENTER", frame.name, "CENTER");
+    frame.name:SetAlpha(1 - amount);
+    frame.compactName:SetAlpha(amount);
+    frame.requirement:SetAlpha(amount);
+    frame.requirement:SetShown(amount > 0);
+    frame.statusShadow:SetAlpha(0.35 * amount);
+    frame.statusShadow:SetShown(amount > 0);
   end
 
-  local function StyleName()
-    local db = EnhancedSoftInteractDB;
-    local font = media:Fetch("font", db.font);
-    frame.showRequirement = frame.requirementText ~= nil and not frame.outOfRange;
-    frame.name:SetFont(font, NameFontSize());
-    if frame.showRequirement then
-      frame.name:SetTextColor(REQ_NAME_GREY, REQ_NAME_GREY, REQ_NAME_GREY);
-      frame.requirement:SetFont(font, db.fontSize * REQ_TEXT_SCALE);
-      frame.requirement:SetText(frame.requirementText);
+  local function StyleName(animate)
+    local text = frame.outOfRange and "Move closer" or frame.requirementText;
+    frame.showRequirement = text ~= nil;
+    local to = text and 1 or 0;
+    if not (animate and EnhancedSoftInteractDB.animationsEnabled and frame.statusAmount ~= nil) then
+      statusTween:Stop();
+      frame.statusTarget = to;
+      PaintStatus(to);
+    elseif frame.statusTarget ~= to then
+      statusTween:Stop();
+      frame.statusTarget = to;
+      local from = frame.statusAmount;
+      statusTween:Play(0.25, function(t)
+        t = t * t * (3 - 2 * t);
+        PaintStatus(from + (to - from) * t);
+      end);
+      PaintStatus(from);
     else
-      frame.name:SetTextColor(unpack(frame.nameColor));
+      PaintStatus(frame.statusAmount);
     end
-    frame.requirement:SetShown(frame.showRequirement);
   end
 
   -- The box is a table of three columns: icon | name | key cap (swapIconAndKey swaps the outer two). The icon
@@ -622,9 +665,8 @@ local function CreateHUD(frame)
   -- column fits the name (and the requirement line) between nameMinWidth and nameMaxWidth, and cuts a longer
   -- name short with "...". A secret name has a secret width; its column then takes nameMaxWidth.
   local COLUMN_GAP = 8;
-  local function UpdateLayout()
+  local function UpdateLayout(animate)
     local db = EnhancedSoftInteractDB;
-    StyleName(); --sets frame.showRequirement, which the name column depends on
     local minName = db.nameMinWidth;
     local maxName = math.max(minName, db.nameMaxWidth);
     local function Column(width) return width > 0 and width + COLUMN_GAP or 0 end
@@ -637,30 +679,47 @@ local function CreateHUD(frame)
       if issecretvalue(textWidth) then return maxName end
       return math.min(maxName, math.max(width, math.ceil(textWidth) + 1)); --+1: no "..." on an exact fit
     end
-    local nameWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "", NameFontSize(), minName);
-    local nameY = 0;
-    if frame.showRequirement then
-      nameWidth = FitWidth(frame.requirementText, db.fontSize * REQ_TEXT_SCALE, nameWidth);
-      nameY = db.fontSize * REQ_NAME_Y;
-      frame.requirement:ClearAllPoints();
-      frame.requirement:SetPoint("LEFT", frame.box, "LEFT", EDGE_INSET + left, db.fontSize * REQ_TEXT_Y);
-      frame.requirement:SetWidth(nameWidth);
+    local nameWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "", db.fontSize, minName);
+    local text = frame.outOfRange and "Move closer" or frame.requirementText;
+    local statusWidth = minName;
+    if text then
+      statusWidth = FitWidth(text, db.fontSize * REQ_TEXT_SCALE, 0);
+      nameWidth = math.max(nameWidth, statusWidth);
     end
+    -- Prepare the text and a full line before showing it, including the first target after /reload.
+    if text then
+      frame.requirement:SetText(text);
+      if frame.outOfRange then
+        frame.requirement:SetTextColor(1, 0.82, 0.35);
+      else
+        frame.requirement:SetTextColor(RED_FONT_COLOR:GetRGB());
+      end
+    end
+    frame.requirement:SetFont(media:Fetch("font", db.font), db.fontSize * REQ_TEXT_SCALE);
+    frame.requirement:ClearAllPoints();
+    frame.requirement:SetPoint("LEFT", frame.box, "LEFT", EDGE_INSET + left, db.fontSize * REQ_TEXT_Y);
+    frame.requirement:SetWidth(nameWidth);
+    frame.requirement:SetHeight(math.ceil(db.fontSize * REQ_TEXT_SCALE * 1.5));
+    frame.statusShadow:ClearAllPoints();
+    frame.statusShadow:SetPoint("CENTER", frame.box, "LEFT", EDGE_INSET + left + nameWidth * 0.5, db.fontSize * REQ_TEXT_Y);
+    frame.statusShadow:SetSize(statusWidth + 32, db.fontSize * REQ_TEXT_SCALE + 11);
     frame.name:ClearAllPoints();
-    frame.name:SetPoint("LEFT", frame.box, "LEFT", EDGE_INSET + left, nameY);
+    frame.name:SetFont(media:Fetch("font", db.font), db.fontSize);
     frame.name:SetWidth(nameWidth);
+    frame.compactName:SetFont(media:Fetch("font", db.font), db.fontSize * REQ_NAME_SCALE);
+    frame.compactName:SetWidth(nameWidth);
     local width = EDGE_INSET + left + nameWidth + right + EDGE_INSET;
     frame.box:SetWidth(width);
     frame.boxWidth, frame.nameWidth = width, nameWidth; --for /esi debug; reading them back could be secret
     frame.nameLeft = EDGE_INSET + left;
-    frame.nameOffsetY = nameY;
+    StyleName(animate);
     ns.styles.Layout(frame);
     if frame.onLayout then frame.onLayout(width); end --the preview widens its window to fit the HUD
   end
 
   -- After a font or font size change, the name, key cap, columns and lines follow.
   local function UpdateFont()
-    frame.name:SetText(frame.sampleName or UnitName("softInteract"));
+    SetName(frame.sampleName or UnitName("softInteract"));
     UpdateKeyCap();
     UpdateLayout();
   end
@@ -675,7 +734,7 @@ local function CreateHUD(frame)
 
   -- Only a target you can interact with gets its type's color. In range but unable (such as a herb without
   -- Herbalism) is UNABLE_COLOR. Out of range is OUT_OF_RANGE_COLOR, the frame fades to OUT_OF_RANGE_ALPHA,
-  -- and the key label turns red, as an action button's hotkey does when its target is out of range.
+  -- and a shared status line explains why the interaction is unavailable.
   -- A texture's vertex alpha and its own alpha are one value, so an Alpha animation overwrites the
   -- vertex alpha set here. The switch animation fades the icon glow in to alpha 1, which left it at full
   -- strength instead of 0.6 until the next repaint (seen in game as a glow that's too strong after a
@@ -762,6 +821,7 @@ local function CreateHUD(frame)
     local token = frame.fadeToken;
     local function FadeOut()
       if token == frame.fadeToken and frame:IsShown() and not frame.fadingOut then
+        rangeFade:Stop();
         FadeTo(0, select(2, GetFadeTimes()), true);
       end
     end
@@ -774,7 +834,7 @@ local function CreateHUD(frame)
     frame.iconSource, frame.iconFromFileID = target.iconSource, target.iconFromFileID;
     frame.inRangeTarget = target.inRangeTarget;
     if target.overrideCursor then ShowCursor(target.overrideCursor); end
-    frame.name:SetText(target.name);
+    SetName(target.name);
     local knownTarget, iconKey, outOfRange = target.knownTarget, target.iconKey, target.outOfRange;
     local signature = target.signature;
     if knownTarget and knownTarget == frame.lastTarget and signature == frame.lastSignature
@@ -786,20 +846,25 @@ local function CreateHUD(frame)
     local switched = visible and (action ~= frame.lastAction or not knownTarget or knownTarget ~= frame.lastTarget);
     frame.lastTarget, frame.lastSignature, frame.lastAction = knownTarget, signature, action;
 
-    -- A visible HUD dims or brightens over SWITCH_TIME, together with its colors. A short fade-in time
+    -- A visible HUD dims or brightens with its status transition. A short fade-in time
     -- would otherwise drop it from 1 to 0.75 in about 0.02 seconds while the colors still blend.
     local toAlpha = outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA;
+    local fromAlpha = CurrentAlpha();
+    rangeFade:Stop();
+    frame.fader:Stop(); --settle native animation state before painting the new status
+    frame.fadingOut = false;
+    frame.colorKey, frame.outOfRange = iconKey, outOfRange;
+    frame.requirementText = target.requirementText;
+    UpdateLayout(visible and not switched);
+    AnchorIcon();
+    SetTypeColor(visible); --blend while the frame is up, set at once when it fades in
+    -- Prepare child opacity before the HUD fade starts. Otherwise its completion can restore
+    -- the hidden status opacity from before this target was laid out.
     if visible and EnhancedSoftInteractDB.animationsEnabled then
-      FadeOver(toAlpha, SWITCH_TIME, false);
+      FadeRange(toAlpha, fromAlpha);
     else
       FadeTo(toAlpha, (GetFadeTimes()), false);
     end
-
-    frame.colorKey, frame.outOfRange = iconKey, outOfRange;
-    frame.requirementText = target.requirementText;
-    UpdateLayout();
-    AnchorIcon();
-    SetTypeColor(visible); --blend while the frame is up, set at once when it fades in
     if switched and EnhancedSoftInteractDB.animationsEnabled then PlaySwitchAnim(); end
 
     return target, true;
@@ -815,6 +880,8 @@ local function CreateHUD(frame)
     glowTween:Stop();
     colorTween:Stop();
     depthTween:Stop();
+    statusTween:Stop();
+    rangeFade:Stop();
     tapToken = tapToken + 1; --cancels a pending tap release
     ClearPulseLight();
     frame.pulseUntil = 0;
@@ -822,8 +889,32 @@ local function CreateHUD(frame)
     frame.glowScale, frame.rgb, glowTarget = nil, nil, nil;
     cap.isDown, cap.tapping, cap.consumed, cap.releasedAt = false, false, false, nil;
     cap.pressDepth, cap.pressShade = 0, 1; --the key cap repaints with the next target (SetTypeColor)
+    frame.statusAmount, frame.statusTarget = nil, nil;
   end
   frame:HookScript("OnHide", ResetAnimations);
+
+  -- Native animations can finish after the range has changed. Restore the current appearance,
+  -- rather than leaving a previously captured opacity on the icon or name.
+  local function SettleAppearance()
+    if not frame:IsShown() or frame.fadingOut or not frame.nameLeft then return end
+    frame.icon:SetAlpha(1);
+    frame.nameHolder:SetAlpha(1);
+    SetTypeColor(false);
+    if not statusTween:GetScript("OnUpdate") then PaintStatus(frame.statusAmount or 0); end
+    if not rangeFade:GetScript("OnUpdate") and not frame.fader:IsPlaying() then
+      frame:SetAlpha(frame.sampleName and 1 or (frame.outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA));
+    end
+  end
+  frame.pulse:SetScript("OnFinished", function()
+    ClearPulseLight();
+    SettleAppearance();
+  end);
+  frame.switchAnim:SetScript("OnFinished", SettleAppearance);
+  local fadeFinished = frame.fader:GetScript("OnFinished");
+  frame.fader:SetScript("OnFinished", function()
+    fadeFinished();
+    SettleAppearance();
+  end);
 
   -- Turning animations off also settles effects that are already playing on either HUD.
   local function UpdateAnimations()
@@ -838,18 +929,20 @@ local function CreateHUD(frame)
     else
       frame:SetAlpha(frame.sampleName and 1 or (frame.outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA));
       SetTypeColor(false);
+      UpdateLayout();
     end
   end
 
   -- Shows a made-up target in Edit Mode: a name, a cursor by name ("Skin", "UnableGatherHerbs") and an
   -- optional requirement line, fully visible and in range.
   local function ShowSample(name, cursor, requirementText)
+    rangeFade:Stop();
     frame.fader:Stop();
     frame.fadingOut = false;
     frame:SetAlpha(1);
     frame:Show();
     frame.sampleName = name;
-    frame.name:SetText(name);
+    SetName(name);
     frame.requirementText = requirementText;
     frame.colorKey, frame.outOfRange = ShowCursor(cursor), false;
     SetTypeColor(true);
