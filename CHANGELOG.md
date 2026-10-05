@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.2.3 (2026-10-05)
+
+### Features
+
+- Added optional cast bars for gathering and opening objects.
+- Changed the default font size to 16.
+
+### Bug fixes
+
+- Fixed incorrect text sizing when switching targets.
+
 ## 0.2.2 (2026-10-04)
 
 ### Features
