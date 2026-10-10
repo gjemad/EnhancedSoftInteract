@@ -1,4 +1,4 @@
-## Interface: 120000, 120001, 16001
+## Interface: 11509, 20506, 50504, 120000, 120001, 120100, 16001
 ## Title: Enhanced Soft Interact
 ## Notes: Shows your soft interact target's name, action and keybind in a frame you can customize.
 ## IconAtlas: Crosshair_interact_64
@@ -26,7 +26,8 @@ Styles\FloatingText.lua
 Styles\PlainBar.lua
 Styles\RunicLine.lua
 EnhancedSoftInteract.lua
-Feat\Forever.lua [ExcludeLoadGameType standard, classic][AllowLoadGameType camelot]
+Feat\SkinningRange.lua [ExcludeLoadGameType standard]
+Feat\Gamepad_Camelot.lua [ExcludeLoadGameType standard, classic][AllowLoadGameType camelot]
 Feat\Target.lua
 Feat\HideBlizzard.lua
 Feat\Persistence.lua

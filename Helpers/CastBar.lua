@@ -84,7 +84,9 @@ function bar.Layout(frame)
   if not config then holder.width = nil; holder:Hide(); return end
   local shown = holder:IsShown();
   holder.width, holder.left = frame.nameWidth, frame.nameLeft;
-  holder.y = -(EnhancedSoftInteractDB.fontSize * 0.5 + config.offset);
+  -- Styles with an underline keep the track on it; the others use their line offset.
+  holder.y = style.underline and ns.styles.UnderlineY(frame, EnhancedSoftInteractDB)
+    or -(EnhancedSoftInteractDB.fontSize * 0.5 + config.offset);
   holder.height, holder.split, holder.centerBright = config.height, config.split == true, config.centerBright == true;
   local half = holder.width * 0.5;
   local firstWidth = holder.split and half - 5 or (holder.centerBright and half or holder.width);

@@ -42,11 +42,13 @@ ns.HUD_SHADOW_PADDING = { x = 75, y = 16 };
 --  box. margins is the transparent art around the key face (left, top, right, bottom), as shares of the
 --  art's width and height. The plunderstorm key's border runs from x 16 to 92 and y 16 to 80 of its
 --  108x96 image. Shares hold whatever size GetAtlasInfo reports. The cap frame is the face, so the layout
---  spaces the visible key like the icon, and the art's margins hang outside the frame.
+--  spaces the visible key like the icon, and the art's margins hang outside the frame. bottomBorder is the
+--  center of the face's bottom border line as a share of the art's height (rows 79-80 of 96, the same art
+--  on Forever and Era); name underlines align with it.
 ----
 local KEYCAP_STYLES = { --in order of preference
   { atlas = "plunderstorm-icon-key", textColor = {1, 1, 1}, shadow = true,
-    margins = {16 / 108, 16 / 96, 15 / 108, 15 / 96} },
+    margins = {16 / 108, 16 / 96, 15 / 108, 15 / 96}, bottomBorder = 80 / 96 },
   { atlas = "newplayertutorial-icon-key", textColor = {0, 0, 0}, shadow = false },
 };
 local NO_MARGINS = {0, 0, 0, 0};
@@ -93,7 +95,9 @@ local function CreateHUD(frame)
   frame.flash:SetBlendMode("ADD");
   ns.styles.Create(frame);
   frame.icon = frame:CreateTexture(nil, "ARTWORK");
-  local NAME_FONT = _G.Game17Font_Shadow and "Game17Font_Shadow" or "GameFontNormalLarge";
+  -- Era has no Game17Font_Shadow. SetFont replaces the template's font and size, and screenshots of both
+  -- clients put the capitals' center on the anchor, so the name needs no client offset.
+  local NAME_FONT = _G.Game17Font_Shadow and "Game17Font_Shadow" or "GameFontHighlightLarge";
   frame.nameHolder = CreateFrame("Frame", nil, frame);
   frame.nameHolder:SetAllPoints(frame);
   frame.nameHolder:SetFrameLevel(frame:GetFrameLevel());
@@ -143,7 +147,8 @@ local function CreateHUD(frame)
       local info = C_Texture.GetAtlasInfo(style.atlas);
       if info and info.width > 0 and info.height > 0 then
         cap.icon:SetAtlas(style.atlas);
-        cap.art = { aspect = info.width / info.height, margins = style.margins or NO_MARGINS };
+        cap.art = { aspect = info.width / info.height, margins = style.margins or NO_MARGINS,
+          bottomBorder = style.bottomBorder };
         cap.textColor = style.textColor;
         cap.text:SetShadowOffset(style.shadow and 1 or 0, style.shadow and -1 or 0);
         return;
@@ -459,21 +464,24 @@ local function CreateHUD(frame)
   local EDGE_INSET = 7;
   local function Inset(side) return side == "LEFT" and EDGE_INSET or -EDGE_INSET end
 
-  -- Most cursor art isn't centered in its image. ns.iconArtOffsets (Helpers\Cursors.lua) has how far each
-  -- one's art sits right of and below center, in 64px units; the icon moves the other way. AnchorIcon
-  -- rounds the nudge to whole units, because the renderer may snap a fractional nudge away. Unable icons
-  -- use their cursor's offset. Icons from a file ID are 32px files that are already centered.
+  -- Most cursor art isn't centered in its image. IconArtOffset picks the measurements for the actual
+  -- mouse or crosshair artwork, in 64px units; the icon moves the other way. AnchorIcon
+  -- rounds the nudge to whole units, because the renderer may snap a fractional nudge away. Every client
+  -- keeps a full iconSize column and centers the visible art in it: Forever's crosshair art and Era's
+  -- native mouse cursors (Cursors.lua, triangle included).
   local function AnchorIcon()
     local side = EnhancedSoftInteractDB.swapIconAndKey and "RIGHT" or "LEFT";
-    local key = frame.colorKey and NormalizeCursorKey(frame.colorKey):gsub("^cursor unable", "cursor ");
-    local offset = key and not frame.iconFromFileID and ns.iconArtOffsets[key];
+    local key = frame.colorKey and NormalizeCursorKey(frame.colorKey);
+    local offset = key and ns.IconArtOffset(frame.icon, key, frame.iconFromFileID);
     local nudgeX, nudgeY = 0, 0;
+    local size = EnhancedSoftInteractDB.iconSize;
     if offset then
       local function Round(v) return v >= 0 and math.floor(v + 0.5) or -math.floor(-v + 0.5) end
-      local scale = EnhancedSoftInteractDB.iconSize / 64;
+      local scale = size / 64;
       nudgeX, nudgeY = Round(-offset[1] * scale), Round(offset[2] * scale);
     end
     frame.iconNudgeX, frame.iconNudgeY = nudgeX, nudgeY; --for /esi debug
+    frame.iconColumnWidth = size;
     frame.icon:ClearAllPoints();
     frame.icon:SetPoint(side, frame.box, side, Inset(side) + nudgeX, nudgeY);
   end
@@ -598,7 +606,7 @@ local function CreateHUD(frame)
   -- chat), the key types instead, so the cap stays up. With animations off, or when the HUD goes away, a
   -- held cap comes up. An Edit Mode sample has no target for the game to interact with, so letting go of
   -- the key plays the whole interaction there, ripple, flash and icon pop included.
-  local keyWatcher = CreateFrame("Frame");
+  local keyWatcher = CreateFrame("Frame", nil, frame);
   keyWatcher:SetScript("OnUpdate", function()
     local watching = cap.key and frame:IsShown() and not frame.fadingOut and cap:IsShown()
       and EnhancedSoftInteractDB.animationsEnabled
@@ -624,7 +632,8 @@ local function CreateHUD(frame)
   ----
 
   -- Range and profession messages share the compact name layout. Availability fades the message and
-  -- restores the name's size and position without changing the HUD's height or measuring a secret region.
+  -- blends fixed-size labels on one moving anchor without changing the HUD's height or measuring
+  -- a secret region. Keep font sizes fixed so glyph rasterization cannot step during the transition.
   local REQ_NAME_SCALE, REQ_TEXT_SCALE = 0.82, 0.65;
   local REQ_NAME_Y, REQ_TEXT_Y = 0.26, -0.41;
   local REQ_NAME_GREY = 0.8;
@@ -635,7 +644,7 @@ local function CreateHUD(frame)
     local c = frame.nameColor;
     frame.name:SetTextColor(c[1], c[2], c[3]);
     frame.compactName:SetTextColor(REQ_NAME_GREY, REQ_NAME_GREY, REQ_NAME_GREY);
-    frame.nameOffsetY = db.fontSize * REQ_NAME_Y * amount;
+    frame.nameOffsetY = (db.fontSize * REQ_NAME_Y + ns.styles.StatusShift(frame, db)) * amount;
     frame.name:SetPoint("CENTER", frame.box, "LEFT",
       frame.nameLeft + frame.nameWidth * 0.5, frame.nameOffsetY);
     frame.compactName:SetPoint("CENTER", frame.name, "CENTER");
@@ -648,7 +657,7 @@ local function CreateHUD(frame)
   end
 
   local function StyleName(animate)
-    local text = frame.outOfRange and "Move closer" or frame.requirementText;
+    local text = frame.requirementText or (frame.outOfRange and "Move closer");
     frame.showRequirement = text ~= nil;
     local to = text and 1 or 0;
     if not (animate and EnhancedSoftInteractDB.animationsEnabled and frame.statusAmount ~= nil) then
@@ -676,10 +685,12 @@ local function CreateHUD(frame)
   local COLUMN_GAP = 8;
   local function UpdateLayout(animate)
     local db = EnhancedSoftInteractDB;
+    local nameOffsetY = ns.styles.StatusShift(frame, db);
     local minName = db.nameMinWidth;
     local maxName = math.max(minName, db.nameMaxWidth);
     local function Column(width) return width > 0 and width + COLUMN_GAP or 0 end
-    local left, right = Column(db.showIcon and db.iconSize or 0), Column(cap:IsShown() and cap.capWidth or 0);
+    AnchorIcon(); --measure the actual artwork before reserving its column
+    local left, right = Column(db.showIcon and frame.iconColumnWidth or 0), Column(cap:IsShown() and cap.capWidth or 0);
     if db.swapIconAndKey then left, right = right, left; end
     local function FitWidth(text, size, width)
       nameMeasure:SetFont(media:Fetch("font", db.font), size, "");
@@ -689,7 +700,7 @@ local function CreateHUD(frame)
       return math.min(maxName, math.max(width, math.ceil(textWidth) + 1)); --+1: no "..." on an exact fit
     end
     local nameWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "", db.fontSize, minName);
-    local text = frame.outOfRange and "Move closer" or frame.requirementText;
+    local text = frame.requirementText or (frame.outOfRange and "Move closer");
     local statusWidth = minName;
     if text then
       statusWidth = FitWidth(text, db.fontSize * REQ_TEXT_SCALE, 0);
@@ -698,7 +709,7 @@ local function CreateHUD(frame)
     -- Prepare the text and a full line before showing it, including the first target after /reload.
     if text then
       frame.requirement:SetText(text);
-      if frame.outOfRange then
+      if frame.outOfRange and not frame.requirementText then
         frame.requirement:SetTextColor(1, 0.82, 0.35);
       else
         frame.requirement:SetTextColor(RED_FONT_COLOR:GetRGB());
@@ -706,11 +717,11 @@ local function CreateHUD(frame)
     end
     frame.requirement:SetFont(media:Fetch("font", db.font), db.fontSize * REQ_TEXT_SCALE);
     frame.requirement:ClearAllPoints();
-    frame.requirement:SetPoint("LEFT", frame.box, "LEFT", EDGE_INSET + left, db.fontSize * REQ_TEXT_Y);
+    frame.requirement:SetPoint("LEFT", frame.box, "LEFT", EDGE_INSET + left, nameOffsetY + db.fontSize * REQ_TEXT_Y);
     frame.requirement:SetWidth(nameWidth);
     frame.requirement:SetHeight(math.ceil(db.fontSize * REQ_TEXT_SCALE * 1.5));
     frame.statusShadow:ClearAllPoints();
-    frame.statusShadow:SetPoint("CENTER", frame.box, "LEFT", EDGE_INSET + left + nameWidth * 0.5, db.fontSize * REQ_TEXT_Y);
+    frame.statusShadow:SetPoint("CENTER", frame.box, "LEFT", EDGE_INSET + left + nameWidth * 0.5, nameOffsetY + db.fontSize * REQ_TEXT_Y);
     frame.statusShadow:SetSize(statusWidth + 32, db.fontSize * REQ_TEXT_SCALE + 11);
     frame.name:ClearAllPoints();
     frame.name:SetFont(media:Fetch("font", db.font), db.fontSize);
@@ -722,6 +733,7 @@ local function CreateHUD(frame)
     frame.boxWidth, frame.nameWidth = width, nameWidth; --for /esi debug; reading them back could be secret
     frame.nameLeft = EDGE_INSET + left;
     StyleName(animate);
+    SetIconSide(); --the icon and key center on the complete name/underline group
     ns.styles.Layout(frame);
     ns.CastBar.Layout(frame);
     if frame.onLayout then frame.onLayout(width); end --the preview widens its window to fit the HUD
@@ -1018,7 +1030,7 @@ local function OnSoftInteractChanged(oldTarget, newTarget)
     if frame:IsShown() and not frame.fadingOut then hud.OnSoftTargetCleared(); end
   end
   if ns.RefreshInteractionCastBar then ns.RefreshInteractionCastBar(); end
-  -- Always retain game events, including clears and repeats; unchanged range polls stay silent.
+  -- Selected debug sources retain clears/repeats while open; unchanged range polls stay silent.
   if ns.DebugSoftTarget and (not frame.fromRangeCheck or changed) then
     ns.DebugSoftTarget(oldTarget, newTarget, target, EnhancedSoftInteractDB.enabled and "active" or "disabled");
   end
@@ -1030,7 +1042,7 @@ ns.OnSoftInteractChanged = OnSoftInteractChanged;
 -- target, rangeWatcher checks that target again every RANGE_CHECK_INTERVAL seconds, and the repeat filter
 -- skips unchanged checks. It leaves a target with a secret GUID (combat, instances) to the game's event.
 local RANGE_CHECK_INTERVAL = 0.2;
-local rangeWatcher = CreateFrame("Frame");
+local rangeWatcher = CreateFrame("Frame", nil, frame);
 local sinceRangeCheck = 0;
 rangeWatcher:SetScript("OnUpdate", function(_, elapsed)
   sinceRangeCheck = sinceRangeCheck + elapsed;

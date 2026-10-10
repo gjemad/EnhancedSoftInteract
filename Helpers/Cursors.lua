@@ -1,4 +1,5 @@
 local _, ns = ...;
+local issecretvalue = issecretvalue or function() return false end;
 
 -- Colors per icon type, for targets you can interact with. Unable icons always get UNABLE_COLOR or
 -- OUT_OF_RANGE_COLOR, so they have no entries. Each color is an OKLCH hue and chroma picked per family
@@ -48,7 +49,7 @@ local TYPE_COLORS = {
 -- ones ("Cursor Cursor_CampaignQuest_32") and file paths ("Interface\Cursor\Innkeeper"). CursorName
 -- reduces each one to "innkeeper", and returns nil for anything that isn't a cursor.
 local function CursorName(key)
-  local name = key:match("^[Cc]ursor (.+)$") or key:match("[Cc][Uu][Rr][Ss][Oo][Rr][\\/]([%w_]+)[%.%w]*$")
+  local name = key:match("^[Cc]ursor (.+)$") or key:match("[Cc][Uu][Rr][Ss][Oo][Rr][\\/]([%w_%-]+)[%.%w]*$")
     or key:match("^[Cc]rosshair_.+$");
   if not name then return nil end
   return (name:gsub("^[Cc]rosshair_", ""):gsub("^[Cc]ursor_", ""):gsub("_%d+$", ""):lower());
@@ -136,6 +137,255 @@ ns.iconArtOffsets = {
   ["cursor wrapperturnin"] = {2.5, 2},
 };
 
+-- Era only. Native mouse cursors, extracted from the Era 1.15.9.70003 client (all 32x32). Each entry is
+-- {right, down}: how far the visible art's center sits from the image center, in 64px units, measured
+-- like the crosshair table above (opaque pixels brighter than the outline and shadow). Most files carry
+-- the same hotspot triangle at pixels 1-9 of the top-left corner. It is visible, so it counts: AnchorIcon
+-- centers the whole art, triangle included, in the icon column. Normal and Unable files are measured
+-- separately. Regenerate with era_icon_table.py in the wow-ui-renderer tools.
+ns.mouseCursorArtOffsets = {
+  ["cursor architect"] = {-2, 0},
+  ["cursor argusteleporter"] = {0, -7},
+  ["cursor attack"] = {0, 0},
+  ["cursor buy"] = {-6, -7},
+  ["cursor cast"] = {0, -3},
+  ["cursor crosshairs"] = {0, 0},
+  ["cursor directions"] = {-1, -1},
+  ["cursor driver"] = {-1, -2},
+  ["cursor engineerskin"] = {0, -1},
+  ["cursor fishing"] = {-1, -1},
+  ["cursor fishingcursor"] = {2, 2},
+  ["cursor gatherherbs"] = {0, 0},
+  ["cursor gunner"] = {1, 0},
+  ["cursor innkeeper"] = {-3, -4},
+  ["cursor inspect"] = {-1, 0},
+  ["cursor interact"] = {-3, -3},
+  ["cursor item"] = {-22, -22},
+  ["cursor lootall"] = {-3, -2},
+  ["cursor mail"] = {-1, -5},
+  ["cursor mine"] = {-5, 0},
+  ["cursor missions"] = {-3, -3},
+  ["cursor openhand"] = {-1, 0},
+  ["cursor openhandglow"] = {-1, 1},
+  ["cursor picklock"] = {-5, -3},
+  ["cursor pickup"] = {-6, -7},
+  ["cursor point"] = {-4, -8},
+  ["cursor pvp"] = {-1, -1},
+  ["cursor quest"] = {-10, -2},
+  ["cursor questinteract"] = {-5, -2},
+  ["cursor questrepeatable"] = {-9, -3},
+  ["cursor questturnin"] = {-8, -3},
+  ["cursor reforge"] = {0, 0},
+  ["cursor repair"] = {-1, -2},
+  ["cursor repairnpc"] = {-4, -4},
+  ["cursor sawblade"] = {-1, -1},
+  ["cursor skin"] = {-1, -4},
+  ["cursor skinalliance"] = {-1, -2},
+  ["cursor skinhorde"] = {0, 0},
+  ["cursor speak"] = {-3, -6},
+  ["cursor stablemaster"] = {-2, -2},
+  ["cursor taxi"] = {0, 0},
+  ["cursor teleport"] = {-3, -1},
+  ["cursor thumbsup"] = {3, -1},
+  ["cursor trainer"] = {0, -1},
+  ["cursor transmogrify"] = {-4, 0},
+  ["cursor ui-cursor-move"] = {-1, 0},
+  ["cursor ui-cursor-size"] = {-1, -2},
+  ["cursor ui-cursor-sizeleft"] = {1, -1},
+  ["cursor ui-cursor-sizeright"] = {-1, -1},
+  ["cursor unablearchitect"] = {-2, -1},
+  ["cursor unableargusteleporter"] = {0, -7},
+  ["cursor unableattack"] = {-1, -1},
+  ["cursor unablebuy"] = {-8, -8},
+  ["cursor unablecast"] = {0, -3},
+  ["cursor unablecrosshairs"] = {0, 0},
+  ["cursor unabledirections"] = {-1, -1},
+  ["cursor unabledriver"] = {-1, -2},
+  ["cursor unableengineerskin"] = {0, -1},
+  ["cursor unablefishing"] = {-2, -2},
+  ["cursor unablegatherherbs"] = {0, -3},
+  ["cursor unablegunner"] = {1, 0},
+  ["cursor unableinnkeeper"] = {-4, -5},
+  ["cursor unableinspect"] = {-1, 0},
+  ["cursor unableinteract"] = {-4, -4},
+  ["cursor unableitem"] = {-22, -22},
+  ["cursor unablelootall"] = {-12, -4},
+  ["cursor unablemail"] = {-1, -5},
+  ["cursor unablemine"] = {-5, 0},
+  ["cursor unablemissions"] = {-3, -3},
+  ["cursor unableopenhand"] = {0, 1},
+  ["cursor unableopenhandglow"] = {-1, 1},
+  ["cursor unablepicklock"] = {-5, -5},
+  ["cursor unablepickup"] = {-13, -9},
+  ["cursor unablepoint"] = {-4, -8},
+  ["cursor unablepvp"] = {-1, -1},
+  ["cursor unablequest"] = {-10, -2},
+  ["cursor unablequestinteract"] = {-5, -2},
+  ["cursor unablequestrepeatable"] = {-8, -3},
+  ["cursor unablequestturnin"] = {-8, -3},
+  ["cursor unablereforge"] = {1, -1},
+  ["cursor unablerepair"] = {-1, -4},
+  ["cursor unablerepairnpc"] = {-4, -4},
+  ["cursor unablesawblade"] = {-3, -3},
+  ["cursor unableskin"] = {-1, -5},
+  ["cursor unableskinalliance"] = {-1, -2},
+  ["cursor unableskinhorde"] = {1, -2},
+  ["cursor unablespeak"] = {-3, -7},
+  ["cursor unablestablemaster"] = {-3, -3},
+  ["cursor unabletaxi"] = {0, 0},
+  ["cursor unableteleport"] = {-3, -1},
+  ["cursor unablethumbdown"] = {-1, 0},
+  ["cursor unablethumbsdown"] = {1, -2},
+  ["cursor unablethumbsup"] = {3, -1},
+  ["cursor unablethumbup"] = {-3, -1},
+  ["cursor unabletrainer"] = {0, -1},
+  ["cursor unabletransmogrify"] = {-4, -1},
+  ["cursor unableui-cursor-move"] = {-1, 0},
+  ["cursor unableui-cursor-size"] = {-1, -4},
+  ["cursor unableui-cursor-sizeleft"] = {1, -1},
+  ["cursor unablevehichlecursor"] = {-1, -2},
+  ["cursor unablevoidstorage"] = {-3, -1},
+  ["cursor unablewildpet"] = {0, 2},
+  ["cursor unablewildpetcapturable"] = {-1, -1},
+  ["cursor unableworkorders"] = {-4, -2},
+  ["cursor vehichlecursor"] = {-1, -2},
+  ["cursor voidstorage"] = {-2, -1},
+  ["cursor wildpet"] = {1, 1},
+  ["cursor wildpetcapturable"] = {1, 1},
+  ["cursor workorders"] = {-3, 0},
+};
+
+local mouseCursorByFileID = {
+  [131013] = "cursor attack",
+  [131014] = "cursor buy",
+  [131015] = "cursor cast",
+  [131017] = "cursor directions",
+  [131018] = "cursor gatherherbs",
+  [131019] = "cursor innkeeper",
+  [131020] = "cursor inspect",
+  [131021] = "cursor interact",
+  [131022] = "cursor item",
+  [131023] = "cursor lootall",
+  [131024] = "cursor mail",
+  [131025] = "cursor mine",
+  [131026] = "cursor picklock",
+  [131027] = "cursor pickup",
+  [131028] = "cursor point",
+  [131029] = "cursor pvp",
+  [131030] = "cursor quest",
+  [131031] = "cursor questrepeatable",
+  [131032] = "cursor questturnin",
+  [131033] = "cursor repair",
+  [131034] = "cursor repairnpc",
+  [131035] = "cursor skin",
+  [131036] = "cursor skinalliance",
+  [131037] = "cursor skinhorde",
+  [131038] = "cursor speak",
+  [131039] = "cursor taxi",
+  [131040] = "cursor trainer",
+  [131041] = "cursor unableattack",
+  [131042] = "cursor unablebuy",
+  [131043] = "cursor unablecast",
+  [131044] = "cursor unabledirections",
+  [131045] = "cursor unablegatherherbs",
+  [131046] = "cursor unableinnkeeper",
+  [131047] = "cursor unableinspect",
+  [131048] = "cursor unableinteract",
+  [131049] = "cursor unableitem",
+  [131050] = "cursor unablelootall",
+  [131051] = "cursor unablemail",
+  [131052] = "cursor unablemine",
+  [131053] = "cursor unablepicklock",
+  [131054] = "cursor unablepickup",
+  [131055] = "cursor unablepoint",
+  [131056] = "cursor unablepvp",
+  [131057] = "cursor unablequest",
+  [131058] = "cursor unablequestrepeatable",
+  [131059] = "cursor unablequestturnin",
+  [131060] = "cursor unablerepair",
+  [131061] = "cursor unablerepairnpc",
+  [131062] = "cursor unableskin",
+  [131063] = "cursor unableskinalliance",
+  [131064] = "cursor unableskinhorde",
+  [131065] = "cursor unablespeak",
+  [131066] = "cursor unabletaxi",
+  [131067] = "cursor unabletrainer",
+  [131068] = "cursor unablevehichlecursor",
+  [131069] = "cursor vehichlecursor",
+  [235497] = "cursor driver",
+  [235498] = "cursor engineerskin",
+  [235499] = "cursor gunner",
+  [235500] = "cursor unabledriver",
+  [235501] = "cursor unableengineerskin",
+  [235502] = "cursor unablegunner",
+  [252300] = "cursor fishingcursor",
+  [303902] = "cursor fishing",
+  [303903] = "cursor unablefishing",
+  [462987] = "cursor openhand",
+  [463442] = "cursor reforge",
+  [463443] = "cursor unablereforge",
+  [463850] = "cursor openhandglow",
+  [463987] = "cursor thumbsup",
+  [464971] = "cursor unableopenhand",
+  [464972] = "cursor unableopenhandglow",
+  [527420] = "cursor stablemaster",
+  [527421] = "cursor unablestablemaster",
+  [532327] = "cursor ui-cursor-move",
+  [532998] = "cursor transmogrify",
+  [532999] = "cursor unabletransmogrify",
+  [533000] = "cursor unablevoidstorage",
+  [533001] = "cursor voidstorage",
+  [590792] = "cursor crosshairs",
+  [590793] = "cursor unablecrosshairs",
+  [610631] = "cursor unablewildpet",
+  [610632] = "cursor wildpet",
+  [613072] = "cursor unablewildpetcapturable",
+  [613073] = "cursor wildpetcapturable",
+  [985085] = "cursor architect",
+  [985086] = "cursor missions",
+  [985223] = "cursor unablearchitect",
+  [985224] = "cursor unablemissions",
+  [1006596] = "cursor questinteract",
+  [1006597] = "cursor unablequestinteract",
+  [1024962] = "cursor sawblade",
+  [1024963] = "cursor unablesawblade",
+  [1062216] = "cursor unablethumbdown",
+  [1062217] = "cursor unablethumbsdown",
+  [1062218] = "cursor unablethumbsup",
+  [1062219] = "cursor unablethumbup",
+  [1094568] = "cursor ui-cursor-size",
+  [1094569] = "cursor unableui-cursor-move",
+  [1094570] = "cursor unableui-cursor-size",
+  [1094573] = "cursor ui-cursor-sizeleft",
+  [1094574] = "cursor unableui-cursor-sizeleft",
+  [1097680] = "cursor unableworkorders",
+  [1097681] = "cursor workorders",
+  [1261459] = "cursor ui-cursor-sizeright",
+  [1706226] = "cursor teleport",
+  [1706227] = "cursor unableteleport",
+  [1706448] = "cursor argusteleporter",
+  [1706449] = "cursor unableargusteleporter",
+};
+
+function ns.IconArtOffset(icon, key, fromFileID)
+  local atlas = icon:GetAtlas();
+  if issecretvalue(atlas) then return nil end
+  if atlas and atlas ~= "" then return ns.iconArtOffsets[key:gsub("^cursor unable", "cursor ")] end
+  local path = icon:GetTextureFilePath();
+  if not issecretvalue(path) and type(path) == "string" then
+    if path:lower():find("crosshair_", 1, true) then
+      return ns.iconArtOffsets[key:gsub("^cursor unable", "cursor ")];
+    end
+    local name = CursorName(path);
+    if name then return ns.mouseCursorArtOffsets["cursor " .. name] end
+  end
+  local fileID = icon:GetTextureFileID();
+  if not issecretvalue(fileID) and mouseCursorByFileID[fileID] then
+    return ns.mouseCursorArtOffsets[mouseCursorByFileID[fileID]];
+  end
+  if fromFileID then return nil end --resolved retail crosshair files are already centered
+end
+
 -- Retail sometimes gives a cursor as a texture file ID instead of a name, for the files in
 -- interface/cursor/crosshair/ at 1x and 2x ("uiquestinteractcrosshair2x"). This maps each file ID to its
 -- cursor name, from the client file list on wago.tools. Lookups ignore case.
@@ -189,19 +439,34 @@ ns.cursorFileNames = {
   [7961749] = "unablebroom", [7961750] = "unablepalette",
 };
 
--- Gather cursors the game shows even to characters without the profession (seen on WoW: Forever, and
--- assumed the same on retail, which uses the same client). RequirementFor matches professions by skill
--- line, which is the same on both clients, through GetProfessions() and GetProfessionInfo(index) (7th
--- return), as Blizzard's profession book does. Names are the client's localized strings. Skinning needs no
--- entry, because the game doesn't show the Skin cursor at all without the profession.
+-- Classic can return a native mouse cursor by file ID instead of by path. Use the same identity table
+-- for target decisions and icon centering, alongside the modern cursor files above.
+function ns.CursorKeyForFileID(fileID)
+  local key = mouseCursorByFileID[fileID];
+  if not key then
+    local name = ns.cursorFileNames[fileID];
+    key = name and "Cursor " .. name;
+  end
+  return key and ColorKeyFor(key);
+end
+
+-- Match modern professions by skill line. Era can return no GetProfessions entries even for a gatherer;
+-- its learned tracking spells identify the professions without depending on rank or expanded skill rows.
+-- Skinning needs no entry because the game does not show its cursor without the profession.
 local PROFESSIONS = {
-  GatherHerbs = { skillLine = 182, name = HERBALISM or "Herbalism" },
-  Mine = { skillLine = 186, name = MINING or "Mining" },
+  GatherHerbs = { skillLine = 182, trackingSpell = 2383, name = HERBALISM or "Herbalism" },
+  Mine = { skillLine = 186, trackingSpell = 2580, name = MINING or "Mining" },
 };
 
-local function HasSkillLine(skillLine)
-  for _, index in pairs({ GetProfessions() }) do --pairs skips the nil gaps
-    if select(7, GetProfessionInfo(index)) == skillLine then return true end
+local function HasProfession(profession)
+  if GetProfessions and GetProfessionInfo then
+    for _, index in pairs({ GetProfessions() }) do --pairs skips the nil gaps
+      if select(7, GetProfessionInfo(index)) == profession.skillLine then return true end
+    end
+  end
+  if C_SpellBook and C_SpellBook.IsSpellKnown then
+    local known = C_SpellBook.IsSpellKnown(profession.trackingSpell);
+    if not ns.issecretvalue(known) then return known end
   end
   return false;
 end
@@ -209,7 +474,7 @@ end
 -- "Requires Herbalism" when the cursor needs a profession the character doesn't have, else nil.
 function ns.RequirementFor(cursorName)
   local profession = PROFESSIONS[cursorName];
-  if profession and not HasSkillLine(profession.skillLine) then
+  if profession and not HasProfession(profession) then
     return (ITEM_REQ_SKILL or "Requires %s"):format(profession.name);
   end
   return nil;

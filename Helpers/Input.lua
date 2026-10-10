@@ -3,7 +3,7 @@ local _, ns = ...;
 -- The interact key's text ("F", "s-F"), or nil when it's unbound. While a controller is the active input
 -- (GAME_PAD_ACTIVE_CHANGED), a gamepad binding ("PAD1", "PADLTRIGGER-PAD1") wins over a keyboard one.
 -- WoW: Forever's gamepad UI has a fixed interact button instead of a binding; ns.GamepadInteractGlyph
--- (Feat\Forever.lua) returns its glyph while that UI is on.
+-- (Feat\Gamepad_Camelot.lua) returns its glyph while that UI is on.
 ns.gamepadActive = false;
 local function IsPadKey(key) return key:find("^PAD") ~= nil or key:find("%-PAD") ~= nil end
 -- Also returns the key itself ("F", "SHIFT-F", "PAD3"), which KeyWatcher checks. The gamepad UI's

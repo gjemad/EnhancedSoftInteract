@@ -2,9 +2,26 @@ local _, ns = ...;
 local frame, issecretvalue = ns.frame, ns.issecretvalue;
 
 -- Session-only structured diagnostics. The ring owns at most 2000 records, including live snapshots.
--- Filters never change capture. JSON lines are escaped before display and contain no secret values.
+-- Sources and data sections gate capture before any diagnostic API reads. Nothing runs while closed.
 local LIMIT, INTERVAL = 2000, 0.25;
-local log = { limit = LIMIT, interval = INTERVAL, revision = 0, liveCapture = true };
+local log = { limit = LIMIT, interval = INTERVAL, revision = 0, open = false,
+  sources = {}, sections = { event = true, animations = false, range = false } };
+log.sourceOptions = {
+  { "target", "Target changes", "targetFilter", "Records when your soft interact target changes or clears." },
+  { "target_repeat", "Target repeats", "repeatFilter", "Records repeated events for the same target. Can be noisy." },
+  { "range_check", "Range changes", "checkFilter", "Records changes found by the HUD's range checks." },
+  { "interaction", "Interactions", "interactionFilter", "Records interact and loot events." },
+  { "cast", "Player casts", "castFilter", "Records your spell casts and channels, including unrelated spells." },
+  { "cast_state", "Object cast state", "castStateFilter", "Records changes to tracked gathering and opening casts." },
+  { "bindings", "Bindings", "bindingsFilter", "Records keybinding updates." },
+  { "input", "Input devices", "inputFilter", "Records gamepad and input mode changes." },
+  { "cvars", "Relevant CVars", "cvarFilter", "Records changes to game settings used by this addon." },
+  { "snapshot", "Live snapshots", "liveFilter", "Records changing HUD details. Requires Animations or Range data." },
+};
+for _, option in ipairs(log.sourceOptions) do log.sources[option[1]] = false; end
+local function Enabled(source)
+  return log.open and log.sources[source] and (log.sections.event or log.sections.animations or log.sections.range);
+end
 ns.debugLog = log;
 local started = GetTime();
 local session = date("!%Y-%m-%dT%H:%M:%SZ");
@@ -42,9 +59,20 @@ local function JSON(v)
   if kind == "boolean" then return v and "true" or "false" end
   if kind ~= "table" then return Quote(tostring(v)); end
   local keys, fields = {}, {};
-  for key in pairs(v) do keys[#keys + 1] = key; end
-  table.sort(keys);
-  for _, key in ipairs(keys) do fields[#fields + 1] = Quote(key) .. ":" .. JSON(v[key]); end
+  local array = true;
+  for key in pairs(v) do
+    keys[#keys + 1] = key;
+    if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then array = false; end
+  end
+  if array and #keys > 0 then
+    for i = 1, #keys do if v[i] == nil then array = false; break end end
+    if array then
+      for i = 1, #keys do fields[i] = JSON(v[i]); end
+      return "[" .. table.concat(fields, ",") .. "]";
+    end
+  end
+  table.sort(keys, function(a, b) return tostring(a) < tostring(b); end);
+  for _, key in ipairs(keys) do fields[#fields + 1] = Quote(tostring(key)) .. ":" .. JSON(v[key]); end
   return "{" .. table.concat(fields, ",") .. "}";
 end
 
@@ -107,7 +135,8 @@ local function Range(evidence)
   return { name = Safe(evidence.name), guid = Safe(guid), drawn = Safe(frame.iconSource),
     shown = Safe(frame.colorKey), cursor = Safe(evidence.cursor),
     interact_range = Safe(evidence.interactRange), spell_range = Safe(evidence.spellRange),
-    casting = Safe(evidence.casting), channeling = Safe(evidence.channeling),
+    casting = Safe(evidence.casting), channeling = Safe(evidence.channeling), looting = Safe(evidence.looting),
+    loot_closing = Safe(evidence.loot_closing),
     out_of_range = Safe(frame.outOfRange), last_in_range_target = same,
     interaction_cast = ns.InteractionCastSnapshot and ns.InteractionCastSnapshot() or nil };
 end
@@ -115,6 +144,7 @@ end
 local function At(index) return records[(head + index - 2) % LIMIT + 1]; end
 
 local function Append(source, event, animations, range)
+  if not Enabled(source) then return end
   sequence = sequence + 1;
   local record = { sequence = sequence, timestamp = date("!%Y-%m-%dT%H:%M:%SZ"),
     elapsed = Number(GetTime() - started), source = source, event = event,
@@ -130,11 +160,30 @@ local function Append(source, event, animations, range)
   log.revision = log.revision + 1;
 end
 
-function ns.DebugInteractionCast(reason, state)
-  Append("game", { name = "INTERACTION_CAST_STATE", reason = reason, interaction_cast = state }, Animations(), Range());
+local function Details(evidence)
+  return log.sections.animations and Animations() or nil, log.sections.range and Range(evidence) or nil;
 end
 
-function ns.DebugSoftTarget(oldGUID, newGUID, target, mode)
+local function DebugLoot(name, before, after)
+  if not Enabled("interaction") then return end
+  local animations, range = Details();
+  Append("interaction", log.sections.event and { name = name, before = before, after = after } or nil, animations, range);
+end
+
+local function DebugInteractionCast(reason, state)
+  if not Enabled("cast_state") then return end
+  local animations, range = Details();
+  Append("cast_state", log.sections.event and { name = "INTERACTION_CAST_STATE", reason = reason,
+    interaction_cast = state } or nil, animations, range);
+end
+
+local function DebugSoftTarget(oldGUID, newGUID, target, mode)
+  local source = frame.fromRangeCheck and "range_check" or "target";
+  if not frame.fromRangeCheck and not issecretvalue(oldGUID) and not issecretvalue(newGUID)
+      and oldGUID == newGUID then source = "target_repeat"; end
+  if not Enabled(source) then return end
+  local animations, range = Details(target and target.range);
+  if not log.sections.event then Append(source, nil, animations, range); return end
   target = target or {};
   local hasCursor, resolvedKey, iconKey = target.hasCursor, target.resolvedKey, target.iconKey;
   local talkBadge, outOfRange = target.talkBadge, target.outOfRange;
@@ -160,10 +209,10 @@ function ns.DebugSoftTarget(oldGUID, newGUID, target, mode)
     layout = { width = Number(frame.boxWidth), name_width = Number(frame.nameWidth),
       height = Number(EnhancedSoftInteractDB.hudHeight), key_shown = Safe(cap:IsShown()),
       key_text = Safe(cap.text:GetText()), key_width = Number(cap.capWidth), key_height = Number(cap.capHeight) } };
-  Append(frame.fromRangeCheck and "range_check" or "game", event, Animations(), Range(target.range));
+  Append(source, event, animations, range);
 end
 
--- Keep the triggers for short animations and changes to input/persistence, even with the window closed.
+-- Subscribe only to selected sources while the debug window is open.
 local watchedCVars = { gamepadenable = true };
 for _, kept in ipairs(ns.keptSettings) do
   for cvar in pairs(kept.cvars) do watchedCVars[cvar:lower()] = true; end
@@ -209,10 +258,18 @@ local function CastTargets()
     hud_guid = Safe(frame.lastTarget), hud_action = Safe(frame.lastAction), hud_cursor = Safe(frame.colorKey) };
 end
 
+local eventSources = { PLAYER_SOFT_TARGET_INTERACTION = "interaction", UPDATE_BINDINGS = "bindings",
+  GAME_PAD_ACTIVE_CHANGED = "input", CVAR_UPDATE = "cvars" };
+if ns.IsGamepadUI then eventSources.INPUT_DEVICE_INTERFACE_TRANSITION = "input"; end
+for name in pairs(castEvents) do eventSources[name] = "cast"; end
 local watcher = CreateFrame("Frame");
 watcher:SetScript("OnEvent", function(_, name, ...)
+  local source = eventSources[name];
+  if not source or not Enabled(source) then return end
   local arg1, arg2 = ...;
   if name == "CVAR_UPDATE" and (issecretvalue(arg1) or type(arg1) ~= "string" or not watchedCVars[arg1:lower()]) then return end
+  local animations, range = Details();
+  if not log.sections.event then Append(source, nil, animations, range); return end
   local event = { name = name, arg1 = Safe(arg1), arg2 = Safe(arg2) };
   local fields = castEvents[name];
   if fields then
@@ -222,16 +279,26 @@ watcher:SetScript("OnEvent", function(_, name, ...)
   if fields or name == "PLAYER_SOFT_TARGET_INTERACTION" then
     event.player_cast, event.targets = PlayerCast(), CastTargets();
   end
-  Append("game", event, Animations(), Range());
+  Append(source, event, animations, range);
 end);
-table.insert(ns.onLoad, function()
-  for _, name in ipairs({ "PLAYER_SOFT_TARGET_INTERACTION", "UPDATE_BINDINGS", "GAME_PAD_ACTIVE_CHANGED", "CVAR_UPDATE" }) do
-    watcher:RegisterEvent(name);
+
+function log.Configure(open)
+  log.open = open and true or false;
+  lastGUID, lastSnapshot = nil, nil;
+  ns.DebugSoftTarget = (Enabled("target") or Enabled("target_repeat") or Enabled("range_check")) and DebugSoftTarget or nil;
+  ns.DebugInteractionCast = Enabled("cast_state") and DebugInteractionCast or nil;
+  ns.DebugLoot = Enabled("interaction") and DebugLoot or nil;
+  for name, source in pairs(eventSources) do
+    if Enabled(source) then
+      if castEvents[name] then watcher:RegisterUnitEvent(name, "player"); else watcher:RegisterEvent(name); end
+    else
+      watcher:UnregisterEvent(name);
+    end
   end
-  for name in pairs(castEvents) do watcher:RegisterUnitEvent(name, "player"); end
-  -- This event and gamepad UI belong to Forever; retail still logs GAME_PAD_ACTIVE_CHANGED.
-  if ns.IsGamepadUI then watcher:RegisterEvent("INPUT_DEVICE_INTERFACE_TRANSITION"); end
-end);
+  if not log.open then
+    log.Clear();
+  end
+end
 
 function log.Match(filters, all)
   local list = {};
@@ -239,7 +306,8 @@ function log.Match(filters, all)
   local sources, sections = filters.sources, filters.sections;
   for i = 1, count do
     local record = At(i);
-    local hasSection = sections.animations or sections.range or (sections.event and record.event);
+    local hasSection = (sections.animations and record.animations) or (sections.range and record.range)
+      or (sections.event and record.event);
     if all or (hasSection and sources[record.source] and record.elapsed >= first and record.elapsed <= last) then
       list[#list + 1] = record;
     end
@@ -259,15 +327,20 @@ end
 function log.Export(list, first, last, filters, all)
   local lower, upper = filters.from, filters.to;
   local sources, sections = filters.sources, filters.sections;
+  local exportedSources = {};
+  if all then
+    for i = first, last do exportedSources[list[i].source] = true; end
+  end
   local version, build, _, interface = GetBuildInfo();
-  local lines = { JSON({ format = "esi-debug-jsonl", schema = 1, session_started = session,
+  local lines = { JSON({ format = "esi-debug-jsonl", schema = 2, session_started = session,
     client_version = Safe(version), client_build = Safe(build), interface = Safe(interface),
     retained = count, limit = LIMIT, evicted = dropped, exported = math.max(0, last - first + 1),
     scope = all and "all_retained" or "filtered", from_elapsed = all and 0 or Number(lower),
     to_elapsed = all and Number(GetTime() - started) or Number(upper),
-    sources = all and { game = true, range_check = true, snapshot = true } or sources,
+    sources = all and exportedSources or sources, capture_sources = log.sources, capture_sections = log.sections,
     sections = all and { event = true, animations = true, range = true } or sections,
-    live_capture = log.liveCapture,
+    capture_open = log.open, capture_scope = "selected sources and data while debug window is open",
+    live_capture = Enabled("snapshot") and (log.sections.animations or log.sections.range) and true or false,
     live_interval = INTERVAL, live_scope = "changed snapshots while debug window is open",
     missing_values = "<nil>", restricted_values = "<secret>", timestamps = "UTC; elapsed is session seconds" }) };
   for i = first, last do lines[#lines + 1] = ExportRecord(list[i], sections, all); end
@@ -277,16 +350,27 @@ end
 function log.Now() return Number(GetTime() - started); end
 function log.Count() return count, dropped; end
 function log.Clear()
-  wipe(records);
-  head, count, dropped, lastSnapshot = 1, 0, 0, nil;
+  -- Drop the ring itself too, so its expanded storage can be reclaimed after a long capture.
+  records = {};
+  head, count, dropped, lastSnapshot, lastGUID = 1, 0, 0, nil, nil;
   log.revision = log.revision + 1;
 end
-function log.ResetLive() lastSnapshot = nil; end
+-- Compare sanitized tables directly: no sorted JSON string allocation on every sample.
+local function Equal(a, b)
+  if type(a) ~= type(b) then return false end
+  if type(a) ~= "table" then return a == b end
+  -- The client assigns a new tooltip instance ID on each query, even when its content is unchanged.
+  for key, value in pairs(a) do
+    if key ~= "dataInstanceID" and not Equal(value, b[key]) then return false end
+  end
+  for key in pairs(b) do if key ~= "dataInstanceID" and a[key] == nil then return false end end
+  return true;
+end
 function log.Sample()
-  if not log.liveCapture then return end
-  local animations, range = Animations(), Range();
-  local signature = JSON({ animations = animations, range = range });
-  if signature == lastSnapshot then return end
-  lastSnapshot = signature;
+  if not Enabled("snapshot") or not (log.sections.animations or log.sections.range) then return end
+  local animations, range = Details();
+  local snapshot = { animations = animations, range = range };
+  if lastSnapshot and Equal(snapshot, lastSnapshot) then return end
+  lastSnapshot = snapshot;
   Append("snapshot", nil, animations, range);
 end

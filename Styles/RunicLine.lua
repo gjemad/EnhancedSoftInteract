@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...;
 local DIAMOND = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\RunicDiamond]];
 ns.styles.Register("runic", {
-  name = "Runic Line", shadow = true,
+  name = "Runic Line", underline = true, shadow = true,
   castBar = { height = 1.2, offset = 6.5, split = true },
   layers = { lineLow = true, lineHigh = true }, highLineAlpha = 1,
   flashStrength = 0.8,
@@ -29,7 +29,7 @@ ns.styles.Register("runic", {
     frame.flash:SetSize(10, 10);
   end,
   Layout = function(frame, db)
-    local left, width, y = frame.nameLeft, frame.nameWidth, -(db.fontSize * 0.5 + 6.5);
+    local left, width, y = frame.nameLeft, frame.nameWidth, ns.styles.UnderlineY(frame, db);
     ns.styles.NameSegment(frame, frame.lineLow, left, width * 0.5 - 5, y);
     ns.styles.NameSegment(frame, frame.lineHigh, left + width * 0.5 + 5, width * 0.5 - 5, y);
     ns.styles.BloomSegment(frame, frame.runicBloom[1], left, width * 0.5 - 5, y);

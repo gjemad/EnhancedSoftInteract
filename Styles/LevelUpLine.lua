@@ -1,5 +1,6 @@
-local _, ns = ...;
+local ADDON_NAME, ns = ...;
 local ATLAS = "LevelUp-Bar-White";
+local BAR_TEXTURE = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\LevelUpBar]];
 local FLASH_ATLAS = "AftLevelup-GlowLine";
 ns.styles.Register("levelup", {
   name = "Level-Up Line", shadow = true,
@@ -11,9 +12,15 @@ ns.styles.Register("levelup", {
     return { frame.levelupBloom[1], frame.levelupBloom[2], frame.levelupNameGlow };
   end,
   Apply = function(frame)
-    frame.lineStrokeShift = C_Texture.GetAtlasInfo(ATLAS) and 3 / 7 or 0;
-    if frame.lineStrokeShift > 0 then
-      for _, line in ipairs({ frame.lineLow, frame.lineLowGlow, frame.lineHigh }) do line:SetAtlas(ATLAS); end
+    local hasAtlas = C_Texture.GetAtlasInfo(ATLAS) ~= nil;
+    frame.lineStrokeShift = 3 / 7;
+    for _, line in ipairs({ frame.lineLow, frame.lineLowGlow, frame.lineHigh }) do
+      if hasAtlas then line:SetAtlas(ATLAS);
+      else
+        -- Era lacks this atlas. The bundled crop preserves its 418x7 artwork and alignment.
+        line:SetTexture(BAR_TEXTURE);
+        line:SetTexCoord(0, 418 / 512, 0, 7 / 8);
+      end
     end
     frame.hasLineFlash = C_Texture.GetAtlasInfo(FLASH_ATLAS) ~= nil;
     if frame.hasLineFlash then

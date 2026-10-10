@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.3.0 (2026-10-10)
+
+### Features
+
+- Added support for Classic Era, TBC Anniversary and Mists of Pandaria Classic.
+- Improved spacing in the Plain Bar and Runic Line styles.
+- Made the Plain Bar interaction glow softer.
+
+### Bug fixes
+
+- Fixed skinnable corpses showing as out of range on Classic when the interact key could already skin them.
+- Fixed missing or incorrect profession requirement messages on Classic.
+- Fixed incorrect icons and range messages for guards on Classic.
+- Fixed brief "Move closer" messages when closing gathering loot windows.
+- Smoothed transitions when moving into and out of interaction range.
+
 ## 0.2.3 (2026-10-05)
 
 ### Features

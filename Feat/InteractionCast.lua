@@ -9,6 +9,7 @@ local END_EVENT_GRACE = 0.25; --Food Crate success arrived 50 ms after the adver
 local PROFESSION_SPELLS = { ["cursor skin"] = 8613, ["cursor gatherherbs"] = 2368, ["cursor mine"] = 2576 };
 local attempt, sent, active;
 local watcher = CreateFrame("Frame");
+watcher:Hide();
 
 local function Accessible(value)
   if issecretvalue(value) then return nil end
@@ -68,6 +69,7 @@ end
 
 local function Clear(reason)
   attempt, sent = nil, nil;
+  watcher:Hide();
   if not active then return end
   active = nil;
   Changed(reason);
@@ -89,7 +91,7 @@ watcher:SetScript("OnEvent", function(_, event, unit, value, spellID, sentSpellI
     if UnitCastingInfo("player") or UnitChannelInfo("player") then return end
     local guid, name, action = Target();
     if guid then attempt = { objectGUID = guid, name = name, action = action,
-      colorKey = frame.colorKey, time = GetTime() }; end
+      colorKey = frame.colorKey, time = GetTime() }; watcher:Show(); end
     return;
   end
   if event == "PLAYER_ENTERING_WORLD" then Clear("world_changed"); return end
@@ -123,6 +125,7 @@ watcher:SetScript("OnEvent", function(_, event, unit, value, spellID, sentSpellI
     if not name or endTime <= GetTime() then return end
     active = { objectGUID = guid, castGUID = castGUID, spellID = id,
       name = name, colorKey = pending.colorKey, startTime = startTime, endTime = endTime };
+    watcher:Show();
     Changed("started");
   elseif event == "UNIT_SPELLCAST_DELAYED" then
     if not active or active.castGUID ~= castGUID then return end
@@ -142,6 +145,7 @@ watcher:SetScript("OnUpdate", function()
   if sent and GetTime() - sent.time > ATTEMPT_WINDOW then sent = nil; end
   if active and GetTime() >= active.endTime + END_EVENT_GRACE then Clear("expired"); end
   if active then ns.RefreshInteractionCastBar(); end
+  if not (attempt or sent or active) then watcher:Hide(); end
 end);
 
 table.insert(ns.onLoad, function()

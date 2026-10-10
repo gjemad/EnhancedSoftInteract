@@ -1,26 +1,9 @@
 local _, ns = ...;
-local issecretvalue = ns.issecretvalue;
 
--- Only WoW: Forever loads this file. It holds the Skinning range check and the gamepad UI's interact button.
-
--- Cursors whose interact range the game misreports, and the spell whose range check is right for them.
--- The check needs the name (spell ID 8613 gave nil for a higher rank), so the ID only localizes it.
--- Characters without the spell skip the check; then, or when it gives nil, UnitIsInInteractRange decides.
--- On skinnable corpses, the cursor stays UnableSkin and UnitIsInInteractRange stays false even where the
--- key skins (measured in game), but the Skinning spell's range check is right.
-local RANGE_SPELLS = {
-  Skin = {8613, "Skinning"},
-};
-
--- Whether the unit is in range of the cursor's range spell, or nil when there is no answer.
-function ns.SpellRangeCheck(cursorName, unit)
-  local rangeSpell = RANGE_SPELLS[cursorName];
-  local spellName = rangeSpell and (C_Spell.GetSpellName(rangeSpell[1]) or rangeSpell[2]);
-  if not (spellName and C_SpellBook.FindSpellBookSlotForSpell(spellName)) then return nil end --learned, any rank
-  local inRange = C_Spell.IsSpellInRange(spellName, unit);
-  if issecretvalue(inRange) then return nil end
-  return inRange;
-end
+-- Only WoW: Forever loads this file. A client that recognizes none of the TOC's game types loads it
+-- anyway, so check the build too.
+local build = select(4, GetBuildInfo());
+if build < 16000 or build >= 20000 then return end
 
 -- Whether Forever's gamepad UI is on. While it is, Blizzard_Gamepad\Core.lua holds the soft target CVars
 -- at its own temporary values.

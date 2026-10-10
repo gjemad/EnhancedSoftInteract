@@ -1,6 +1,9 @@
 local _, ns = ...;
+-- The icon column starts 7 units in from the box edge. A plate edge at -1 is 8 units outside it, the same
+-- gap as between the icon column and the name.
+local ICON_PLATE_INSET = -1;
 ns.styles.Register("plain", {
-  name = "Plain Bar", shadow = false, layers = { lineLow = true }, flashStrength = 0.6,
+  name = "Plain Bar", underline = true, shadow = false, layers = { lineLow = true }, flashStrength = 0.4,
   castBar = { height = 1.7, offset = 6.5 },
   Create = function(frame)
     frame.stylePlate = frame:CreateTexture(nil, "BACKGROUND");
@@ -24,8 +27,8 @@ ns.styles.Register("plain", {
     frame.flash:SetPoint("BOTTOMRIGHT", frame.stylePlate, "BOTTOMRIGHT", -1, 1);
   end,
   Layout = function(frame, db)
-    ns.styles.NameSegment(frame, frame.lineLow, frame.nameLeft, frame.nameWidth, -(db.fontSize * 0.5 + 6.5));
-    -- Three units of padding around the visible columns, including the keyboard art's overhang.
+    ns.styles.NameSegment(frame, frame.lineLow, frame.nameLeft, frame.nameWidth, ns.styles.UnderlineY(frame, db));
+    -- Key side: three units of padding past the keyboard art's overhang.
     local cap = frame.keyCap;
     local keyOverhang, keyHeight = 0, cap:IsShown() and cap.capHeight or 0;
     if cap:IsShown() and not cap.isGlyph then
@@ -34,8 +37,11 @@ ns.styles.Register("plain", {
       keyOverhang = artWidth * (db.swapIconAndKey and m[1] or m[3]);
       keyHeight = cap.capHeight * (1 + 2 * math.max(m[2], m[4]) / (1 - m[2] - m[4]));
     end
-    local plateLeft = 4 - (db.swapIconAndKey and keyOverhang or 0);
-    local plateRight = 4 - (db.swapIconAndKey and 0 or keyOverhang);
+    -- The icon art is centered in its column, so equal gaps on both sides of the column center the icon
+    -- between the plate edge and the name, as the key's art margin centers the key face.
+    local iconInset = db.showIcon and ICON_PLATE_INSET or 4;
+    local plateLeft = db.swapIconAndKey and 4 - keyOverhang or iconInset;
+    local plateRight = db.swapIconAndKey and iconInset or 4 - keyOverhang;
     frame.stylePlate:ClearAllPoints();
     frame.stylePlate:SetPoint("LEFT", frame.box, "LEFT", plateLeft, 0);
     frame.stylePlate:SetPoint("RIGHT", frame.box, "RIGHT", -plateRight, 0);
