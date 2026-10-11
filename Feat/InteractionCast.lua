@@ -2,8 +2,8 @@ local _, ns = ...;
 local frame, issecretvalue = ns.frame, ns.issecretvalue;
 
 -- A cast GUID does not identify its object. Keep a conservative association from an interact
--- attempt, the sent target name and the same full object GUID at cast start. Gathering and the
--- barrel's opening spell have been measured in game. Other casts stay unassociated.
+-- attempt, the sent target name and the same full object GUID at cast start.
+-- Track gathering and object-opening casts; other casts stay unassociated.
 local ATTEMPT_WINDOW = 1;
 local END_EVENT_GRACE = 0.25; --Food Crate success arrived 50 ms after the advertised end
 local PROFESSION_SPELLS = { ["cursor skin"] = 8613, ["cursor gatherherbs"] = 2368, ["cursor mine"] = 2576 };

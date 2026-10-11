@@ -44,6 +44,11 @@ local function PaintFill(holder, first, second)
 end
 
 local function Place(frame, texture, left, width, height)
+  local style = ns.styles.Get();
+  if style.PlaceCast then style.PlaceCast(frame, texture, left, width, height, frame.castBar.y); return end
+  if texture.SetRoundLayoutToNearestPixel then texture:SetRoundLayoutToNearestPixel(false); end
+  if texture.SetSnapToPixelGrid then texture:SetSnapToPixelGrid(true); end
+  if texture.SetTexelSnappingBias then texture:SetTexelSnappingBias(0.5); end
   texture:ClearAllPoints();
   texture:SetPoint("LEFT", frame.box, "LEFT", left, frame.castBar.y);
   texture:SetSize(width, height);
@@ -83,17 +88,20 @@ function bar.Layout(frame)
   local config = style.castBar;
   if not config then holder.width = nil; holder:Hide(); return end
   local shown = holder:IsShown();
+  holder.pixel = config.pixel and style.Pixel(frame) or nil;
   holder.width, holder.left = frame.nameWidth, frame.nameLeft;
   -- Styles with an underline keep the track on it; the others use their line offset.
   holder.y = style.underline and ns.styles.UnderlineY(frame, EnhancedSoftInteractDB)
     or -(EnhancedSoftInteractDB.fontSize * 0.5 + config.offset);
   holder.height, holder.split, holder.centerBright = config.height, config.split == true, config.centerBright == true;
+  if config.pixel then holder.height = style.Pixel(frame) * 2; end
+  for i = 1, 2 do holder["fill" .. i]:SetTexture(config.Texture and config.Texture() or WHITE); end
   local half = holder.width * 0.5;
   local firstWidth = holder.split and half - 5 or (holder.centerBright and half or holder.width);
   Place(frame, holder.fill1, holder.left, 0.1, holder.height);
   Place(frame, holder.fill2, holder.left + half + (holder.split and 5 or 0), 0.1, holder.height);
   for _, prefix in ipairs({ "backing", "track" }) do
-    local height = holder.height + (prefix == "backing" and 1.2 or 0);
+    local height = holder.height + (prefix == "backing" and (holder.pixel or 1.2) or 0);
     Place(frame, holder[prefix .. "1"], holder.left, holder.split and firstWidth or holder.width, height);
     holder[prefix .. "1"]:Show();
     if holder.split then
@@ -103,20 +111,23 @@ function bar.Layout(frame)
       holder[prefix .. "2"]:Hide();
     end
   end
-  Place(frame, holder.end1, holder.left - 0.45, 0.9, 4.5);
-  Place(frame, holder.end2, holder.left + holder.width - 0.45, 0.9, 4.5);
+  local endWidth, endHeight = holder.pixel or 0.9, holder.pixel and holder.pixel * 4 or 4.5;
+  Place(frame, holder.end1, holder.left - endWidth * 0.5, endWidth, endHeight);
+  Place(frame, holder.end2, holder.left + holder.width - endWidth * 0.5, endWidth, endHeight);
   holder.end1:Show();
   holder.end2:Show();
   holder.runeGlow:ClearAllPoints();
   holder.runeGlow:SetPoint("CENTER", frame.box, "LEFT", holder.left + half, holder.y);
   holder.runeGlow:SetSize(16, 14);
-  bar.Paint(frame, holder.red or 0, holder.green or 0, holder.blue or 0);
+  bar.Paint(frame, holder.sourceRed or 0, holder.sourceGreen or 0, holder.sourceBlue or 0);
   bar.SetProgress(frame, holder.progress);
   if not shown then holder:Hide(); end
 end
 
 function bar.Paint(frame, r, g, b)
   local holder = frame.castBar;
+  holder.sourceRed, holder.sourceGreen, holder.sourceBlue = r, g, b;
+  r, g, b = ns.styles.Color(frame, r, g, b);
   if holder.red == r and holder.green == g and holder.blue == b
       and holder.paintedCenterBright == holder.centerBright then return end
   holder.red, holder.green, holder.blue = r, g, b;

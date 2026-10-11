@@ -19,10 +19,56 @@ function ns.styles.Get()
   return styles[EnhancedSoftInteractDB.hudStyle] or styles.levelup;
 end
 
+function ns.styles.Font(db)
+  local style = ns.styles.Get();
+  return style.Font and style.Font(db) or ns.media:Fetch("font", db.font);
+end
+
+function ns.styles.ShowIcon(db)
+  if db.hudStyle == "elv" then return db.elvShowIcon end
+  return db.showIcon;
+end
+
+function ns.styles.NameMinWidth(db)
+  return db.hudStyle == "elv" and db.elvNameMinWidth or db.nameMinWidth;
+end
+
+function ns.styles.IconDimensions(frame, db)
+  local style = ns.styles.Get();
+  if style.IconDimensions then return style.IconDimensions(frame, db) end
+  return db.iconSize, db.iconSize;
+end
+
+function ns.styles.Pixel(frame)
+  local factor = PixelUtil and PixelUtil.GetPixelToUIUnitFactor and PixelUtil.GetPixelToUIUnitFactor();
+  if not factor then
+    local _, height = GetPhysicalScreenSize();
+    factor = 768 / height;
+  end
+  return factor / frame:GetEffectiveScale();
+end
+
+function ns.styles.KeyDimensions(frame, db)
+  local cap = frame.keyCap;
+  if cap:IsShown() and cap.capWidth then return cap.capWidth, cap.capHeight end
+  local height = math.max(24, db.fontSize + 9) * 1.3 * db.keyScale / 100;
+  local art = cap.art;
+  local m = art and art.margins or {0, 0, 0, 0};
+  return height * (art and art.aspect or 1) * (1 - m[1] - m[3]), height * (1 - m[2] - m[4]);
+end
+
+function ns.styles.Color(frame, r, g, b)
+  local style = ns.styles.Get();
+  if style.Color then return style.Color(frame, r, g, b) end
+  return r, g, b;
+end
+
 -- Y of a name underline (styles with underline = true): the center of the key's bottom border, so the
 -- underline and the key end on one line. Without key art, the line sits fontSize * 0.5 + 6.5 below the
 -- center, and it never rises closer than 2 units below the name's line box (a small key with large text).
 function ns.styles.UnderlineY(frame, db)
+  local style = ns.styles.Get();
+  if style.UnderlineY then return style.UnderlineY(frame, db) end
   local y = -(db.fontSize * 0.5 + 6.5);
   local cap = frame.keyCap;
   if cap:IsShown() and cap.capHeight then
@@ -34,12 +80,14 @@ function ns.styles.UnderlineY(frame, db)
       y = -cap.capHeight * 0.5 + 0.5; --a gamepad glyph or plain box: its bottom edge
     end
   end
-  return math.min(y, -(db.fontSize * 0.5 + 2));
+  local keyY = cap:IsShown() and style.KeyOffsetY and style.KeyOffsetY(frame, db) or 0;
+  return math.min(y + keyY, -(db.fontSize * 0.5 + 2));
 end
 
 -- How far the requirement line and its compact name rise so they keep their distance to an underline
 -- that moved up to the key's border.
 function ns.styles.StatusShift(frame, db)
+  if ns.styles.Get().NameOffset then return 0 end
   if not ns.styles.Get().underline then return 0 end
   return ns.styles.UnderlineY(frame, db) + db.fontSize * 0.5 + 6.5;
 end
@@ -68,6 +116,9 @@ function ns.styles.Apply(frame)
   for _, name in ipairs({ "lineLow", "lineLowGlow", "lineHigh" }) do
     frame[name]:SetTexture([[Interface\Buttons\WHITE8X8]]);
     frame[name]:SetTexCoord(0, 1, 0, 1);
+    if frame[name].SetRoundLayoutToNearestPixel then frame[name]:SetRoundLayoutToNearestPixel(false); end
+    if frame[name].SetSnapToPixelGrid then frame[name]:SetSnapToPixelGrid(true); end
+    if frame[name].SetTexelSnappingBias then frame[name]:SetTexelSnappingBias(0.5); end
   end
   frame.flash:SetTexture(MEDIA .. "SoftGlow");
   frame.flash:SetDesaturated(false);

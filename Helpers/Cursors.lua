@@ -42,6 +42,51 @@ local TYPE_COLORS = {
   -- Battle pets: green when you can capture the pet, gold otherwise.
   ["Cursor WildPetCapturable"] = {0.33, 1, 0.5},
   ["Cursor WildPet"] = {1, 0.74, 0.19},
+
+  -- Additional Retail cursor families.
+  ["Cursor Architect"] = {1, 0.75, 0.44},
+  ["Cursor Attack"] = {0.86, 0.94, 1},
+  ["Cursor axe"] = {1, 0.75, 0.47},
+  ["Cursor BastionTeleporter"] = {0.3, 0.79, 1},
+  ["Cursor broom"] = {1, 0.68, 0.31},
+  ["Cursor cast"] = {0.14, 0.74, 1},
+  ["Cursor crosshairs"] = {1, 0.71, 0.24},
+  ["Cursor DisarmTrap"] = {1, 0.79, 0.44},
+  ["Cursor Driver"] = {1, 0.74, 0.46},
+  ["Cursor enchant"] = {0.3, 0.79, 1},
+  ["Cursor EngineerSkin"] = {0.86, 0.94, 1},
+  ["Cursor Fishing"] = {1, 0.61, 0.38},
+  ["Cursor GrabbingHand"] = {0.86, 0.94, 1},
+  ["Cursor Gunner"] = {1, 0.98, 0.32},
+  ["Cursor holdingHand"] = {0.86, 0.94, 1},
+  ["Cursor important"] = {0.81, 0.03, 1},
+  ["Cursor importantturnin"] = {0.81, 0.03, 1},
+  ["Cursor legendaryquest"] = {1, 0.53, 0.05},
+  ["Cursor legendaryquestturnin"] = {1, 0.53, 0.05},
+  ["Cursor lock"] = {0.78, 0.88, 1},
+  ["Cursor MapPinCursor"] = {1, 0.64, 0.08},
+  ["Cursor palette"] = {1, 0.8, 0.41},
+  ["Cursor Petting"] = {1, 0.61, 0.33},
+  ["Cursor Point"] = {0.86, 0.94, 1},
+  ["Cursor PVP"] = {1, 0.56, 0.36},
+  ["Cursor Questturnin"] = {1, 0.85, 0.09},
+  ["Cursor Recurring"] = {0.05, 0.74, 1},
+  ["Cursor Recurringturnin"] = {0.05, 0.74, 1},
+  ["Cursor Repair"] = {0.86, 0.94, 1},
+  ["Cursor SawBlade"] = {0.64, 0.67, 1},
+  ["Cursor SkinAlliance"] = {0.25, 0.48, 1},
+  ["Cursor SkinHorde"] = {1, 0.3, 0.18},
+  ["Cursor stablemaster"] = {0.86, 0.94, 1},
+  ["Cursor Thumbsup"] = {0.7, 0.85, 1},
+  ["Cursor track"] = {1, 0.76, 0.02},
+  ["Cursor UI-Cursor-Move"] = {1, 0.84, 0.24},
+  ["Cursor UI-Cursor-Size"] = {1, 0.84, 0.24},
+  ["Cursor UI-Cursor-SizeLeft"] = {1, 0.84, 0.24},
+  ["Cursor UI-Cursor-SizeRight"] = {1, 0.84, 0.24},
+  ["Cursor VehichleCursor"] = {0.36, 1, 0.04},
+  ["Cursor WorkOrders"] = {1, 0.82, 0.51},
+  ["Cursor Wrapper"] = {0.18, 0.85, 1},
+  ["Cursor Wrapperturnin"] = {0.18, 0.85, 1},
 };
 
 -- Cursor textures come in several spellings: plain names ("Cursor Innkeeper"), the crosshair version both
@@ -111,7 +156,7 @@ end
 -- Most cursor art isn't centered in its 64x64 image. It sits low and right, with its dark outline and drop
 -- shadow below and to the right. Each value is {right, down}, how far the art's colored body (opaque
 -- pixels brighter than the outline and shadow) sits from the image center, in 64px units. The values come
--- from measuring every Crosshair_*_64 atlas of the client on 2026-10-03, and the table leaves out offsets
+-- from the Crosshair_*_64 atlas art, and the table leaves out offsets
 -- under 1. Unable versions have the same shapes and use their cursor's value. AnchorIcon moves the icon
 -- the other way.
 ns.iconArtOffsets = {
@@ -437,6 +482,13 @@ ns.cursorFileNames = {
   [7958603] = "skinalliance", [7958610] = "skinhorde", [7958619] = "thumbsup", [7958632] = "workorders",
   [7959502] = "architect", [7961737] = "axe", [7961738] = "broom", [7961739] = "palette", [7961748] = "unableaxe",
   [7961749] = "unablebroom", [7961750] = "unablepalette",
+  [6158302] = "crosshairs",
+  [6158314] = "directions",
+  [7958211] = "engineerskin",
+  [6116532] = "point",
+  [6158312] = "speak",
+  [6393129] = "track",
+  [6726950] = "ui-cursor-size",
 };
 
 -- Classic can return a native mouse cursor by file ID instead of by path. Use the same identity table

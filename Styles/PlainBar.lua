@@ -4,6 +4,7 @@ local _, ns = ...;
 local ICON_PLATE_INSET = -1;
 ns.styles.Register("plain", {
   name = "Plain Bar", underline = true, shadow = false, layers = { lineLow = true }, flashStrength = 0.4,
+  IconDimensions = ns.styles.KeyDimensions,
   castBar = { height = 1.7, offset = 6.5 },
   Create = function(frame)
     frame.stylePlate = frame:CreateTexture(nil, "BACKGROUND");
@@ -45,7 +46,8 @@ ns.styles.Register("plain", {
     frame.stylePlate:ClearAllPoints();
     frame.stylePlate:SetPoint("LEFT", frame.box, "LEFT", plateLeft, 0);
     frame.stylePlate:SetPoint("RIGHT", frame.box, "RIGHT", -plateRight, 0);
-    frame.stylePlate:SetHeight(math.max(38, db.fontSize + 21, db.showIcon and db.iconSize + 6 or 0, keyHeight + 6));
+    local _, iconHeight = ns.styles.IconDimensions(frame, db);
+    frame.stylePlate:SetHeight(math.max(38, db.fontSize + 21, db.showIcon and iconHeight + 6 or 0, keyHeight + 6));
     frame.plateInsetLeft, frame.plateInsetRight = plateLeft, plateRight;
     for i, edge in ipairs(frame.styleBorder) do
       edge:ClearAllPoints();

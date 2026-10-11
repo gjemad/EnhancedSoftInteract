@@ -117,6 +117,9 @@ local function Animations()
       alpha = Number(frame.name:GetAlpha()), compact_alpha = Number(frame.compactName:GetAlpha()),
       holder_alpha = Number(frame.nameHolder:GetAlpha()) },
     press_depth = Number(frame.keyCap.pressDepth), layers = layers,
+    key = { down = Safe(frame.keyCap.isDown), tapping = Safe(frame.keyCap.tapping),
+      consumed = Safe(frame.keyCap.consumed), shade = Number(frame.keyCap.pressShade),
+      icon = Layer(frame.keyCap.icon), ring = Layer(frame.keyCap.ring) },
     playing = { fade = Safe(frame.fader:IsPlaying()), pulse = Safe(frame.pulse:IsPlaying()),
       switch = Safe(frame.switchAnim:IsPlaying()), ripple = Safe(frame.ripple:IsPlaying()),
       press_in = Safe(frame.pressIn:IsPlaying()), press_out = Safe(frame.pressOut:IsPlaying()) } };

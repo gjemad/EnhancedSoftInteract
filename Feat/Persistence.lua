@@ -49,8 +49,10 @@ local function KeepSettings()
   for _, kept in ipairs(KEPT) do
     if db[kept.option] then
       for cvar, value in pairs(kept.cvars) do
-        local current = GetCVar(cvar);
-        if current ~= nil and tonumber(current) ~= value then SetBack(cvar, value); end
+        if not ns.IsBlizzardDisplayCVarHidden(cvar) then
+          local current = GetCVar(cvar);
+          if current ~= nil and tonumber(current) ~= value then SetBack(cvar, value); end
+        end
       end
     end
   end

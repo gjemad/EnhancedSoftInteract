@@ -1,5 +1,28 @@
 # Changelog
 
+## 0.3.1 (2026-10-11)
+
+### Features
+
+- Added the Elv style with optional ElvUI integration.
+- Added PT Sans Narrow for the Elv style.
+- Moved settings to Interface > AddOns, with a HUD preview.
+- Edit Mode now focuses on moving the HUD, with a button to open addon settings.
+- Added buttons to reset individual settings.
+- Added clearer setting descriptions with screenshot examples.
+- Added separate controls for the game's target icons and tooltips.
+
+### Improvements
+
+- Improved icon sizing and key alignment.
+- Added colors for more Retail interaction types.
+
+### Bug fixes
+
+- Fixed animations getting stuck or carrying over when switching styles.
+- Fixed font changes not updating the HUD and preview.
+- Fixed target icon and tooltip settings not applying correctly.
+
 ## 0.3.0 (2026-10-10)
 
 ### Features

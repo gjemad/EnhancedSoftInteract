@@ -4,7 +4,7 @@
 ## IconAtlas: Crosshair_interact_64
 ## Version: @project-version@
 ## SavedVariables: EnhancedSoftInteractDB
-## OptionalDeps: LibStub, CallbackHandler-1.0, LibSharedMedia-3.0, LibEditMode
+## OptionalDeps: LibStub, CallbackHandler-1.0, LibSharedMedia-3.0, LibEditMode, ElvUI
 ## X-Curse-Project-ID: 1726408
 ## X-License: All rights reserved
 
@@ -20,12 +20,15 @@ Helpers\Input.lua
 Helpers\Text.lua
 Helpers\Tween.lua
 Helpers\StyleRegistry.lua
+Helpers\ElvTheme.lua
 Helpers\CastBar.lua
 Styles\LevelUpLine.lua
 Styles\FloatingText.lua
 Styles\PlainBar.lua
 Styles\RunicLine.lua
+Styles\Elv.lua
 EnhancedSoftInteract.lua
+Feat\ElvTheme.lua
 Feat\SkinningRange.lua [ExcludeLoadGameType standard]
 Feat\Gamepad_Camelot.lua [ExcludeLoadGameType standard, classic][AllowLoadGameType camelot]
 Feat\Target.lua
@@ -35,5 +38,5 @@ Feat\DebugLog.lua
 Feat\InteractionCast.lua
 Feat\Debug.lua
 Feat\EditMode.lua
-Feat\EditModeLayout.lua
-Feat\Preview.lua
+Feat\SettingsDefinitions.lua
+Feat\Settings.lua

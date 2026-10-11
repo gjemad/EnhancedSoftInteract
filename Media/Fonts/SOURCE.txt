@@ -1,0 +1,4 @@
+PT Sans Narrow Regular by ParaType.
+Source: https://github.com/google/fonts/tree/main/ofl/ptsansnarrow
+Original file: PT_Sans-Narrow-Web-Regular.ttf (unmodified; renamed on disk).
+Redistributed under SIL Open Font License 1.1; see OFL.txt.

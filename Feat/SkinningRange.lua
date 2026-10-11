@@ -2,14 +2,13 @@ local _, ns = ...;
 local issecretvalue = ns.issecretvalue;
 
 -- Every client except Retail loads this file: WoW: Forever and Classic (Era and MoP). On those, skinnable
--- corpses keep the UnableSkin cursor where the key already skins (measured on Forever, user-confirmed on
--- Classic, 2026-10-10). Retail is unchecked, so the TOC leaves it out.
+-- corpses keep the UnableSkin cursor even within skinning range. The TOC excludes Retail.
 
 -- Cursors whose interact range the game misreports, and the spell whose range check is right for them.
 -- The check needs the name (spell ID 8613 gave nil for a higher rank on Forever), so the ID only localizes
 -- it. When it gives nil, UnitIsInInteractRange decides where the client has it.
 -- On skinnable corpses, the cursor stays UnableSkin and UnitIsInInteractRange stays false even where the
--- key skins (measured in game), but the Skinning spell's range check is right.
+-- key skins, but the Skinning spell's range check is right.
 local RANGE_SPELLS = {
   Skin = {8613, "Skinning"},
 };

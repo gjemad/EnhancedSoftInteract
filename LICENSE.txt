@@ -1,5 +1,6 @@
 EnhancedSoftInteract
-Copyright (c) 2026 the EnhancedSoftInteract authors. All rights reserved.
+Copyright (c) 2026 gjemad. All rights reserved.
+https://github.com/gjemad
 
 Permission is granted to download, install, and use this addon for personal use.
 
@@ -17,3 +18,14 @@ INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A
 PARTICULAR PURPOSE, AND NONINFRINGEMENT. TO THE EXTENT PERMITTED BY LAW, THE
 COPYRIGHT HOLDERS SHALL NOT BE LIABLE FOR ANY CLAIM, DAMAGES, OR OTHER LIABILITY
 ARISING FROM THE ADDON OR ITS USE.
+
+-------------------------------------------------------------------------------
+
+PT Sans Narrow Regular
+https://github.com/google/fonts/tree/main/ofl/ptsansnarrow
+Copyright (c) 2010, ParaType Ltd.
+Reserved Font Names: "PT Sans" and "ParaType".
+Licensed under the SIL Open Font License, Version 1.1.
+The complete copyright notice and license are included in Media/Fonts/OFL.txt.
+This font license applies to the bundled font, not to the addon's original code
+or assets.
