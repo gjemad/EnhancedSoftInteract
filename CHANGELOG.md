@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+- Added Small, Normal, and Large sizes tailored to each style. Normal is the default.
+- Improved button alignment and spacing around icons, status text, and cast bars. Changing button artwork keeps text and lines steady.
+
+- Renamed Floating Text to Plain Text.
+
+### Features
+
+- Added a Classic button style alongside the default Plunderstorm keycaps. Elv keeps its own buttons.
+- Elv shows monochrome controller buttons and compact keyboard modifiers inside its flat button.
+
 ## 0.3.1 (2026-10-11)
 
 ### Features

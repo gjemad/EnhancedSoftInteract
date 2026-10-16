@@ -210,7 +210,7 @@ local function DebugSoftTarget(oldGUID, newGUID, target, mode)
       gamepad_ui = ns.IsGamepadUI and ns.IsGamepadUI() or false,
       glyph = Safe(ns.GamepadInteractGlyph and ns.GamepadInteractGlyph()) },
     layout = { width = Number(frame.boxWidth), name_width = Number(frame.nameWidth),
-      height = Number(EnhancedSoftInteractDB.hudHeight), key_shown = Safe(cap:IsShown()),
+      height = Number(ns.styles.Size(EnhancedSoftInteractDB).hudHeight), key_shown = Safe(cap:IsShown()),
       key_text = Safe(cap.text:GetText()), key_width = Number(cap.capWidth), key_height = Number(cap.capHeight) } };
   Append(source, event, animations, range);
 end

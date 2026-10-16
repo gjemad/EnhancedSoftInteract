@@ -2,6 +2,8 @@ local ADDON_NAME, ns = ...;
 local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
 local panel, card;
 local rows = {};
+local ROW_HEIGHT = 36;
+local pageItems, pageContent, pageHeight = {};
 ns.settingsRows = rows;
 local IMAGES = {
   ["Show Target Icons"] = { "SettingsTargetIcons", 256, 256, 288 },
@@ -96,7 +98,7 @@ local function CreateRow(content, data, y)
   local row = CreateFrame("Frame", nil, content);
   row:SetPoint("TOPLEFT", 8, -y);
   row:SetPoint("TOPRIGHT", -8, -y);
-  row:SetHeight(36);
+  row:SetHeight(ROW_HEIGHT);
   row:EnableMouse(true);
   row.data = data;
   row.highlight = row:CreateTexture(nil, "BACKGROUND");
@@ -175,6 +177,8 @@ end
 function ns.RefreshSettings()
   for _, row in ipairs(rows) do
     local data = row.data;
+    row.settingsHidden = data.hidden and data.hidden() or false;
+    row:SetShown(not row.settingsHidden);
     local disabled = data.disabled and data.disabled();
     row.refreshing = true;
     row.control:SetEnabled(not disabled);
@@ -196,6 +200,13 @@ function ns.RefreshSettings()
     end
     row.refreshing = false;
   end
+  local removed = 0;
+  for _, item in ipairs(pageItems) do
+    item.frame:SetPoint("TOPLEFT", item.inset, -item.y + removed);
+    item.frame:SetPoint("TOPRIGHT", -item.inset, -item.y + removed);
+    if item.frame.settingsHidden then removed = removed + ROW_HEIGHT; end
+  end
+  if pageContent then pageContent:SetHeight(pageHeight - removed); end
 end
 
 local function CreatePage()
@@ -249,6 +260,7 @@ local function CreatePage()
       heading:SetPoint("TOPLEFT", 0, -y);
       heading:SetPoint("TOPRIGHT", 0, -y);
       heading:SetHeight(18);
+      pageItems[#pageItems + 1] = {frame = heading, inset = 0, y = y};
       local text = heading:CreateFontString(nil, "ARTWORK", "GameFontNormal");
       text:SetText(data.name);
       text:SetPoint("CENTER");
@@ -263,10 +275,12 @@ local function CreatePage()
       y = y + 26;
     elseif data.kind ~= ns.SettingType.Divider then
       CreateRow(content, data, y);
-      y = y + 36;
+      pageItems[#pageItems + 1] = {frame = rows[#rows], inset = 8, y = y};
+      y = y + ROW_HEIGHT;
     end
   end
   content:SetHeight(y + 20);
+  pageContent, pageHeight = content, y + 20;
   CreateCard();
   panel:SetScript("OnShow", ns.RefreshSettings);
   panel:SetScript("OnHide", function() card:Hide(); end);

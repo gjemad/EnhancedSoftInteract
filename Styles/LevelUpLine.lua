@@ -4,6 +4,11 @@ local BAR_TEXTURE = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\LevelUpBar]]
 local FLASH_ATLAS = "AftLevelup-GlowLine";
 ns.styles.Register("levelup", {
   name = "Level-Up Line", shadow = true,
+  sizes = {
+    small = { fontSize = 14, iconSize = 26, keyHeight = 22, glyphHeight = 22, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 44, gap = 7, edgeInset = 6 },
+    normal = { fontSize = 16, iconSize = 30, keyHeight = 26, glyphHeight = 26, keyFontSize = 17, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 50, gap = 8, edgeInset = 7 },
+    large = { fontSize = 20, iconSize = 38, keyHeight = 30, glyphHeight = 30, keyFontSize = 21, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 62, gap = 10, edgeInset = 9 },
+  },
   castBar = { height = 1.2, offset = 6.5, centerBright = true },
   layers = { iconGlow = true, lineLowGlow = true, lineLow = true, lineHigh = true },
   Create = function(frame)
@@ -30,7 +35,8 @@ ns.styles.Register("levelup", {
     end
   end,
   Layout = function(frame, db)
-    local y = db.fontSize * 0.5 + 6.5;
+    local scale = ns.styles.Size(db).inputScale;
+    local y = -ns.styles.LineY(frame, db, 6.5);
     local function Line(tex, inset, offsetY, height)
       offsetY = offsetY + height * frame.lineStrokeShift;
       tex:ClearAllPoints();
@@ -38,17 +44,17 @@ ns.styles.Register("levelup", {
       tex:SetPoint("RIGHT", frame.box, "RIGHT", -inset, offsetY);
       tex:SetHeight(height);
     end
-    Line(frame.lineLow, -5, -y, 4);
-    Line(frame.lineLowGlow, -5, -y, 10);
-    Line(frame.lineHigh, 20, y, 3);
-    ns.styles.BloomSegment(frame, frame.levelupBloom[1], -5, frame.boxWidth + 10, -y);
-    ns.styles.BloomSegment(frame, frame.levelupBloom[2], 20, frame.boxWidth - 40, y);
+    Line(frame.lineLow, -5 * scale, -y, 4 * scale);
+    Line(frame.lineLowGlow, -5 * scale, -y, 10 * scale);
+    Line(frame.lineHigh, 20 * scale, y, 3 * scale);
+    ns.styles.BloomSegment(frame, frame.levelupBloom[1], -5 * scale, frame.boxWidth + 10 * scale, -y);
+    ns.styles.BloomSegment(frame, frame.levelupBloom[2], 20 * scale, frame.boxWidth - 40 * scale, y);
     ns.styles.NameBloom(frame, frame.levelupNameGlow, db);
     if frame.hasLineFlash then
       frame.flash:ClearAllPoints();
-      frame.flash:SetPoint("LEFT", frame.box, "LEFT", -5, -y);
-      frame.flash:SetPoint("RIGHT", frame.box, "RIGHT", 5, -y);
-      frame.flash:SetHeight(8);
+      frame.flash:SetPoint("LEFT", frame.box, "LEFT", -5 * scale, -y);
+      frame.flash:SetPoint("RIGHT", frame.box, "RIGHT", 5 * scale, -y);
+      frame.flash:SetHeight(8 * scale);
     end
   end,
   Paint = function(frame, r, g, b)

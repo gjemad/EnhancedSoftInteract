@@ -19,16 +19,13 @@ local function Notify(msg) print("|cffffd100ESI:|r " .. msg) end
 local DEFAULTS = {
   enabled = true, showBlizzardTooltip = false, showBlizzardIcons = true,
   forceInteractKey = true, forceInteractIcons = true,
-  showIcon = true, elvShowIcon = false, iconSize = 30, swapIconAndKey = false, showKey = true, keyScale = 100,
-  fontSize = 16, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 50, colorBrightness = 100,
+  showIcon = true, elvShowIcon = false, swapIconAndKey = false, showKey = true, hudSize = "normal", colorBrightness = 100,
   animationsEnabled = true, castBarEnabled = true, hudStyle = "levelup", shadowStrength = 90,
-  elvFont = "PT Sans Narrow", elvNameMinWidth = 140,
+  elvFont = "PT Sans Narrow", keyStyle = "plunderstorm",
 };
 -- Each settings slider's {min, max, step}.
 local SLIDER_RANGES = {
-  iconSize = {16, 48, 2}, keyScale = {60, 150, 5},
-  fontSize = {10, 32, 1}, nameMinWidth = {50, 300, 5}, nameMaxWidth = {50, 400, 5},
-  colorBrightness = {30, 100, 5}, hudHeight = {20, 80, 2}, shadowStrength = {0, 100, 5},
+  colorBrightness = {30, 100, 5}, shadowStrength = {0, 100, 5},
 };
 
 -- Animation timings match the user's chosen settings.
@@ -51,7 +48,7 @@ ns.HUD_SHADOW_PADDING = { x = 75, y = 16 };
 ----
 local KEYCAP_STYLES = { --in order of preference
   { atlas = "plunderstorm-icon-key", textColor = {1, 1, 1}, shadow = true,
-    margins = {16 / 108, 16 / 96, 15 / 108, 15 / 96}, bottomBorder = 80 / 96 },
+    margins = {16 / 108, 16 / 96, 15 / 108, 15 / 96}, topBorder = 16 / 96, bottomBorder = 80 / 96 },
   { atlas = "newplayertutorial-icon-key", textColor = {0, 0, 0}, shadow = false },
 };
 local NO_MARGINS = {0, 0, 0, 0};
@@ -81,7 +78,7 @@ local function CreateHUD(frame)
   -- frame.box is the layout box (icon | name | key, hudHeight tall) that everything anchors to. It draws
   -- nothing itself.
   frame.box = frame:CreateTexture(nil, "BACKGROUND");
-  frame.box:SetPoint("CENTER"); --a longer name widens the box equally on both sides
+  frame.box:SetPoint("CENTER"); --layout keeps the name column centered on the HUD
   frame.shadow = frame:CreateTexture(nil, "BACKGROUND", nil, -1);
   frame.iconGlow = frame:CreateTexture(nil, "BACKGROUND", nil, 1);
   frame.iconGlow:SetBlendMode("ADD");
@@ -147,6 +144,34 @@ local function CreateHUD(frame)
   local function StyleKeyCap()
     cap.isGlyph = false;
     cap.styleArt = ns.styles.Get();
+    cap.keyStyle = EnhancedSoftInteractDB.keyStyle;
+    cap.classic = not cap.styleArt.ownKey and cap.keyStyle == "classic";
+    for _, slices in ipairs(cap.classicButton or {}) do
+      for _, texture in ipairs(slices) do texture:Hide(); end
+    end
+    if cap.classic then
+      cap.art = { aspect = 185 / 161, margins = NO_MARGINS };
+      cap.icon:SetColorTexture(0, 0, 0, 0);
+      cap.icon:SetTexCoord(0, 1, 0, 1);
+      cap.textColor = {1, 1, 1};
+      cap.text:SetShadowOffset(1, -1);
+      if not cap.classicButton then
+        cap.classicButton = {};
+        for state, file in ipairs({[[Interface\Buttons\UI-Panel-Button-Up]], [[Interface\Buttons\UI-Panel-Button-Down]]}) do
+          local slices = {};
+          cap.classicButton[state] = slices;
+          for i, coords in ipairs({{0, 0.09375}, {0.09375, 0.53125}, {0.53125, 0.625}}) do
+            -- Down draws above Up; textures sharing a sublevel have no guaranteed order.
+            local texture = cap:CreateTexture(nil, "ARTWORK", nil, state);
+            texture:SetTexture(file);
+            texture:SetTexCoord(coords[1], coords[2], 0, 0.6875);
+            texture:SetDesaturated(true);
+            slices[i] = texture;
+          end
+        end
+      end
+      return;
+    end
     if ns.styles.Get().flatKey then
       cap.art = { aspect = 1, margins = NO_MARGINS };
       local data = ns.ElvTheme.Media();
@@ -168,7 +193,7 @@ local function CreateHUD(frame)
       if info and info.width > 0 and info.height > 0 then
         cap.icon:SetAtlas(style.atlas);
         cap.art = { aspect = info.width / info.height, margins = style.margins or NO_MARGINS,
-          bottomBorder = style.bottomBorder };
+          topBorder = style.topBorder, bottomBorder = style.bottomBorder };
         cap.textColor = style.textColor;
         cap.text:SetShadowOffset(style.shadow and 1 or 0, style.shadow and -1 or 0);
         return;
@@ -183,6 +208,17 @@ local function CreateHUD(frame)
   -- A blocked interaction dims the input; the status line explains why. Press shading still applies.
   local WHITE = {1, 1, 1};
   local function PaintKeyCap()
+    for state, slices in ipairs(cap.classicButton or {}) do
+      for _, texture in ipairs(slices) do
+        local tint = (cap.pressShade or 1) * ((frame.outOfRange or frame.requirementText ~= nil) and 0.7 or 1);
+        texture:SetVertexColor(tint, tint * 0.98, tint * 0.93, 1);
+        texture:SetAlpha(state == 1 and 1 or (cap.pressDepth or 0));
+        texture:SetShown(cap.classic and cap:IsShown() and not cap.isGlyph and (texture.classicWidth or 0) > 0);
+      end
+    end
+    if cap.classic and not cap.isGlyph and cap.textX then
+      cap.text:SetPoint("CENTER", cap.textX, cap.textY - (cap.pressDepth or 0));
+    end
     if ns.styles.Get().flatKey and not cap.isGlyph then
       local data = ns.ElvTheme.Media();
       local bg = data and data.backdropcolor or {0.1, 0.1, 0.1};
@@ -191,6 +227,8 @@ local function CreateHUD(frame)
       cap.icon:SetVertexColor(1, 1, 1, 1);
       local shade = (frame.outOfRange or frame.requirementText) and 0.75 or 1;
       cap.text:SetTextColor(shade, shade, shade);
+      local style = ns.styles.Get();
+      if style.PaintKeyCap then style.PaintKeyCap(frame, cap); end
       return;
     end
     local shade = cap.pressShade or 1;
@@ -204,6 +242,8 @@ local function CreateHUD(frame)
       cap.icon:SetVertexColor(Shaded(blocked and {0.7, 0.7, 0.7} or WHITE));
       cap.text:SetTextColor(Shaded(neutral or cap.textColor));
     end
+    local style = ns.styles.Get();
+    if style.PaintKeyCap then style.PaintKeyCap(frame, cap, shade, blocked); end
   end
 
   ----
@@ -403,6 +443,7 @@ local function CreateHUD(frame)
   end
 
   local function PlaySwitchAnim()
+    if not EnhancedSoftInteractDB.animationsEnabled then return end
     frame.switchAnim:Play();
   end
 
@@ -504,10 +545,10 @@ local function CreateHUD(frame)
 
   -- The icon and the key cap sit at opposite ends of the box, EDGE_INSET from the edge. "Swap Icon and
   -- Key" (swapIconAndKey) swaps their ends. The name sits between them (UpdateLayout).
-  local EDGE_INSET = 7;
   local function Inset(side)
     local style = ns.styles.Get();
-    local left, right = EDGE_INSET, EDGE_INSET;
+    local size = ns.styles.Size(EnhancedSoftInteractDB);
+    local left, right = size.edgeInset, size.edgeInset;
     if style.Insets then left, right = style.Insets(frame, EnhancedSoftInteractDB); end
     return side == "LEFT" and left or -right;
   end
@@ -528,10 +569,12 @@ local function CreateHUD(frame)
       nudgeX, nudgeY = Round(-offset[1] * width / 64), Round(offset[2] * height / 64);
     end
     frame.iconNudgeX, frame.iconNudgeY = nudgeX, nudgeY; --for /esi debug
+    local centerY = ns.styles.ContentCenterY(frame, EnhancedSoftInteractDB);
+    frame.iconCenterY = centerY;
     frame.icon:SetSize(width, height);
     frame.iconColumnWidth = width;
     frame.icon:ClearAllPoints();
-    frame.icon:SetPoint(side, frame.box, side, Inset(side) + nudgeX, nudgeY);
+    frame.icon:SetPoint(side, frame.box, side, Inset(side) + nudgeX, centerY + nudgeY);
   end
 
   local function SetIconSide()
@@ -574,7 +617,6 @@ local function CreateHUD(frame)
 
   local function UpdateIcon()
     local db = EnhancedSoftInteractDB;
-    frame.icon:SetSize(db.iconSize, db.iconSize);
     frame.icon:SetShown(ns.styles.ShowIcon(db));
     local style = ns.styles.Get();
     frame.iconGlow:SetShown(ns.styles.ShowIcon(db) and style.layers and style.layers.iconGlow or false);
@@ -588,20 +630,31 @@ local function CreateHUD(frame)
   -- so a letter can still land half a pixel off.
   local KEY_TEXT_NUDGE_X = 0.06;
 
-  -- At 100%, the whole key art is max(24, fontSize + 9) x 1.3 tall and keeps its proportions. The cap frame
-  -- (capWidth x capHeight, what the layout uses) is the key's face, and the art hangs past it by its
-  -- margins. A label too wide for the face widens it to the text plus KEY_TEXT_PAD and stretches the art.
-  -- A gamepad button comes from GetBindingText as one atlas markup ("|A:Gamepad_Gen_1_32:14:14|a"); the
-  -- cap then draws that button's 64px glyph, which fills its square, in place of the key art. The glyph is
-  -- GLYPH_SHARE of the key art's height: at the default font and key size that is 26 units, between the
-  -- lines (30 units apart) and a little larger than the key face (23), because a round button looks smaller
-  -- than a square key of the same height.
+  -- Each style's size profile owns the key face, glyph and lettering heights. Native art keeps its
+  -- margins; a long label widens the key without changing that profile's vertical alignment.
   local KEY_TEXT_PAD = 10;
-  local GLYPH_SHARE = 0.77;
+  -- Composite glyphs stay inside the shared keycap. Their explicit atlas sizes do not follow SetFont.
+  local function ScaleGamepadText(text, scale, limit)
+    local tallest = 0;
+    for height in text:gmatch("|A:Gamepad_[^:|]+:([^:|]*)") do
+      tallest = math.max(tallest, (tonumber(height) or 0) * scale);
+    end
+    if tallest > limit then scale = scale * limit / tallest; end
+    text = text:gsub("(|A:Gamepad_[^:|]+:)([^:|]*):([^:|]*)([^|]*|a)", function(prefix, height, width, suffix)
+      local h, w = tonumber(height), tonumber(width);
+      -- Zero or omitted dimensions let the font choose the size. Preserve atlas offsets and artwork.
+      if h and h > 0 then height = h * scale; end
+      if w and w > 0 then width = w * scale; end
+      return prefix .. height .. ":" .. width .. suffix;
+    end);
+    return text;
+  end
   local function SetKeyCapText(text)
     local db = EnhancedSoftInteractDB;
-    local scale = db.keyScale / 100 * 1.3;
-    local height = math.max(24, db.fontSize + 9) * scale;
+    local style = ns.styles.Get();
+    local size = ns.styles.Size(db);
+    if style.KeyText then text = style.KeyText(frame, text); end
+    if cap.isGlyph or cap.styleArt ~= style or cap.keyStyle ~= db.keyStyle then StyleKeyCap(); end
     local glyph = text:match("^|A:([^:|]+):[^|]*|a$");
     glyph = glyph and glyph:gsub("_32$", "_64");
     if glyph and C_Texture.GetAtlasInfo(glyph) then
@@ -610,30 +663,34 @@ local function CreateHUD(frame)
       cap.icon:SetAllPoints();
       cap.text:SetText("");
       cap.isGlyph = true;
-      local size = height * GLYPH_SHARE;
-      cap.capWidth, cap.capHeight = size, size;
-      cap:SetSize(size, size);
+      local height = ns.styles.KeyFaceHeight(frame, db, true);
+      cap.capWidth, cap.capHeight = height, height;
+      cap:SetSize(height, height);
       PaintKeyCap();
       return;
     end
-    if cap.isGlyph or cap.styleArt ~= ns.styles.Get() then StyleKeyCap(); end
-    local style = ns.styles.Get();
-    height = height * (style.keyHeightShare or 1);
-    if style.KeyHeight then height = style.KeyHeight(db); end
+    local m = cap.art.margins;
+    local faceShareX, faceShareY = 1 - m[1] - m[3], 1 - m[2] - m[4];
+    local faceHeight = ns.styles.KeyFaceHeight(frame, db, false);
+    local height = faceHeight / faceShareY;
+    local gamepadText = text:find("|A:Gamepad_", 1, true);
+    if gamepadText then text = ScaleGamepadText(text, size.inputScale, faceHeight - 2 * size.inputScale); end
     local fontPath = ns.styles.Font(db);
-    local fontSize = math.max(10, (db.fontSize - 3) * scale);
+    local fontSize = size.keyFontSize;
     cap.text:SetFont(fontPath, fontSize, "");
     local textNudge = style.flatKey and 0 or KEY_TEXT_NUDGE_X;
-    cap.text:SetPoint("CENTER", fontSize * (textNudge - InkOffset(text, fontPath)), -fontSize * 0.04);
+    cap.textX = gamepadText and 0 or fontSize * (textNudge - InkOffset(text, fontPath));
+    cap.textY = gamepadText and 0 or -fontSize * 0.04;
+    cap.text:SetPoint("CENTER", cap.textX, cap.textY);
     cap.text:SetText(text);
     keyTextMeasure:SetFont(fontPath, fontSize, "");
     keyTextMeasure:SetText(text);
     local textWidth = keyTextMeasure:GetStringWidth();
     if issecretvalue(textWidth) then textWidth = fontSize * #text * 0.6; end --rough estimate; not seen yet
-    local m = cap.art.margins;
-    local faceShareX, faceShareY = 1 - m[1] - m[3], 1 - m[2] - m[4];
-    cap.capWidth = math.max(height * cap.art.aspect * faceShareX, textWidth + KEY_TEXT_PAD * scale);
-    cap.capHeight = height * faceShareY;
+    if style.KeyWidth then textWidth = math.max(textWidth, style.KeyWidth(frame, height)); end
+    cap.capWidth = math.max(height * cap.art.aspect * faceShareX,
+      textWidth + (style.keyTextPadding or KEY_TEXT_PAD) * 1.3 * size.inputScale);
+    cap.capHeight = faceHeight;
     if style.Pixel then
       local pixel = style.Pixel(frame);
       cap.capWidth = math.floor(cap.capWidth / pixel + 0.5) * pixel;
@@ -645,6 +702,20 @@ local function CreateHUD(frame)
     cap.icon:ClearAllPoints();
     cap.icon:SetPoint("TOPLEFT", -m[1] * artWidth, m[2] * height);
     cap.icon:SetPoint("BOTTOMRIGHT", m[3] * artWidth, -m[4] * height);
+    if cap.classic then
+      local edge = math.min(cap.capWidth * 0.5, cap.capHeight * 12 / 22);
+      local widths = {edge, math.max(0, cap.capWidth - edge * 2), edge};
+      for _, slices in ipairs(cap.classicButton) do
+        local left = 0;
+        for i, texture in ipairs(slices) do
+          texture:ClearAllPoints();
+          texture:SetPoint("LEFT", cap, "LEFT", left, 0);
+          texture:SetSize(math.max(0.01, widths[i]), cap.capHeight);
+          texture.classicWidth = widths[i];
+          left = left + widths[i];
+        end
+      end
+    end
     PaintKeyCap();
   end
 
@@ -656,7 +727,7 @@ local function CreateHUD(frame)
     end
     cap.key = key;
     cap:SetShown(text and true or false);
-    if text then SetKeyCapText(text); end
+    if text then SetKeyCapText(text); else PaintKeyCap(); end
   end
 
   -- Watches the interact key every frame while the key cap is showing, and presses the cap with it. Letting
@@ -667,7 +738,8 @@ local function CreateHUD(frame)
   -- the key plays the whole interaction there, ripple, flash and icon pop included.
   local keyWatcher = CreateFrame("Frame", nil, frame);
   keyWatcher:SetScript("OnUpdate", function()
-    local watching = cap.key and frame:IsShown() and not frame.fadingOut and cap:IsShown()
+    local watching = cap.key and frame:IsShown() and not frame.fadingOut
+      and cap:IsShown()
       and EnhancedSoftInteractDB.animationsEnabled
       and not (GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus());
     if not watching then
@@ -700,12 +772,12 @@ local function CreateHUD(frame)
   local function PaintStatus(amount)
     local db = EnhancedSoftInteractDB;
     frame.statusAmount = amount;
+    local style = ns.styles.Get();
     local c = frame.nameColor;
     frame.name:SetTextColor(c[1], c[2], c[3]);
     frame.compactName:SetTextColor(REQ_NAME_GREY, REQ_NAME_GREY, REQ_NAME_GREY);
-    local style = ns.styles.Get();
     frame.nameOffsetY = style.NameOffset and style.NameOffset(frame, db, amount)
-      or (db.fontSize * REQ_NAME_Y + ns.styles.StatusShift(frame, db)) * amount;
+      or ns.styles.Size(db).fontSize * REQ_NAME_Y * amount;
     frame.name:SetPoint("CENTER", frame.box, "LEFT",
       frame.nameLeft + frame.nameWidth * 0.5, frame.nameOffsetY);
     frame.compactName:SetPoint("CENTER", frame.name, "CENTER");
@@ -743,19 +815,17 @@ local function CreateHUD(frame)
   -- and key columns are as wide as their contents plus COLUMN_GAP; an empty column takes no room. The name
   -- column fits the name (and the requirement line) between nameMinWidth and nameMaxWidth, and cuts a longer
   -- name short with "...". A secret name has a secret width; its column then takes nameMaxWidth.
-  local COLUMN_GAP = 8;
   local function UpdateLayout(animate)
     local db = EnhancedSoftInteractDB;
-    local nameOffsetY = ns.styles.StatusShift(frame, db);
     local minName = ns.styles.NameMinWidth(db);
-    local maxName = math.max(minName, db.nameMaxWidth);
-    local gap = ns.styles.Get().columnGap or COLUMN_GAP;
+    local maxName = math.max(minName, ns.styles.Size(db).nameMaxWidth);
+    local gap = ns.styles.Size(db).gap;
     local function Column(width) return width > 0 and width + gap or 0 end
     AnchorIcon(); --measure the actual artwork before reserving its column
     local left, right = Column(ns.styles.ShowIcon(db) and frame.iconColumnWidth or 0), Column(cap:IsShown() and cap.capWidth or 0);
     if db.swapIconAndKey then left, right = right, left; end
     local style = ns.styles.Get();
-    local edgeLeft, edgeRight = EDGE_INSET, EDGE_INSET;
+    local edgeLeft, edgeRight = ns.styles.Size(db).edgeInset, ns.styles.Size(db).edgeInset;
     if style.Insets then edgeLeft, edgeRight = style.Insets(frame, db); end
     local function FitWidth(text, size, width)
       nameMeasure:SetFont(ns.styles.Font(db), size, "");
@@ -764,11 +834,12 @@ local function CreateHUD(frame)
       if issecretvalue(textWidth) then return maxName end
       return math.min(maxName, math.max(width, math.ceil(textWidth) + 1)); --+1: no "..." on an exact fit
     end
-    local nameWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "", db.fontSize, minName);
+    local textScale = REQ_TEXT_SCALE;
+    local nameWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "", ns.styles.Size(db).fontSize, minName);
     local text = frame.requirementText or (frame.outOfRange and "Move closer");
     local statusWidth = minName;
     if text then
-      statusWidth = FitWidth(text, db.fontSize * REQ_TEXT_SCALE, 0);
+      statusWidth = FitWidth(text, ns.styles.Size(db).fontSize * textScale, 0);
       nameWidth = math.max(nameWidth, statusWidth);
     end
     -- Prepare the text and a full line before showing it, including the first target after /reload.
@@ -780,24 +851,31 @@ local function CreateHUD(frame)
         frame.requirement:SetTextColor(RED_FONT_COLOR:GetRGB());
       end
     end
-    frame.requirement:SetFont(ns.styles.Font(db), db.fontSize * REQ_TEXT_SCALE, "");
+    frame.requirement:SetFont(ns.styles.Font(db), ns.styles.Size(db).fontSize * textScale, "");
     frame.requirement:ClearAllPoints();
-    local requirementY = style.RequirementY and style.RequirementY(frame, db) or nameOffsetY + db.fontSize * REQ_TEXT_Y;
+    local requirementY = style.RequirementY and style.RequirementY(frame, db) or ns.styles.Size(db).fontSize * REQ_TEXT_Y;
     frame.requirement:SetPoint("LEFT", frame.box, "LEFT", edgeLeft + left, requirementY);
     frame.requirement:SetWidth(nameWidth);
-    frame.requirement:SetHeight(math.ceil(db.fontSize * REQ_TEXT_SCALE * 1.5));
+    frame.requirement:SetHeight(math.ceil(ns.styles.Size(db).fontSize * textScale * 1.5));
     frame.statusShadow:ClearAllPoints();
     frame.statusShadow:SetPoint("CENTER", frame.box, "LEFT", edgeLeft + left + nameWidth * 0.5, requirementY);
-    frame.statusShadow:SetSize(statusWidth + 32, db.fontSize * REQ_TEXT_SCALE + 11);
+    frame.statusShadow:SetSize(statusWidth + 32, ns.styles.Size(db).fontSize * textScale + 11);
     frame.name:ClearAllPoints();
-    frame.name:SetFont(ns.styles.Font(db), db.fontSize, "");
+    frame.name:SetFont(ns.styles.Font(db), ns.styles.Size(db).fontSize, "");
     frame.name:SetWidth(nameWidth);
-    frame.compactName:SetFont(ns.styles.Font(db), db.fontSize * REQ_NAME_SCALE, "");
+    frame.compactName:SetFont(ns.styles.Font(db), ns.styles.Size(db).fontSize * REQ_NAME_SCALE, "");
     frame.compactName:SetWidth(nameWidth);
+    frame.name:SetJustifyH("CENTER");
+    frame.compactName:SetJustifyH("CENTER");
+    frame.requirement:SetJustifyH("CENTER");
     local width = edgeLeft + left + nameWidth + right + edgeRight;
     frame.box:SetWidth(width);
     frame.boxWidth, frame.nameWidth = width, nameWidth; --for /esi debug; reading them back could be secret
     frame.nameLeft = edgeLeft + left;
+    -- Center the name column, rather than the combined icon/name/key width. Resizing an outer column
+    -- must not slide the name and status sideways. The cached offset also informs pixel snapping.
+    frame.boxOffsetX = width * 0.5 - frame.nameLeft - nameWidth * 0.5;
+    frame.box:SetPoint("CENTER", frame, "CENTER", frame.boxOffsetX, 0);
     StyleName(animate);
     SetIconSide(); --the icon and key center on the complete name/underline group
     ns.styles.Layout(frame);
@@ -813,7 +891,7 @@ local function CreateHUD(frame)
   end
 
   local function UpdateHeight()
-    frame.box:SetHeight(EnhancedSoftInteractDB.hudHeight);
+    frame.box:SetHeight(ns.styles.Size(EnhancedSoftInteractDB).hudHeight);
   end
 
   ----
@@ -849,7 +927,6 @@ local function CreateHUD(frame)
     PaintKeyCap();
     SetGlowScale(frame.outOfRange and GLOW_OUT_OF_RANGE_SCALE or 1, blend);
     local to = { GetTypeColor(frame.colorKey, frame.outOfRange) };
-    to = { ns.styles.Color(frame, unpack(to)) };
     if not (blend and EnhancedSoftInteractDB.animationsEnabled and frame.rgb) then
       colorTween:Stop();
       frame.rgb = to;
@@ -880,10 +957,14 @@ local function CreateHUD(frame)
 
   local ResetAnimations, SettleAppearance;
   local function UpdateStyle()
-    local changed = cap.styleArt ~= ns.styles.Get();
+    local size = ns.styles.Size(EnhancedSoftInteractDB);
+    local changed = cap.styleArt ~= ns.styles.Get() or cap.keyStyle ~= EnhancedSoftInteractDB.keyStyle
+      or frame.appliedSize ~= size;
     -- Native effects retain their old targets and starting appearance. Stop them before changing art.
     if changed and ResetAnimations then ResetAnimations(); end
     ApplyTextures();
+    frame.appliedSize = size;
+    UpdateHeight();
     UpdateIcon();
     StyleKeyCap();
     UpdateKeyCap();
@@ -932,11 +1013,17 @@ local function CreateHUD(frame)
     frame.iconSource, frame.iconFromFileID = target.iconSource, target.iconFromFileID;
     frame.inRangeTarget = target.inRangeTarget;
     if target.overrideCursor then ShowCursor(target.overrideCursor); end
+    -- Cursor refreshes supply the artwork; the current style and option own its visibility.
+    frame.icon:SetShown(ns.styles.ShowIcon(EnhancedSoftInteractDB));
     SetName(target.name);
     local knownTarget, iconKey, outOfRange = target.knownTarget, target.iconKey, target.outOfRange;
     local signature = target.signature;
     if knownTarget and knownTarget == frame.lastTarget and signature == frame.lastSignature
-        and frame:IsShown() and not frame.fadingOut then return target, false; end
+        and frame:IsShown() and not frame.fadingOut then
+      -- The same cursor can arrive as different artwork, with different centering offsets.
+      AnchorIcon();
+      return target, false;
+    end
     UpdateKeyCap(); --bindings and text measurement are unchanged during repeat range checks
     -- It's a switch when the visible frame changes to another target or another action, not only its range.
     local action = target.action;

@@ -1,5 +1,5 @@
 local ADDON_NAME, ns = ...;
-local bar = {};
+local bar = { END_HEIGHT = 4.5 };
 ns.CastBar = bar;
 local WHITE = [[Interface\Buttons\WHITE8X8]];
 
@@ -60,8 +60,8 @@ function bar.SetProgress(frame, progress)
   holder.progress = math.max(0, math.min(1, progress));
   local tip = holder.width * holder.progress;
   local half = holder.width * 0.5;
-  local firstWidth = holder.split and half - 5 or (holder.centerBright and half or holder.width);
-  local secondLeft = half + (holder.split and 5 or 0);
+  local firstWidth = holder.split and half - holder.gap or (holder.centerBright and half or holder.width);
+  local secondLeft = half + (holder.split and holder.gap or 0);
   local filled = math.min(firstWidth, tip);
   if filled > 0 then
     holder.fill1:SetWidth(filled);
@@ -88,37 +88,38 @@ function bar.Layout(frame)
   local config = style.castBar;
   if not config then holder.width = nil; holder:Hide(); return end
   local shown = holder:IsShown();
+  local size = ns.styles.Size(EnhancedSoftInteractDB);
+  holder.gap = 5 * size.inputScale;
   holder.pixel = config.pixel and style.Pixel(frame) or nil;
   holder.width, holder.left = frame.nameWidth, frame.nameLeft;
-  -- Styles with an underline keep the track on it; the others use their line offset.
-  holder.y = style.underline and ns.styles.UnderlineY(frame, EnhancedSoftInteractDB)
-    or -(EnhancedSoftInteractDB.fontSize * 0.5 + config.offset);
-  holder.height, holder.split, holder.centerBright = config.height, config.split == true, config.centerBright == true;
+  -- Share the idle line or selected key baseline, including the style's text clearance.
+  holder.y = ns.styles.LineY(frame, EnhancedSoftInteractDB, config.offset);
+  holder.height, holder.split, holder.centerBright = config.height * size.inputScale, config.split == true, config.centerBright == true;
   if config.pixel then holder.height = style.Pixel(frame) * 2; end
   for i = 1, 2 do holder["fill" .. i]:SetTexture(config.Texture and config.Texture() or WHITE); end
   local half = holder.width * 0.5;
-  local firstWidth = holder.split and half - 5 or (holder.centerBright and half or holder.width);
+  local firstWidth = holder.split and half - holder.gap or (holder.centerBright and half or holder.width);
   Place(frame, holder.fill1, holder.left, 0.1, holder.height);
-  Place(frame, holder.fill2, holder.left + half + (holder.split and 5 or 0), 0.1, holder.height);
+  Place(frame, holder.fill2, holder.left + half + (holder.split and holder.gap or 0), 0.1, holder.height);
   for _, prefix in ipairs({ "backing", "track" }) do
     local height = holder.height + (prefix == "backing" and (holder.pixel or 1.2) or 0);
     Place(frame, holder[prefix .. "1"], holder.left, holder.split and firstWidth or holder.width, height);
     holder[prefix .. "1"]:Show();
     if holder.split then
-      Place(frame, holder[prefix .. "2"], holder.left + half + 5, half - 5, height);
+      Place(frame, holder[prefix .. "2"], holder.left + half + holder.gap, half - holder.gap, height);
       holder[prefix .. "2"]:Show();
     else
       holder[prefix .. "2"]:Hide();
     end
   end
-  local endWidth, endHeight = holder.pixel or 0.9, holder.pixel and holder.pixel * 4 or 4.5;
+  local endWidth, endHeight = holder.pixel or 0.9, holder.pixel and holder.pixel * 4 or bar.END_HEIGHT * size.inputScale;
   Place(frame, holder.end1, holder.left - endWidth * 0.5, endWidth, endHeight);
   Place(frame, holder.end2, holder.left + holder.width - endWidth * 0.5, endWidth, endHeight);
   holder.end1:Show();
   holder.end2:Show();
   holder.runeGlow:ClearAllPoints();
   holder.runeGlow:SetPoint("CENTER", frame.box, "LEFT", holder.left + half, holder.y);
-  holder.runeGlow:SetSize(16, 14);
+  holder.runeGlow:SetSize(16 * size.inputScale, 14 * size.inputScale);
   bar.Paint(frame, holder.sourceRed or 0, holder.sourceGreen or 0, holder.sourceBlue or 0);
   bar.SetProgress(frame, holder.progress);
   if not shown then holder:Hide(); end
@@ -127,7 +128,6 @@ end
 function bar.Paint(frame, r, g, b)
   local holder = frame.castBar;
   holder.sourceRed, holder.sourceGreen, holder.sourceBlue = r, g, b;
-  r, g, b = ns.styles.Color(frame, r, g, b);
   if holder.red == r and holder.green == g and holder.blue == b
       and holder.paintedCenterBright == holder.centerBright then return end
   holder.red, holder.green, holder.blue = r, g, b;

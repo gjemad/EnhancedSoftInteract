@@ -23,9 +23,9 @@ Helpers\StyleRegistry.lua
 Helpers\ElvTheme.lua
 Helpers\CastBar.lua
 Styles\LevelUpLine.lua
+Styles\RunicLine.lua
 Styles\FloatingText.lua
 Styles\PlainBar.lua
-Styles\RunicLine.lua
 Styles\Elv.lua
 EnhancedSoftInteract.lua
 Feat\ElvTheme.lua

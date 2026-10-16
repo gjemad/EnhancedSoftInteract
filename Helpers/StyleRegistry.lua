@@ -19,6 +19,12 @@ function ns.styles.Get()
   return styles[EnhancedSoftInteractDB.hudStyle] or styles.levelup;
 end
 
+-- Size profiles are style-owned geometry, never copied into or derived from saved dimension values.
+function ns.styles.Size(db)
+  local style = styles[db.hudStyle] or styles.levelup;
+  return style.sizes[db.hudSize] or style.sizes.normal;
+end
+
 function ns.styles.Font(db)
   local style = ns.styles.Get();
   return style.Font and style.Font(db) or ns.media:Fetch("font", db.font);
@@ -30,13 +36,14 @@ function ns.styles.ShowIcon(db)
 end
 
 function ns.styles.NameMinWidth(db)
-  return db.hudStyle == "elv" and db.elvNameMinWidth or db.nameMinWidth;
+  return ns.styles.Size(db).nameMinWidth;
 end
 
 function ns.styles.IconDimensions(frame, db)
   local style = ns.styles.Get();
   if style.IconDimensions then return style.IconDimensions(frame, db) end
-  return db.iconSize, db.iconSize;
+  local size = ns.styles.Size(db).iconSize;
+  return size, size;
 end
 
 function ns.styles.Pixel(frame)
@@ -48,48 +55,60 @@ function ns.styles.Pixel(frame)
   return factor / frame:GetEffectiveScale();
 end
 
-function ns.styles.KeyDimensions(frame, db)
-  local cap = frame.keyCap;
-  if cap:IsShown() and cap.capWidth then return cap.capWidth, cap.capHeight end
-  local height = math.max(24, db.fontSize + 9) * 1.3 * db.keyScale / 100;
-  local art = cap.art;
-  local m = art and art.margins or {0, 0, 0, 0};
-  return height * (art and art.aspect or 1) * (1 - m[1] - m[3]), height * (1 - m[2] - m[4]);
+local function TextClearance(db, offset)
+  -- The status is centered 0.41 font sizes down and uses a 0.65-size font. Reserve half that font
+  -- below its center, plus the style's decoration clearance; retain a larger normal line offset.
+  local size = ns.styles.Size(db);
+  return math.max(size.fontSize * 0.5 + offset * size.inputScale,
+    size.fontSize * 0.735 + (ns.styles.Get().lineClearance or 2) * size.inputScale);
 end
 
-function ns.styles.Color(frame, r, g, b)
-  local style = ns.styles.Get();
-  if style.Color then return style.Color(frame, r, g, b) end
-  return r, g, b;
-end
-
--- Y of a name underline (styles with underline = true): the center of the key's bottom border, so the
--- underline and the key end on one line. Without key art, the line sits fontSize * 0.5 + 6.5 below the
--- center, and it never rises closer than 2 units below the name's line box (a small key with large text).
+-- Text and lines use stable font-relative baselines. Outer icon/key sizes do not move them.
 function ns.styles.UnderlineY(frame, db)
   local style = ns.styles.Get();
   if style.UnderlineY then return style.UnderlineY(frame, db) end
-  local y = -(db.fontSize * 0.5 + 6.5);
-  local cap = frame.keyCap;
-  if cap:IsShown() and cap.capHeight then
-    local m = cap.art and cap.art.margins;
-    local border = cap.art and cap.art.bottomBorder;
-    if border and not cap.isGlyph then
-      y = -(border - (1 + m[2] - m[4]) * 0.5) / (1 - m[2] - m[4]) * cap.capHeight;
-    else
-      y = -cap.capHeight * 0.5 + 0.5; --a gamepad glyph or plain box: its bottom edge
-    end
-  end
-  local keyY = cap:IsShown() and style.KeyOffsetY and style.KeyOffsetY(frame, db) or 0;
-  return math.min(y + keyY, -(db.fontSize * 0.5 + 2));
+  return -TextClearance(db, 6.5);
 end
 
--- How far the requirement line and its compact name rise so they keep their distance to an underline
--- that moved up to the key's border.
-function ns.styles.StatusShift(frame, db)
-  if ns.styles.Get().NameOffset then return 0 end
-  if not ns.styles.Get().underline then return 0 end
-  return ns.styles.UnderlineY(frame, db) + db.fontSize * 0.5 + 6.5;
+-- Runic and Plain Bar fit both measured keyboard borders between the ready capital reference and line.
+-- Controller canvases use the same bounds; their native symbols retain their own transparent margins.
+function ns.styles.KeyFaceHeight(frame, db, glyph)
+  local size, style = ns.styles.Size(db), ns.styles.Get();
+  if not style.fitKeyToName then return glyph and size.glyphHeight or size.keyHeight end
+  local span = size.nameTop - ns.styles.UnderlineY(frame, db);
+  if glyph then return span end
+  local art = frame.keyCap.art;
+  if not glyph and art and art.bottomBorder then
+    local m = art.margins;
+    return span * (1 - m[2] - m[4]) / (art.bottomBorder - (art.topBorder or m[2]));
+  end
+  return span + 1; --plain and Classic borders are centered half a unit inside each frame edge
+end
+
+-- Underlined styles align the button's visible bottom border to the fixed text baseline.
+-- Resizing or changing artwork moves the button, rather than the text or underline.
+function ns.styles.KeyBaselineY(frame, db)
+  local cap = frame.keyCap;
+  if not cap:IsShown() or not cap.capHeight then return 0 end
+  local bottom = -cap.capHeight * 0.5 + (cap.isGlyph and 0 or 0.5);
+  local art = cap.art;
+  if art and art.bottomBorder and not cap.isGlyph then
+    local m = art.margins;
+    bottom = ((1 + m[2] - m[4]) * 0.5 - art.bottomBorder) / (1 - m[2] - m[4]) * cap.capHeight;
+  end
+  return ns.styles.UnderlineY(frame, db) - bottom;
+end
+
+-- Fitted buttons and cursor artwork share the center of the visible name/line area.
+function ns.styles.ContentCenterY(frame, db)
+  local style = ns.styles.Get();
+  if not style.fitKeyToName then return 0 end
+  return (ns.styles.Size(db).nameTop + ns.styles.UnderlineY(frame, db)) * 0.5;
+end
+
+function ns.styles.LineY(frame, db, offset)
+  if ns.styles.Get().underline then return ns.styles.UnderlineY(frame, db); end
+  return -TextClearance(db, offset);
 end
 
 function ns.styles.Create(frame)
@@ -105,6 +124,11 @@ end
 
 function ns.styles.Apply(frame)
   local style = ns.styles.Get();
+  -- A style that changes shared regions (masks, icon tint) undoes that when another style takes over.
+  if frame.appliedStyle and frame.appliedStyle ~= style and frame.appliedStyle.Remove then
+    frame.appliedStyle.Remove(frame);
+  end
+  frame.appliedStyle = style;
   for _, region in ipairs(frame.stylePulseLayers) do region:SetAlpha(0); end
   for _, name in ipairs(commonLayers) do
     frame[name]:SetShown(style.layers and style.layers[name] and (name ~= "iconGlow" or EnhancedSoftInteractDB.showIcon) or false);
@@ -148,13 +172,15 @@ end
 function ns.styles.NameBloom(frame, texture, db)
   texture:ClearAllPoints();
   texture:SetPoint("CENTER", frame.name, "CENTER");
-  texture:SetSize(frame.nameWidth + 24, db.fontSize + 16);
+  local size = ns.styles.Size(db);
+  texture:SetSize(frame.nameWidth + 24 * size.inputScale, size.fontSize + 16 * size.inputScale);
 end
 
 function ns.styles.BloomSegment(frame, texture, left, width, y)
   texture:ClearAllPoints();
   texture:SetPoint("CENTER", frame.box, "LEFT", left + width * 0.5, y);
-  texture:SetSize(width + 24, 26);
+  local scale = ns.styles.Size(EnhancedSoftInteractDB).inputScale;
+  texture:SetSize(width + 24 * scale, 26 * scale);
 end
 
 function ns.styles.Layout(frame)
