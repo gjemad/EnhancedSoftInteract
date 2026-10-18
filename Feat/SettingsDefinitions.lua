@@ -20,8 +20,9 @@ function ns.BuildSettings()
     setting.disabled = function() return AddonOff() or (disabled and disabled()) end;
     settings[#settings + 1] = setting;
   end
-  local function Checkbox(name, key, onChange)
-    Add({ kind = kind.Checkbox, name = name, default = DEFAULTS[key],
+  -- A sub-option is indented under its parent and disabled while the parent is off.
+  local function Checkbox(name, key, onChange, disabled, indent)
+    Add({ kind = kind.Checkbox, name = name, default = DEFAULTS[key], disabled = disabled, indent = indent,
       get = function() return db[key] end,
       set = function(_, value) db[key] = value; if onChange then onChange(value) end end });
   end
@@ -68,7 +69,13 @@ function ns.BuildSettings()
       if ns.RefreshSettings then ns.RefreshSettings(); end
     end });
   Checkbox("Enable Animations", "animationsEnabled", ns.UpdateAnimations);
-  Checkbox("Enable Cast Bar", "castBarEnabled", ns.RefreshInteractionCastBar);
+  Checkbox("Enable Cast Bar", "castBarEnabled", function()
+    ns.RefreshInteractionCastBar();
+    if ns.RefreshSettings then ns.RefreshSettings(); end
+  end);
+  local function CastBarOff() return not db.castBarEnabled end
+  Checkbox("Auto Hide Default Cast Bar", "castBarHideGame", ns.RefreshInteractionCastBar, CastBarOff, true);
+  Checkbox("Show for Clicked Objects", "castBarClicked", nil, CastBarOff, true);
   Section("hud", "HUD Elements");
   local function IconChanged()
     UpdateIcon();
@@ -95,6 +102,9 @@ function ns.BuildSettings()
       db.keyStyle = value;
       ns.UpdateStyle();
     end });
+  Slider("Button Size", "buttonSizePercent", Percent, ns.UpdateStyle, KeyHidden);
+  Slider("Interaction Icon Size", "interactionIconSizePercent", Percent, ns.UpdateStyle,
+    function() return not ns.styles.ShowIcon(db) end);
 
   Section("text", "Text");
   Add({ kind = kind.Dropdown, name = "Font",
@@ -126,24 +136,28 @@ function ns.BuildSettings()
   Section("persistence", "Persistence");
   for _, kept in ipairs(ns.keptSettings) do Checkbox(kept.checkbox, kept.option, ns.KeepSettings); end
 
-  -- Cards share these descriptions, with optional visual examples on the settings page.
+  -- Tooltip text for each option: one short sentence, then a second paragraph only for details or limits.
   local DESCRIPTIONS = {
-    ["Style"] = "Chooses the look of the target display.",
-    ["Size"] = "Sizes the whole HUD together. Small, Normal and Large each keep the chosen style's text, button and icon in proportion.",
-    ["Enabled"] = "Shows the target's name, icon and interact key.",
-    ["Show Target Tooltip"] = "Shows the game's tooltip for the selected soft target.\nUnchecked: hides it. Does not change the addon's HUD.\nYour game settings return when the addon is disabled.",
-    ["Show Target Icons"] = "Allows the game's interaction icon above the soft target's nameplate, including herbs, mining nodes and chests.",
-    ["Keep Interact Key On"] = "Keeps the Interact Key enabled\nso you can use it to interact with nearby targets.",
-    ["Keep Interact Key Icons on Show All"] = "Keeps all interact icons enabled\nso the addon can show the right icon for each target.",
-    ["Show Icon"] = "Shows the interaction icon inside the addon's HUD.",
-    ["Swap Icon and Key"] = "Switches the sides of the icon and interact key.",
-    ["Show Interact Key"] = "Shows your interact key or controller button.",
-    ["Button Style"] = "Choose Plunderstorm or Classic artwork for keyboard keys.\nController buttons keep their native symbols. Elv uses its own key display.",
-    ["Font"] = "Chooses the lettering for the name and key.\nElv keeps a separate font choice and uses ElvUI's font while the suite is loaded.",
-    ["Color Brightness"] = "Adjusts how bright the colored lines and glow appear.",
-    ["Shadow Strength"] = "Adjusts how dark the shadow behind the name appears.",
-    ["Enable Animations"] = "Adds movement and fades to the target display.",
-    ["Enable Cast Bar"] = "Shows progress while gathering or opening objects.",
+    ["Enabled"] = "Shows the HUD with your soft target's name, icon and interact key.",
+    ["Style"] = "Changes the look of the HUD.",
+    ["Size"] = "Sets the overall size of the HUD.\n\nButton Size and Interaction Icon Size scale from this size.",
+    ["Enable Animations"] = "Plays fades and effects when your target changes and when you interact.",
+    ["Enable Cast Bar"] = "Shows a cast bar in the HUD while you gather or open something.",
+    ["Auto Hide Default Cast Bar"] = "Hides the default cast bar while the HUD shows a cast.\n\nOther casts still use the default cast bar.",
+    ["Show for Clicked Objects"] = "Also shows the cast bar when you click an object instead of using the interact key.\n\nClicked objects can't always be told apart, so the cast bar may not always behave as expected.",
+    ["Show Icon"] = "Shows the interaction icon in the HUD.",
+    ["Swap Icon and Key"] = "Moves the icon to the right side and the key to the left.",
+    ["Show Interact Key"] = "Shows your interact keybind or controller button in the HUD.",
+    ["Button Style"] = "Changes the artwork of keyboard keys.\n\nController buttons always use the game's own symbols.",
+    ["Button Size"] = "Makes the key or controller button bigger or smaller.\n\n100% is the normal size for the chosen HUD size.",
+    ["Interaction Icon Size"] = "Makes the interaction icon bigger or smaller.\n\n100% is the normal size for the chosen HUD size.",
+    ["Font"] = "Changes the font of the target name and key.\n\nThe Elv style has its own font setting, and uses ElvUI's font while ElvUI is loaded.",
+    ["Color Brightness"] = "Sets how bright the colored lines and glows are.",
+    ["Shadow Strength"] = "Sets how dark the shadow behind the text is.\n\nNot every style has a shadow.",
+    ["Show Target Tooltip"] = "Shows the game's tooltip for your soft target.\n\nWhen unchecked, the tooltip is hidden. Your game setting comes back when Enabled is turned off.",
+    ["Show Target Icons"] = "Lets the game show its interaction icon above your soft target, including herbs, ore and chests.\n\nWhen unchecked, the icon is hidden.",
+    ["Keep Interact Key On"] = "Turns the game's Interact Key option back on if something turns it off.\n\nThe HUD needs it to find targets.",
+    ["Keep Interact Key Icons on Show All"] = "Keeps the game's Interact Key Icons option on Show All.\n\nWith fewer icons, the HUD can't show the right icon for every target, such as corpses you can loot.",
   };
   for _, setting in ipairs(settings) do setting.desc = DESCRIPTIONS[setting.name]; end
 

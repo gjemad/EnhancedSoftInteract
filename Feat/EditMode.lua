@@ -4,35 +4,71 @@ local HUD_DEFAULT_POSITION, Notify = ns.HUD_DEFAULT_POSITION, ns.Notify;
 local UpdateLayout = ns.UpdateLayout;
 
 ----
---  Samples for the HUD in Edit Mode: Classic Era NPCs and game objects (also in WoW: Forever), in three
---  name lengths, each with its cursor. Edit Mode shows a sample while the HUD is moved.
+--  Shared Classic/Forever preview targets, grouped by their actual interaction. A weighted cycle
+--  spreads the families out while using every name once, including just one generic mailbox.
 ----
-local PREVIEW_NPCS = {
-  { --short
-    { "Thrall", "Quest" }, { "Doras", "Taxi" }, { "Devrak", "Taxi" }, { "Karus", "Buy" },
-    { "Olvia", "Buy" }, { "Gamon", "Speak" }, { "Sian'tsu", "Trainer" },
-    { "Mailbox", "Mail" }, { "Peacebloom", "GatherHerbs" }, { "Silverleaf", "GatherHerbs" },
-    { "Earthroot", "GatherHerbs" }, { "Tin Vein", "Mine" }, { "Copper Vein", "Mine" },
-    { "Prairie Wolf", "Skin" }, { "Plainstrider", "Skin" }, { "Kobold Vermin", "LootAll" },
-  },
-  { --medium
-    { "Innkeeper Gryshka", "Innkeeper" }, { "Innkeeper Allison", "Innkeeper" }, { "Dungar Longdrink", "Taxi" },
-    { "Thurman Mullby", "Pickup" }, { "Marshal Dughan", "Quest" }, { "Cairne Bloodhoof", "Quest" },
-    { "Magni Bronzebeard", "Quest" }, { "Ander Germaine", "Trainer" }, { "Deputy Willem", "Quest" },
-    { "Wild Steelbloom", "GatherHerbs" }, { "Mithril Deposit", "Mine" }, { "Truesilver Deposit", "Mine" },
-    { "Small Thorium Vein", "Mine" }, { "Wanted Poster", "Interact" },
-    { "Elder Mottled Boar", "Skin" }, { "Defias Pillager", "LootAll" }, { "Frostmane Headhunter", "LootAll" },
-    { "Battered Footlocker", "PickLock" }, { "Waterlogged Footlocker", "PickLock" },
-  },
-  { --long
-    { "Highlord Bolvar Fordragon", "Quest" }, { "High Tinker Mekkatorque", "Quest" },
-    { "Lady Sylvanas Windrunner", "Quest" }, { "Arch Druid Fandral Staghelm", "Quest" },
-    { "High Priestess Tyrande Whisperwind", "Quest" }, { "Archmage Ansirem Runeweaver", "Quest" },
-    { "Ooze Covered Rich Thorium Vein", "Mine" }, { "Ooze Covered Truesilver Deposit", "Mine" },
-    { "Ooze Covered Mithril Deposit", "Mine" },
-    { "Elder Saltwater Crocolisk", "Skin" }, { "Burning Blade Neophyte", "LootAll" },
-  },
+local PREVIEW_FAMILIES = {
+  { cursor = "Innkeeper", names = { "Innkeeper Gryshka", "Innkeeper Allison", "Innkeeper Firebrew", "Innkeeper Pala", "Innkeeper Farley" } },
+  { cursor = "GatherHerbs", names = { "Peacebloom", "Silverleaf", "Earthroot", "Wild Steelbloom", "Mageroyal",
+    "Briarthorn", "Kingsblood", "Goldthorn", "Sungrass", "Dreamfoil" } },
+  { cursor = "Mine", names = { "Copper Vein", "Tin Vein", "Mithril Deposit", "Truesilver Deposit", "Small Thorium Vein",
+    "Ooze Covered Rich Thorium Vein", "Ooze Covered Truesilver Deposit", "Ooze Covered Mithril Deposit",
+    "Iron Deposit", "Gold Vein", "Rich Thorium Vein", "Silver Vein" } },
+  { cursor = "Taxi", names = { "Doras", "Devrak", "Dungar Longdrink", "Gryth Thurden", "Thor" } },
+  { cursor = "Quest", names = { "Thrall", "Marshal Dughan", "Cairne Bloodhoof", "King Magni Bronzebeard", "Deputy Willem",
+    "Highlord Bolvar Fordragon", "High Tinker Mekkatorque", "Lady Sylvanas Windrunner", "Arch Druid Fandral Staghelm",
+    "Tyrande Whisperwind", "Archmage Ansirem Runeweaver" } },
+  { cursor = "Pickup", names = { "Olvia", "Thurman Mullby", "Trak'gen", "Thomas Miller" } },
+  { cursor = "Trainer", names = { "Sian'tsu", "Ander Germaine", "Wu Shen", "Magar", "Gart Mistrunner" } },
+  { cursor = "Skin", names = { "Prairie Wolf", "Plainstrider", "Elder Mottled Boar", "Elder Saltwater Crocolisk", "Young Goretusk", "Ragged Timber Wolf" } },
+  { cursor = "Buy", names = { "Karus", "Koma", "Barnum Stonemantle", "Olivia Burnside" } },
+  { cursor = "LootAll", names = { "Kobold Vermin", "Defias Pillager", "Frostmane Headhunter", "Burning Blade Neophyte", "Murloc Raider", "Southsea Brigand" } },
+  { cursor = "Speak", names = { "High Overlord Saurfang", "Eitrigg" } },
+  { cursor = "RepairNPC", names = { "Corina Steele", "Kaja" } },
+  { cursor = "Directions", names = { "Stormwind City Guard", "Orgrimmar Grunt" } },
+  { cursor = "Interact", names = { "Wanted Poster", "Battered Footlocker", "Waterlogged Footlocker", "Barrel of Milk", "Food Crate" } },
+  { cursor = "Mail", names = { "Mailbox" } },
 };
+local PREVIEW_TARGETS, scores, used, total = {}, {}, {}, 0;
+for i, family in ipairs(PREVIEW_FAMILIES) do
+  scores[i], used[i] = 0, 0;
+  total = total + #family.names;
+end
+local previous;
+for step = 1, total do
+  local selected;
+  for i, family in ipairs(PREVIEW_FAMILIES) do
+    scores[i] = scores[i] + #family.names;
+    if used[i] < #family.names and i ~= previous and (step < total or i ~= 1)
+      and (not selected or scores[i] > scores[selected]) then selected = i; end
+  end
+  if step == 1 then selected = 1; end --the settings preview opens on Innkeeper Gryshka
+  local family = PREVIEW_FAMILIES[selected];
+  used[selected], scores[selected] = used[selected] + 1, scores[selected] - total;
+  PREVIEW_TARGETS[#PREVIEW_TARGETS + 1] = { name = family.names[used[selected]], cursor = family.cursor };
+  previous = selected;
+end
+ns.PREVIEW_TARGETS = PREVIEW_TARGETS;
+
+-- Samples whose real interaction is a gathering or opening cast, so the settings preview can show a
+-- cast bar on them. Opening is limited to the objects measured with spell 22810, like the live tracker.
+local CAST_CURSORS = { GatherHerbs = true, Mine = true, Skin = true };
+local OPENING_SAMPLES = { ["Barrel of Milk"] = true, ["Food Crate"] = true };
+function ns.SampleCastable(name, cursor)
+  return CAST_CURSORS[cursor] or (cursor == "Interact" and OPENING_SAMPLES[name]) or false;
+end
+
+-- Each surface owns its position in the shared cycle. Requirements are resolved when shown, so
+-- a preview keeps following this character's current gathering professions.
+function ns.CreatePreviewPicker()
+  local index = 0;
+  return function()
+    index = index % #PREVIEW_TARGETS + 1;
+    local target = PREVIEW_TARGETS[index];
+    local requirement = ns.RequirementFor(target.cursor);
+    return target.name, requirement and "Unable" .. target.cursor or target.cursor, requirement, target.cursor;
+  end;
+end
 
 ----
 --  Edit Mode (LibEditMode). In Edit Mode the HUD shows a sample target, so you can see it while you drag
@@ -52,26 +88,15 @@ local function ApplyPosition(pos)
   if ns.styles.Get().Pixel then UpdateLayout(); end
 end
 
--- Shows a sample target of the next name length on every HUD (the real one and the preview). Herbs and
--- ore look the way this character would see them, so without the profession they are unable and show the
--- requirement line.
-local sampleLength, sampleName = 0, nil;
+-- Edit Mode changes every HUD; the settings card uses its own picker and HUD directly.
+local nextEditModeSample = ns.CreatePreviewPicker();
 local function ShowNextEditModeSample()
-  sampleLength = sampleLength % #PREVIEW_NPCS + 1;
-  local npcs = PREVIEW_NPCS[sampleLength];
-  local npc;
-  repeat npc = npcs[math.random(#npcs)] until #npcs == 1 or npc[1] ~= sampleName;
-  local name, cursor = npc[1], npc[2];
-  sampleName = name;
-  local requirement = ns.RequirementFor(cursor);
-  if requirement then cursor = "Unable" .. cursor; end
-  ns.ShowSample(name, cursor, requirement);
+  ns.ShowSample(nextEditModeSample());
 end
 ns.ShowNextEditModeSample = ShowNextEditModeSample;
 
 local function ShowEditModeSample()
   frame.inEditMode = true;
-  sampleLength = 0;
   ShowNextEditModeSample();
 end
 

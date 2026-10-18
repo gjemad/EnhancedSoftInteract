@@ -5,8 +5,8 @@ local _, ns = ...;
 --  Turning the gamepad off can turn the Interact Key off with it, and the Interact Key Icons setting
 --  (Options > Accessibility) decides which targets get a cursor at all; below Show All, corpses and
 --  objects show the plain cog. While the addon is enabled and a setting's Keep option is checked, the
---  addon sets its CVars back. It says nothing in chat, because the gamepad UI turns the Interact Key off
---  on every NPC conversation. It checks on every CVar change and once every CHECK_INTERVAL seconds, in case the
+--  addon sets its CVars back. Native option changes explain which Keep checkbox controls them; automatic
+--  gamepad changes stay quiet. It checks on every CVar change and once every CHECK_INTERVAL seconds, in case the
 --  game changes a CVar without telling addons. CVars a client doesn't have (GetCVar gives nil) are
 --  skipped. While Forever's gamepad UI is on, Blizzard holds these CVars at temporary values (Interact
 --  Key on gamepad only), so the addon sets its own temporary values over them. When the gamepad UI
@@ -14,16 +14,18 @@ local _, ns = ...;
 ----
 local CHECK_INTERVAL = 1;
 
--- option: the EnhancedSoftInteractDB key of its Keep checkbox, which Feat\EditMode.lua builds from this
+-- option: the EnhancedSoftInteractDB key of its Keep checkbox, which Feat\SettingsDefinitions.lua builds from this
 -- list with checkbox as its name. cvars: the values to keep, the way Blizzard's settings set them (Show
 -- All is Blizzard_SettingsDefinitions_Frame\Accessibility.lua).
 local KEPT = {
   {
     option = "forceInteractKey", checkbox = "Keep Interact Key On",
+    setting = "PROXY_ENABLE_INTERACT", value = true, name = "Enable Interact Key",
     cvars = { softTargetInteract = Enum.SoftTargetEnableFlags.Any },
   },
   {
     option = "forceInteractIcons", checkbox = "Keep Interact Key Icons on Show All",
+    setting = "PROXY_INTERACT_ICONS", value = 2, name = "Interact Key Icons",
     cvars = { SoftTargetIconEnemy = 1, SoftTargetIconInteract = 1, SoftTargetIconGameObject = 1, SoftTargetLowPriorityIcons = 1 },
   },
 };
@@ -43,9 +45,11 @@ local function SetBack(cvar, value)
   end
 end
 
+local restoring = false;
 local function KeepSettings()
   local db = EnhancedSoftInteractDB;
-  if not (db and db.enabled) then return end
+  if restoring or not (db and db.enabled) then return end
+  restoring = true;
   for _, kept in ipairs(KEPT) do
     if db[kept.option] then
       for cvar, value in pairs(kept.cvars) do
@@ -56,16 +60,50 @@ local function KeepSettings()
       end
     end
   end
+  restoring = false;
 end
 ns.KeepSettings = KeepSettings;
 
+-- CVAR_UPDATE has no source: Blizzard's automatic gamepad changes look like player changes there.
+-- These native proxies retain the requested choice even when our synchronous restoration wins.
+-- Refreshes/no-op choices already agree with GetValue, even when display hiding owns an icon CVar.
+local noticesRegistered = false;
+local function RegisterNotices()
+  if noticesRegistered then return true end
+  if not (Settings and Settings.SetOnValueChangedCallback) then return false end
+  for _, kept in ipairs(KEPT) do
+    Settings.SetOnValueChangedCallback(kept.setting, function(_, setting, value)
+      local db = EnhancedSoftInteractDB;
+      if restoring or not (db and db.enabled and db[kept.option])
+        or ns.issecretvalue(value) or type(value) ~= type(kept.value) or value == kept.value then return end
+      local current = setting and setting.GetValue and setting:GetValue();
+      if not ns.issecretvalue(current) and current == value then return end
+      local applicable = false;
+      for cvar in pairs(kept.cvars) do
+        if GetCVar(cvar) ~= nil and not ns.IsBlizzardDisplayCVarHidden(cvar) then applicable = true; break end
+      end
+      if not applicable then return end
+      local name = setting and setting.GetName and setting:GetName();
+      if ns.issecretvalue(name) or type(name) ~= "string" or name == "" then name = kept.name; end
+      ns.Notify(('"%s" is kept by ESI. Uncheck "%s" under Enhanced Soft Interact > Persistence to change it.'):format(name, kept.checkbox));
+    end);
+  end
+  noticesRegistered = true;
+  return true;
+end
+
 local watcher = CreateFrame("Frame");
-watcher:SetScript("OnEvent", function(_, _, name)
-  if type(name) == "string" and watched[name:lower()] then KeepSettings(); end
+watcher:SetScript("OnEvent", function(_, event, name)
+  if event == "ADDON_LOADED" then
+    if RegisterNotices() then watcher:UnregisterEvent("ADDON_LOADED"); end
+  elseif not ns.issecretvalue(name) and type(name) == "string" and watched[name:lower()] then
+    KeepSettings();
+  end
 end);
 
 table.insert(ns.onLoad, function()
   KeepSettings();
+  if not RegisterNotices() then watcher:RegisterEvent("ADDON_LOADED"); end
   watcher:RegisterEvent("CVAR_UPDATE");
   C_Timer.NewTicker(CHECK_INTERVAL, KeepSettings);
 end);

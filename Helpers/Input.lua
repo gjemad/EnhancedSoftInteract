@@ -17,7 +17,7 @@ local function GetInteractKeyText()
     if IsPadKey(k) == ns.gamepadActive then key = k; break end
   end
   if not key then return nil end
-  local text = GetBindingText(key, 1);
+  local text = GetBindingText(key, 1); --same compact, localized labels as Blizzard action buttons
   if not text or text == "" then return nil end
   return text, key;
 end

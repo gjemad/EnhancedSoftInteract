@@ -14,6 +14,27 @@ function theme.Font(db)
   return data and data.normFont or ns.media:Fetch("font", db.elvFont);
 end
 
+local function Engine()
+  local suite = _G.ElvUI;
+  local engine = type(suite) == "table" and suite[1];
+  return type(engine) == "table" and engine or nil;
+end
+
+-- ElvUI's general font style (default "OUTLINE"); "NONE" means no outline. Without ElvUI, ElvUI's default.
+function theme.FontFlags()
+  local engine = Engine();
+  local general = engine and engine.db and engine.db.general;
+  local style = general and general.fontStyle;
+  if type(style) ~= "string" then return "OUTLINE" end
+  return style == "NONE" and "" or style;
+end
+
+-- ElvUI draws extra black lines outside and inside each border when its Pixel Perfect option is off.
+function theme.ThickBorders()
+  local engine = Engine();
+  return engine ~= nil and engine.PixelMode == false;
+end
+
 function theme.FontName(db)
   local suite = _G.ElvUI;
   local engine = type(suite) == "table" and suite[1];

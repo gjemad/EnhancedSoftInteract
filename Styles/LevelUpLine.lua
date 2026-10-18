@@ -5,11 +5,17 @@ local FLASH_ATLAS = "AftLevelup-GlowLine";
 ns.styles.Register("levelup", {
   name = "Level-Up Line", shadow = true,
   sizes = {
-    small = { fontSize = 14, iconSize = 26, keyHeight = 22, glyphHeight = 22, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 44, gap = 7, edgeInset = 6 },
+    small = { fontSize = 14, iconSize = 26, keyHeight = 22.75, glyphHeight = 22.75, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 44, gap = 7, edgeInset = 6 },
     normal = { fontSize = 16, iconSize = 30, keyHeight = 26, glyphHeight = 26, keyFontSize = 17, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 50, gap = 8, edgeInset = 7 },
-    large = { fontSize = 20, iconSize = 38, keyHeight = 30, glyphHeight = 30, keyFontSize = 21, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 62, gap = 10, edgeInset = 9 },
+    large = { fontSize = 20, iconSize = 38, keyHeight = 32.5, glyphHeight = 32.5, keyFontSize = 21, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 62, gap = 10, edgeInset = 9 },
   },
-  castBar = { height = 1.2, offset = 6.5, centerBright = true },
+  -- The native glow line uncovers along the cast (user choice: current bar with C, Glow reveal), and
+  -- the start and end markers are wider, taller and in the full object color so they read clearly.
+  -- Both stay in the object color: whiter versions washed out in game.
+  castBar = { height = 1.2, offset = 6.5, centerBright = true, success = "afterglow", interrupt = "redGlowLine",
+    reveal = { atlas = FLASH_ATLAS, height = 14, strength = 0.7 }, endWidth = 1.6, endHeight = 7, endBright = 0.1,
+    glow = { tail = 16, tailHeight = 3.6, tailAlpha = 0.5, haloWidth = 7, haloHeight = 9, haloAlpha = 0.4,
+      coreWidth = 3, coreHeight = 5.5, coreAlpha = 0.82, needle = true, lineTexture = BAR_TEXTURE } },
   layers = { iconGlow = true, lineLowGlow = true, lineLow = true, lineHigh = true },
   Create = function(frame)
     frame.levelupBloom = ns.styles.CreateBloom(frame);

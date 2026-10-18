@@ -1,40 +1,40 @@
 local _, ns = ...;
 local WHITE = [[Interface\Buttons\WHITE8X8]];
 
-local Pixel = ns.styles.Pixel;
+-- Snap one origin and explicit dimensions (shared pixel helpers in Helpers\StyleRegistry.lua).
+-- Independently rounded opposite anchors can collapse a one-pixel region.
+local Pixel, Round, Sampling = ns.styles.Pixel, ns.styles.Round, ns.styles.Sampling;
+local Origin, Rect = ns.styles.Origin, ns.styles.Rect;
 
-local function Round(value, pixel) return math.floor(value / pixel + 0.5) * pixel end
+-- ElvUI conventions, checked against ElvUI main (2026-10-18): a 1-pixel border in ElvUI's border color
+-- around its backdrop color, OUTLINE text without a drop shadow, pressed buttons overlaid with
+-- (0.9, 0.8, 0.1) at 30% inside the border, and extra black lines outside and inside every border when
+-- Pixel Perfect is off. The layout follows the 0.3.1 panel the user chose: the key is a full-height
+-- square flush with its side, sharing the panel edge, with 6 units of padding around the name and the
+-- underline 6 units above the bottom, grouped with the name. Presets keep ElvUI's 32-unit button.
+local PADDING = 6;
+local PUSHED = { 0.9, 0.8, 0.1, 0.3 };
+local BLACK = { 0, 0, 0, 1 };
 
-local function Height(db)
-  return ns.styles.Size(db).keyHeight;
+-- The panel height, which the key and the optional icon cell fill as squares.
+local function Square(db)
+  return ns.styles.Size(db).keyHeight * math.max(1, ns.styles.ButtonScale(db));
 end
+
+local function Padding(db) return PADDING * ns.styles.Size(db).inputScale end
 
 local function PanelHeight(frame, db)
-  local _, iconHeight = ns.styles.IconDimensions(frame, db);
-  return Round(math.max(Height(db), frame.keyCap:IsShown() and frame.keyCap.capHeight or 0,
-    ns.styles.ShowIcon(db) and iconHeight or 0), Pixel(frame));
+  return Round(Square(db), Pixel(frame));
 end
 
--- Snap one origin and explicit dimensions. Independently rounded opposite anchors can collapse a
--- one-pixel region. Disable texture sampling bias so it cannot shift the last column off that rect.
-local function Sampling(texture)
-  if texture.SetRoundLayoutToNearestPixel then texture:SetRoundLayoutToNearestPixel(false); end
-  if texture.SetSnapToPixelGrid then texture:SetSnapToPixelGrid(false); end
-  if texture.SetTexelSnappingBias then texture:SetTexelSnappingBias(0); end
-end
+-- Fill inset inside a border: one pixel, or two with ElvUI's thick borders (its E.Border).
+local function FillInset(pixel) return ns.ElvTheme.ThickBorders() and pixel * 2 or pixel end
 
-local function Origin(frame, x, y, pixel)
-  local cx, cy = frame:GetCenter();
-  if ns.issecretvalue(cx) or ns.issecretvalue(cy) or not cx or not cy then cx, cy = 0, 0; end
-  cx = cx + (frame.boxOffsetX or 0);
-  return Round(cx + x, pixel) - cx, Round(cy + y, pixel) - cy;
-end
-
-local function Rect(texture, target, x, y, width, height)
-  Sampling(texture);
-  texture:ClearAllPoints();
-  texture:SetPoint("TOPLEFT", target, "CENTER", x, y);
-  texture:SetSize(width, height);
+local function LineTop(frame, top, height, pixel)
+  -- Keep the snapped underline/cast rectangles inside the one-pixel panel border at small UI scales.
+  -- The ideal text-relative baseline stays fixed; these cached bounds only constrain rasterization.
+  local rect = frame.elvLineRect;
+  return math.max(rect[2] - rect[4] + pixel + height, math.min(top, rect[2] - pixel));
 end
 
 local function Region(frame, layer)
@@ -61,6 +61,22 @@ local function Border(edges, target, x, y, width, height, pixel, color)
     Rect(edge, target, edgeX, edgeY, horizontal and width or pixel, horizontal and pixel or height);
     edge:SetVertexColor(unpack(color));
   end
+end
+
+-- A border with ElvUI's optional thick-mode lines: the main edge in the border color, plus black lines
+-- one pixel outside and inside it. Sets are { main, outer, inner }, four edges each.
+local function BorderSets(parent, regions, layer)
+  return { main = Edges(parent, regions, layer), outer = Edges(parent, regions, layer), inner = Edges(parent, regions, layer) };
+end
+
+local function DrawBorder(target, sets, x, y, width, height, pixel, color, shown)
+  local thick = (shown and ns.ElvTheme.ThickBorders()) and true or false;
+  Border(sets.main, target, x, y, width, height, pixel, color);
+  Border(sets.outer, target, x - pixel, y + pixel, width + pixel * 2, height + pixel * 2, pixel, BLACK);
+  Border(sets.inner, target, x + pixel, y - pixel, width - pixel * 2, height - pixel * 2, pixel, BLACK);
+  for _, edge in ipairs(sets.main) do edge:SetShown(shown); end
+  for _, edge in ipairs(sets.outer) do edge:SetShown(thick); end
+  for _, edge in ipairs(sets.inner) do edge:SetShown(thick); end
 end
 
 -- Reuse complete native controller art in monochrome; no controller textures are packaged.
@@ -104,18 +120,8 @@ local function KeyText(frame, text)
     from = last + 1;
   end
   if #tokens == 0 then
-    local chord = frame.keyCap.key;
-    if not chord then return text end
-    local key = chord:match("%-(%-)$") or chord:match("([^%-]+)$") or chord;
-    local labels = { SHIFT = "s", CTRL = "c", ALT = "a", META = "m" };
-    local prefix = "";
-    for modifier in chord:sub(1, #chord - #key):gmatch("([^%-]+)%-") do
-      if not labels[modifier] then return text end
-      prefix = prefix .. labels[modifier] .. "-";
-    end
-    if prefix == "" then return text end
-    local label = GetBindingText(key, 1);
-    return prefix .. (label and label ~= "" and label or key);
+    -- Shared input already uses Blizzard's localized compact binding labels.
+    return text;
   end
   if from <= #text then tokens[#tokens + 1] = { text = text:sub(from) }; end
   frame.elvKeyTokens = tokens;
@@ -149,6 +155,12 @@ local function KeyWidth(frame, height)
     end
     width = width + token.width + (i > 1 and gap or 0);
   end
+  -- Controller symbols fit inside the square key, with the same padding the core adds around key text.
+  local db = EnhancedSoftInteractDB;
+  local available = Square(db) - 4 * 1.3 * ns.styles.Size(db).inputScale * ns.styles.ButtonScale(db);
+  frame.elvInputScale = math.min(1, available / math.max(1, width));
+  for _, token in ipairs(tokens) do token.width = token.width * frame.elvInputScale; end
+  width = width * frame.elvInputScale;
   frame.elvKeyWidth = width;
   if #tokens == 1 and tokens[1].atlas then return 0 end
   return width;
@@ -161,6 +173,13 @@ local function PaintInput(frame)
     slot.label:SetTextColor(shade, shade, shade);
   end
   if not frame.keyCap:IsShown() then HideInput(frame); end
+  -- ElvUI's pressed overlay follows the key's press depth.
+  local pushed, cap = frame.elvKeyPushed, frame.keyCap;
+  if pushed then
+    local depth = cap.pressDepth or 0;
+    pushed:SetAlpha(PUSHED[4] * depth);
+    pushed:SetShown(cap:IsShown() and not cap.isGlyph and depth > 0);
+  end
 end
 
 local function InputArt(frame)
@@ -183,13 +202,15 @@ local function InputArt(frame)
       region:SetSize(token.width, token.width * info.height / info.width);
     end
     region:Show();
-    left = left + token.width + cap.capHeight * 0.04;
+    if token.text then region:SetFont(ns.styles.Font(EnhancedSoftInteractDB), ns.styles.Size(EnhancedSoftInteractDB).keyFontSize * ns.styles.ButtonScale(EnhancedSoftInteractDB) * frame.elvInputScale, ns.ElvTheme.FontFlags()); end
+    left = left + token.width + cap.capHeight * 0.04 * frame.elvInputScale;
   end
   PaintInput(frame);
 end
 
 ns.styles.Register("elv", {
   name = "Elv", underline = true, shadow = false, flatKey = true, ownKey = true,
+  fixedPresets = true, noTextShadow = true,
   sizes = {
     small = { fontSize = 14, iconSize = 28, keyHeight = 28, glyphHeight = 28, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 125, nameMaxWidth = 220, hudHeight = 40, gap = 5, edgeInset = 5, padding = 5 },
     normal = { fontSize = 16, iconSize = 32, keyHeight = 32, glyphHeight = 32, keyFontSize = 17, inputScale = 1, nameMinWidth = 140, nameMaxWidth = 250, hudHeight = 48, gap = 6, edgeInset = 6, padding = 6 },
@@ -203,43 +224,50 @@ ns.styles.Register("elv", {
     HideInput(frame);
   end,
   layers = { lineLow = true }, flashStrength = 0.25,
-  Font = ns.ElvTheme.Font, Pixel = Pixel,
-  IconDimensions = function(frame, db)
-    local cap = frame.keyCap;
-    if cap:IsShown() and cap.capHeight then return cap.capHeight, cap.capHeight end
-    local size = Round(Height(db), Pixel(frame));
-    return size, size;
-  end,
-  Insets = function(frame, db)
-    local padding = ns.styles.Size(db).padding;
-    if frame.keyCap:IsShown() and not frame.keyCap.isGlyph then
-      if db.swapIconAndKey then return 0, padding end
-      return padding, 0;
-    end
-    return padding, padding;
-  end,
-  UnderlineY = function(_, db) return -Height(db) * 0.5 + ns.styles.Size(db).padding end,
+  Font = ns.ElvTheme.Font, FontFlags = ns.ElvTheme.FontFlags, Pixel = Pixel,
+  -- Side cells: a flush square (key or icon) plus the padding before the name. Without one, padding only.
+  CellSize = function(db) return Square(db) + Padding(db) end,
+  CellCenter = function(db) return Square(db) * 0.5 end,
+  SidePadding = Padding,
+  KeyFaceHeight = Square,
+  -- The name and its underline form one group: the line sits 6 units above the panel bottom and the
+  -- ready name 2 units above center. A status line lifts the name and sits between it and the line.
+  -- The one-pixel line's bottom edge sits the padding above the panel bottom, as in 0.3.1.
+  UnderlineY = function(frame, db) return -Square(db) * 0.5 + Padding(db) + Pixel(frame) * 0.5 end,
   NameOffset = function(_, db, amount)
     local size = ns.styles.Size(db);
-    return 2 * size.inputScale + size.fontSize * 0.1875 * amount;
+    -- 0.3 font sizes keeps the smaller name's descenders clear of the status line (0.3.1 used 0.1875).
+    return 2 * size.inputScale + size.fontSize * 0.3 * amount;
   end,
   RequirementY = function(_, db) return -ns.styles.Size(db).fontSize * 0.25 end,
+  -- The interaction icon sits inside its square, clear of the border.
+  IconDimensions = function(_, db) local size = Square(db) - Padding(db); return size, size end,
+  IconMax = function(frame, db) return Square(db) - FillInset(Pixel(frame)) * 2 end,
   PlaceCast = function(frame, texture, left, width, height, y)
     local pixel = Pixel(frame);
     local x, top = Origin(frame, -frame.boxWidth * 0.5 + left, y + height * 0.5, pixel);
-    Rect(texture, frame.box, x, top, math.max(pixel, Round(width, pixel)), height);
+    Rect(texture, frame.box, x, LineTop(frame, top, height, pixel), math.max(pixel, Round(width, pixel)), height);
   end,
-  castBar = { height = 1.7, offset = 6.5, pixel = true,
+  castBar = { height = 1.7, offset = 6.5, pixel = true, endPixels = 2, backingPixels = 0,
+    glow = { spark = true }, success = "flashFill", interrupt = "redBar",
     Texture = function() local data = ns.ElvTheme.Media(); return data and data.normTex or WHITE end },
   Create = function(frame)
     frame.elvPlate = Region(frame, "BACKGROUND");
     local regions = { frame.elvPlate };
-    frame.elvBorder = Edges(frame, regions);
+    frame.elvBorder = BorderSets(frame, regions);
+    frame.elvIconBorder = BorderSets(frame, regions);
     return regions;
   end,
   Apply = function(frame)
-    -- The keyboard fill is ARTWORK on a child frame; its edges must be above it on that same frame.
-    frame.elvKeyBorder = frame.elvKeyBorder or Edges(frame.keyCap, frame.styleRegions.elv, "OVERLAY");
+    -- The keyboard fill is ARTWORK on a child frame; its edges and pressed overlay sit above it there.
+    local regions = frame.styleRegions.elv;
+    frame.elvKeyBorder = frame.elvKeyBorder or BorderSets(frame.keyCap, regions, "OVERLAY");
+    if not frame.elvKeyPushed then
+      frame.elvKeyPushed = frame.keyCap:CreateTexture(nil, "OVERLAY", nil, -1);
+      frame.elvKeyPushed:SetColorTexture(PUSHED[1], PUSHED[2], PUSHED[3], 1);
+      frame.elvKeyPushed:SetAlpha(0);
+      regions[#regions + 1] = frame.elvKeyPushed;
+    end
     local data = ns.ElvTheme.Media();
     local backdrop = data and data.backdropcolor or {0.1, 0.1, 0.1, 1};
     frame.elvPlate:SetVertexColor(unpack(backdrop));
@@ -252,7 +280,8 @@ ns.styles.Register("elv", {
   Layout = function(frame, db)
     local pixel = Pixel(frame);
     local data = ns.ElvTheme.Media();
-    local border = data and data.bordercolor or {0, 0, 0, 1};
+    local border = data and data.bordercolor or BLACK;
+    local inset = FillInset(pixel);
     local cap = frame.keyCap;
     local height = PanelHeight(frame, db);
     local width = Round(frame.boxWidth, pixel);
@@ -260,29 +289,33 @@ ns.styles.Register("elv", {
     Rect(frame.elvPlate, frame.box, x, y, width, height);
     frame.plateInsetLeft, frame.plateInsetRight = 0, 0;
     frame.elvRect = { x, y, width, height, pixel };
-    Border(frame.elvBorder, frame.box, x, y, width, height, pixel, border);
-    if cap:IsShown() and not cap.isGlyph then
-      local keyX = db.swapIconAndKey and x or x + width - cap.capWidth;
-      local keyY = y;
+    local _, lineTop = Origin(frame, 0, height * 0.5, pixel);
+    frame.elvLineRect = { 0, lineTop, 0, height, pixel };
+    DrawBorder(frame.box, frame.elvBorder, x, y, width, height, pixel, border, true);
+    -- Key and icon squares share the panel's outer edges; their inner edge is the divider.
+    local keyLeft = db.swapIconAndKey;
+    local keyShown = cap:IsShown() and not cap.isGlyph;
+    if keyShown then
+      local keyX = keyLeft and x or x + width - cap.capWidth;
       cap:ClearAllPoints();
-      cap:SetPoint("TOPLEFT", frame.box, "CENTER", keyX, keyY);
-      cap.icon:ClearAllPoints();
-      -- Inset the fill one physical pixel; the outer border and divider share the panel edges.
-      Rect(cap.icon, frame.box, keyX + pixel, keyY - pixel, cap.capWidth - pixel * 2, height - pixel * 2);
-      Sampling(cap.icon);
-      Border(frame.elvKeyBorder, frame.box, keyX, keyY, cap.capWidth, height, pixel, border);
+      cap:SetPoint("TOPLEFT", frame.box, "CENTER", keyX, y);
+      Rect(cap.icon, frame.box, keyX + inset, y - inset, cap.capWidth - inset * 2, height - inset * 2);
+      Rect(frame.elvKeyPushed, frame.box, keyX + inset, y - inset, cap.capWidth - inset * 2, height - inset * 2);
       InputArt(frame);
-    end
-    if not cap:IsShown() or cap.isGlyph then
+    else
       HideInput(frame);
     end
-    for _, edge in ipairs(frame.elvKeyBorder) do edge:SetShown(cap:IsShown() and not cap.isGlyph); end
-    local line = frame.lineLow;
+    DrawBorder(frame.box, frame.elvKeyBorder, keyLeft and x or x + width - (cap.capWidth or height), y,
+      cap.capWidth or height, height, pixel, border, keyShown);
+    local iconShown = ns.styles.ShowIcon(db) and true or false;
+    DrawBorder(frame.box, frame.elvIconBorder, keyLeft and x + width - height or x, y, height, height, pixel, border, iconShown);
+    PaintInput(frame);
     -- Snap the name column itself. Snapping the growing panel origin and then adding its inset
     -- can move the line by one pixel even though the name column has not moved.
+    local line = frame.lineLow;
     local lineX, lineY = Origin(frame, -frame.nameWidth * 0.5 - frame.boxOffsetX,
       ns.styles.UnderlineY(frame, db) + pixel * 0.5, pixel);
-    Rect(line, frame.box, lineX, lineY, Round(frame.nameWidth, pixel), pixel);
+    Rect(line, frame.box, lineX, LineTop(frame, lineY, pixel, pixel), Round(frame.nameWidth, pixel), pixel);
     line:Show();
   end,
 });

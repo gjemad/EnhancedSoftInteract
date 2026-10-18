@@ -94,7 +94,7 @@ local function Animations()
     layers["cast_" .. name] = Layer(cast[name]);
   end
   layers.cast_runeGlow = Layer(cast.runeGlow);
-    for _, name in ipairs({ "iconGlow", "lineLow", "lineLowGlow", "lineHigh", "flash", "shadow", "stylePlate", "rune",
+    for _, name in ipairs({ "iconGlow", "lineLow", "lineLowGlow", "lineHigh", "flash", "shadow", "rune",
         "levelupNameGlow", "runicNameGlow", "statusShadow", "icon" }) do
       layers[name] = Layer(frame[name]);
     end

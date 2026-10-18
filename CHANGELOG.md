@@ -2,15 +2,36 @@
 
 ## Unreleased
 
-- Added Small, Normal, and Large sizes tailored to each style. Normal is the default.
-- Improved button alignment and spacing around icons, status text, and cast bars. Changing button artwork keeps text and lines steady.
-
-- Renamed Floating Text to Plain Text.
-
 ### Features
 
-- Added a Classic button style alongside the default Plunderstorm keycaps. Elv keeps its own buttons.
-- Elv shows monochrome controller buttons and compact keyboard modifiers inside its flat button.
+- Added Small, Normal and Large HUD sizes, with separate sliders for button and icon size.
+- Added a Classic button style, used by default outside Retail.
+- Cast bars now have glows and success and interrupt effects that match each style.
+- Added an option, on by default, to hide the default cast bar while the HUD shows a cast.
+- The settings preview can show a target out of range, a missing profession and a cast bar.
+- Modifier keys light up on the button while you hold them.
+- Elv shows controller buttons and short modifier labels inside its button.
+
+### Improvements
+
+- Icons, buttons, names and lines now line up the same way in every style.
+- The Elv style now follows ElvUI's look more closely.
+- Key labels use the game's own short names.
+- The preview shows more kinds of targets.
+- The settings preview stays in view while you scroll, and option descriptions are clearer.
+- If Persistence undoes a change you made in the game's options, a chat message tells you which setting to turn off.
+
+### Changes
+
+- Renamed Floating Text to Plain Text.
+- Removed the Plain Bar style.
+
+### Bug fixes
+
+- Fixed font changes not showing on the HUD and preview right away.
+- Fixed the Runic Line underline sometimes looking thicker than it is.
+- Cast bars no longer stop as the HUD fades out.
+- A new target no longer cuts off a cast's success or interrupt effect.
 
 ## 0.3.1 (2026-10-11)
 

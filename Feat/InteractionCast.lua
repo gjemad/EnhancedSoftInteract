@@ -38,18 +38,64 @@ end
 
 local function Visible()
   if not active then return false end
+  local db = EnhancedSoftInteractDB;
+  if not db.enabled or not db.castBarEnabled or frame.inEditMode or frame.sampleName or not frame:IsShown() then
+    return false;
+  end
+  -- Looking away mid-cast clears the target: the bar keeps animating while the HUD fades out.
+  if UnitGUID("softinteract") == nil and frame.lastTarget == nil then return true end
   local guid = Accessible(UnitGUID("softinteract"));
-  return EnhancedSoftInteractDB.enabled and EnhancedSoftInteractDB.castBarEnabled
-    and not frame.inEditMode and not frame.sampleName and frame:IsShown()
-    and not frame.fadingOut and guid == active.objectGUID and frame.lastTarget == active.objectGUID;
+  return not frame.fadingOut and guid == active.objectGUID and frame.lastTarget == active.objectGUID;
 end
 
 local function Progress()
   return math.max(0, math.min(1, (GetTime() - active.startTime) / (active.endTime - active.startTime)));
 end
 
+-- Auto Hide Default Cast Bar: while the HUD shows a tracked cast, the game's player cast bars go transparent.
+-- Alpha is not protected, so Blizzard's own show/hide logic keeps running. Blizzard only fades out
+-- (and then hides) a finished bar whose alpha is above zero, and every client resets alpha to 1 when
+-- its next cast starts. So only a bar that is still casting gets its alpha back; a finished bar stays
+-- transparent, which also hides its end flash, until the game's next cast restores it.
+-- (A finished bar restored to alpha 1 would stay on screen, full and frozen; user report 2026-10-18.)
+local GAME_CAST_BARS = { "PlayerCastingBarFrame", "GamepadPlayerCastingBarFrame" };
+local gameBarHidden = false;
+local function SetGameCastBarHidden(hidden)
+  if not hidden and not gameBarHidden then return end
+  gameBarHidden = hidden;
+  for _, name in ipairs(GAME_CAST_BARS) do
+    local castBar = _G[name];
+    if castBar and (hidden or castBar.casting or castBar.channeling) then
+      local alpha = hidden and 0 or 1;
+      if castBar:GetAlpha() ~= alpha then castBar:SetAlpha(alpha); end
+    end
+  end
+end
+
+-- The HUD played a success or interrupt outcome: keep the finished game bar transparent instead of
+-- restoring it, and stop the game's own "Interrupted" hold-and-fade, which would force alpha back to 1.
+local function ReleaseGameCastBar()
+  if not gameBarHidden then return end
+  gameBarHidden = false;
+  for _, name in ipairs(GAME_CAST_BARS) do
+    local castBar = _G[name];
+    if castBar then
+      for _, anim in ipairs({ castBar.HoldFadeOutAnim, castBar.FadeOutAnim }) do
+        if anim and anim:IsPlaying() then anim:Stop(); end
+      end
+      if castBar:GetAlpha() ~= 0 then castBar:SetAlpha(0); end
+    end
+  end
+end
+
+local function UpdateGameCastBar()
+  local db = EnhancedSoftInteractDB;
+  SetGameCastBarHidden((db.enabled and db.castBarEnabled and db.castBarHideGame and Visible()) and true or false);
+end
+
 function ns.RefreshInteractionCastBar()
-  if not Visible() then ns.CastBar.Hide(frame); return end
+  UpdateGameCastBar();
+  if not Visible() then ns.CastBar.Hide(frame, not active); return end
   ns.CastBar.Paint(frame, ns.GetTypeColor(active.colorKey, false));
   ns.CastBar.SetProgress(frame, Progress());
 end
@@ -70,9 +116,21 @@ end
 local function Clear(reason)
   attempt, sent = nil, nil;
   watcher:Hide();
-  if not active then return end
+  if not active then
+    -- A new or unrelated cast uses the game's bar again.
+    SetGameCastBarHidden(false);
+    ns.CastBar.Hide(frame);
+    return;
+  end
+  -- Success and interruption each play their style's outcome on the original object.
+  -- Expiry, superseding casts and quiet failures simply clear the bar.
+  local kind = reason == "UNIT_SPELLCAST_SUCCEEDED" and "success"
+    or (reason == "UNIT_SPELLCAST_INTERRUPTED" or reason == "UNIT_SPELLCAST_FAILED") and "interrupt";
+  local guid, progress = kind and Visible() and active.objectGUID, Progress();
+  if guid then ReleaseGameCastBar(); end
   active = nil;
   Changed(reason);
+  if guid then ns.CastBar.Outcome(frame, guid, kind, progress); end
 end
 
 local function ReadCast(castGUID, spellID)
@@ -104,11 +162,20 @@ watcher:SetScript("OnEvent", function(_, event, unit, value, spellID, sentSpellI
     local guid, name, action = Target();
     local previous = attempt;
     attempt = nil; --each interaction attempt can associate at most one sent cast
+    -- Show for Clicked Objects: a mouse click sends no interaction event, and the game names the
+    -- clicked object but not which one. Match that name to the HUD's target as a best effort, so a
+    -- same-named neighbor can receive the bar. Interact-key casts keep their stricter association.
+    local db = EnhancedSoftInteractDB;
+    if not previous and db.castBarClicked and db.enabled and guid and not frame.inEditMode
+        and not frame.outOfRange and not frame.requirementText then
+      previous = { objectGUID = guid, name = name, action = action, colorKey = frame.colorKey, time = GetTime() };
+    end
     if not previous or GetTime() - previous.time > ATTEMPT_WINDOW or guid ~= previous.objectGUID
         or action ~= previous.action or name ~= previous.name or targetName ~= name
         or not castGUID or type(id) ~= "number" or not SupportedSpell(action, id) then return end
     sent = { objectGUID = guid, name = name, action = action, colorKey = previous.colorKey,
       castGUID = castGUID, spellID = id, time = GetTime() };
+    watcher:Show(); --a clicked cast has no attempt that woke the watcher to expire it
     return;
   end
   local castGUID, id = Accessible(value), Accessible(spellID);

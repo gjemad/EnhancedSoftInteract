@@ -1,16 +1,16 @@
 local ADDON_NAME, ns = ...;
 local DIAMOND = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\RunicDiamond]];
--- The diamond extends three units above the line, leaving one more unit below status text.
+-- Preserve the original diamond size, scaled with the HUD preset.
 ns.styles.Register("runic", {
-  name = "Runic Line", underline = true, shadow = true, lineClearance = 4,
-  fitKeyToName = true,
+  name = "Runic Line", underline = true, shadow = true,
   sizes = {
-    small = { fontSize = 14, nameTop = 5.25, iconSize = 24, keyHeight = 22, glyphHeight = 22, keyFontSize = 14, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 42, gap = 7, edgeInset = 6 },
-    normal = { fontSize = 16, nameTop = 6, iconSize = 28, keyHeight = 24, glyphHeight = 24, keyFontSize = 16, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 48, gap = 8, edgeInset = 7 },
-    large = { fontSize = 20, nameTop = 7.5, iconSize = 34, keyHeight = 30, glyphHeight = 30, keyFontSize = 20, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 60, gap = 10, edgeInset = 9 },
+    small = { fontSize = 14, iconSize = 24, keyHeight = 22.75, glyphHeight = 22.75, keyFontSize = 14, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 42, gap = 7, edgeInset = 6 },
+    normal = { fontSize = 16, iconSize = 28, keyHeight = 26, glyphHeight = 26, keyFontSize = 16, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 48, gap = 8, edgeInset = 7 },
+    large = { fontSize = 20, iconSize = 34, keyHeight = 32.5, glyphHeight = 32.5, keyFontSize = 20, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 60, gap = 10, edgeInset = 9 },
   },
-  KeyOffsetY = ns.styles.KeyBaselineY,
-  castBar = { height = 1.2, offset = 6.5, split = true },
+  castBar = { height = 1.2, offset = 6.5, split = true, success = "runeIgnition", interrupt = "tipSparks",
+    glow = { tail = 17, tailHeight = 5, tailAlpha = 0.48, haloWidth = 10, haloHeight = 9, haloAlpha = 0.52,
+      coreWidth = 4.2, coreHeight = 5.2, coreAlpha = 1, diamond = true, breathHeight = 7 } },
   layers = { lineLow = true, lineHigh = true }, highLineAlpha = 1,
   flashStrength = 0.8,
   Create = function(frame, media)
@@ -36,12 +36,18 @@ ns.styles.Register("runic", {
     frame.flash:SetTexture(DIAMOND);
     frame.flash:SetSize(10, 10);
   end,
+  -- The cast track snaps like the line, so both keep the same whole-pixel thickness everywhere.
+  PlaceCast = function(frame, texture, left, width, height, y)
+    ns.styles.PixelStrip(frame, texture, left, width, y, height);
+  end,
   Layout = function(frame, db)
     local scale = ns.styles.Size(db).inputScale;
     local gap = 5 * scale;
     local left, width, y = frame.nameLeft, frame.nameWidth, ns.styles.UnderlineY(frame, db);
-    ns.styles.NameSegment(frame, frame.lineLow, left, width * 0.5 - gap, y);
-    ns.styles.NameSegment(frame, frame.lineHigh, left + width * 0.5 + gap, width * 0.5 - gap, y);
+    -- The line is one UI unit tall. Drawn at an arbitrary position it rounds to one or two pixels, so
+    -- it looked thicker in the settings preview than on the HUD; whole pixels keep both the same.
+    ns.styles.PixelStrip(frame, frame.lineLow, left, width * 0.5 - gap, y, 1);
+    ns.styles.PixelStrip(frame, frame.lineHigh, left + width * 0.5 + gap, width * 0.5 - gap, y, 1);
     ns.styles.BloomSegment(frame, frame.runicBloom[1], left, width * 0.5 - gap, y);
     ns.styles.BloomSegment(frame, frame.runicBloom[2], left + width * 0.5 + gap, width * 0.5 - gap, y);
     ns.styles.NameBloom(frame, frame.runicNameGlow, db);
@@ -51,10 +57,13 @@ ns.styles.Register("runic", {
     frame.flash:ClearAllPoints();
     frame.flash:SetPoint("CENTER", frame.box, "LEFT", left + width * 0.5, y);
     frame.flash:SetSize(10 * scale, 10 * scale);
+    local pixel = ns.styles.Pixel(frame);
+    local tickWidth = math.max(pixel, ns.styles.Round(1, pixel));
+    local tickHeight = math.max(pixel, ns.styles.Round(4 * scale, pixel));
     for i, tick in ipairs(frame.runeTicks) do
-      tick:ClearAllPoints();
-      tick:SetPoint("CENTER", frame.box, "LEFT", left + (i - 1) * width, y);
-      tick:SetSize(1, 4 * scale);
+      local x, top = ns.styles.Origin(frame, -frame.boxWidth * 0.5 + left + (i - 1) * width - tickWidth * 0.5,
+        y + tickHeight * 0.5, pixel);
+      ns.styles.Rect(tick, frame.box, x, top, tickWidth, tickHeight);
     end
   end,
   Paint = function(frame, r, g, b)

@@ -523,11 +523,15 @@ local function HasProfession(profession)
   return false;
 end
 
--- "Requires Herbalism" when the cursor needs a profession the character doesn't have, else nil.
+-- "Requires Herbalism" for a cursor that needs a profession, else nil.
+function ns.RequirementText(cursorName)
+  local profession = PROFESSIONS[cursorName];
+  return profession and (ITEM_REQ_SKILL or "Requires %s"):format(profession.name) or nil;
+end
+
+-- The requirement line when the cursor needs a profession the character doesn't have, else nil.
 function ns.RequirementFor(cursorName)
   local profession = PROFESSIONS[cursorName];
-  if profession and not HasProfession(profession) then
-    return (ITEM_REQ_SKILL or "Requires %s"):format(profession.name);
-  end
+  if profession and not HasProfession(profession) then return ns.RequirementText(cursorName) end
   return nil;
 end
