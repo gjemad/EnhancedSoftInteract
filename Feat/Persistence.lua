@@ -16,15 +16,18 @@ local CHECK_INTERVAL = 1;
 
 -- option: the EnhancedSoftInteractDB key of its Keep checkbox, which Feat\SettingsDefinitions.lua builds from this
 -- list with checkbox as its name. cvars: the values to keep, the way Blizzard's settings set them (Show
--- All is Blizzard_SettingsDefinitions_Frame\Accessibility.lua).
+-- All is Blizzard_SettingsDefinitions_Frame\Accessibility.lua). notice: the chat line after the addon
+-- undoes a change in the game's options, with the game's option name and the checkbox.
 local KEPT = {
   {
     option = "forceInteractKey", checkbox = "Keep Interact Key On",
+    notice = '"%s" was turned back on. To turn it off, first uncheck "%s" in /esi.',
     setting = "PROXY_ENABLE_INTERACT", value = true, name = "Enable Interact Key",
     cvars = { softTargetInteract = Enum.SoftTargetEnableFlags.Any },
   },
   {
     option = "forceInteractIcons", checkbox = "Keep Interact Key Icons on Show All",
+    notice = '"%s" was set back to Show All. To change it, first uncheck "%s" in /esi.',
     setting = "PROXY_INTERACT_ICONS", value = 2, name = "Interact Key Icons",
     cvars = { SoftTargetIconEnemy = 1, SoftTargetIconInteract = 1, SoftTargetIconGameObject = 1, SoftTargetLowPriorityIcons = 1 },
   },
@@ -85,7 +88,7 @@ local function RegisterNotices()
       if not applicable then return end
       local name = setting and setting.GetName and setting:GetName();
       if ns.issecretvalue(name) or type(name) ~= "string" or name == "" then name = kept.name; end
-      ns.Notify(('"%s" is kept by ESI. Uncheck "%s" under Enhanced Soft Interact > Persistence to change it.'):format(name, kept.checkbox));
+      ns.Notify(kept.notice:format(name, kept.checkbox));
     end);
   end
   noticesRegistered = true;

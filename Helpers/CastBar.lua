@@ -42,6 +42,7 @@ function bar.Create(frame)
   local holder = CreateHolder(frame);
   frame.castBar = holder;
   frame.castFinish = CreateHolder(frame);
+  bar.CreatePreviewDriver(frame);
   frame:HookScript("OnHide", function()
     if frame.previewCast then frame.previewCast:Hide(); end
     bar.Hide(frame);
@@ -607,6 +608,16 @@ local function PreviewStep(driver)
   end
 end
 
+-- Created with the HUD, never later: Forever's gamepad navigation hooks CreateFrame, and a frame
+-- created inside the open settings page taints it (see Feat\Settings.lua).
+function bar.CreatePreviewDriver(frame)
+  local driver = CreateFrame("Frame", nil, frame);
+  driver:Hide();
+  driver.frame = frame;
+  driver:SetScript("OnUpdate", PreviewStep);
+  frame.previewCast = driver;
+end
+
 function bar.Preview(frame, mode, onStart)
   local driver = frame.previewCast;
   local style = ns.styles.Get();
@@ -616,13 +627,6 @@ function bar.Preview(frame, mode, onStart)
       bar.Hide(frame);
     end
     return;
-  end
-  if not driver then
-    driver = CreateFrame("Frame", nil, frame);
-    driver:Hide();
-    driver.frame = frame;
-    driver:SetScript("OnUpdate", PreviewStep);
-    frame.previewCast = driver;
   end
   driver.onStart = onStart;
   if driver:IsShown() and driver.mode == mode and driver.name == frame.sampleName and driver.style == style then return end

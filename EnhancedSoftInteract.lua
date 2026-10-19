@@ -12,8 +12,8 @@ ns.slashCommands = {};
 local NormalizeCursorKey, ColorKeyFor = ns.NormalizeCursorKey, ns.ColorKeyFor;
 local GetTypeColor = ns.GetTypeColor;
 
--- Every chat message of the addon starts with "ESI:".
-local function Notify(msg) print("|cffffd100ESI:|r " .. msg) end
+-- Every chat message of the addon starts with "Enhanced Soft Interact:".
+local function Notify(msg) print("|cffffd100Enhanced Soft Interact:|r " .. msg) end
 
 -- Saved-setting defaults. LoadSettings fills in unset keys from here.
 local DEFAULTS = {
@@ -142,6 +142,7 @@ local function CreateHUD(frame)
   cap.text = cap:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
   cap:Hide();
   frame.keyCap = cap;
+  if ns.ModifierKey then ns.ModifierKey.Create(cap); end
 
   local function KeyboardArt()
     for _, style in ipairs(KEYCAP_STYLES) do

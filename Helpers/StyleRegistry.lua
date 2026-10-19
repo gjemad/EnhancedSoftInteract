@@ -22,9 +22,9 @@ end
 -- Size profiles are style-owned geometry, never copied into or derived from saved dimension values.
 -- Every preset draws 10% larger than its table (user, 2026-10-18). All profile fields are dimensions,
 -- including inputScale, so the whole HUD grows together. Scaled copies are made once per profile.
--- A style with fixedPresets keeps its table sizes (Elv: ElvUI's 32-unit default button). Buttons and
--- their labels keep their table size in every style, so a key stays clear of Level-Up's lines
--- (user, 2026-10-19: the scaled key overlapped them).
+-- Buttons and their labels keep their table size, so a key stays clear of Level-Up's lines (user,
+-- 2026-10-19: the scaled key overlapped them). A style with scaleButtons scales them too (Elv, whose
+-- panel is one button tall: user, 2026-10-19).
 local PRESET_SCALE = 1.1;
 local UNSCALED = { keyHeight = true, glyphHeight = true, keyFontSize = true };
 local scaled = {};
@@ -33,10 +33,10 @@ function ns.styles.Size(db)
   local profile = style.sizes[db.hudSize] or style.sizes.normal;
   local size = scaled[profile];
   if not size then
-    local factor = style.fixedPresets and 1 or PRESET_SCALE;
     size = {};
     for key, value in pairs(profile) do
-      size[key] = type(value) == "number" and value * (UNSCALED[key] and 1 or factor) or value;
+      local fixed = UNSCALED[key] and not style.scaleButtons;
+      size[key] = type(value) == "number" and value * (fixed and 1 or PRESET_SCALE) or value;
     end
     scaled[profile] = size;
   end

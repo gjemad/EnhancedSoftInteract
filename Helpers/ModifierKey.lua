@@ -47,6 +47,9 @@ local function Create(cap)
   Hide(data);
   return data;
 end
+-- The core creates these frames with the key cap. Forever's gamepad navigation hooks CreateFrame, and
+-- a frame created later inside the open settings page taints it (see Feat\Settings.lua).
+ModifierKey.Create = Create;
 
 -- These inputs are public binding strings, never target-name text. Read only canonical leading
 -- modifiers; a remaining literal '-' is the base key in SHIFT--, rather than another separator.

@@ -108,7 +108,7 @@ function ns.BuildSettings()
 
   Section("text", "Text");
   Add({ kind = kind.Dropdown, name = "Font",
-    default = function() return db.hudStyle == "elv" and DEFAULTS.elvFont or media:GetDefault("font"); end, height = 300,
+    default = function() return db.hudStyle == "elv" and DEFAULTS.elvFont or media:GetDefault("font"); end,
     values = function()
       local values = {};
       for _, name in ipairs(media:List("font")) do values[#values + 1] = { text = name, value = name }; end
