@@ -1,5 +1,8 @@
 local _, ns = ...;
 
+-- Some clients lack issecretvalue.
+ns.issecretvalue = issecretvalue or function() return false end;
+
 -- UpdateKeyCap and UpdateLayout measure text on hidden font strings that aren't anchored to the HUD.
 -- GetStringWidth is SecretWhenAnchoringSecret, so a region anchored to the NPC name, which is secret in
 -- instances and combat, returns secret sizes.

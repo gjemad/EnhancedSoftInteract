@@ -180,9 +180,9 @@ local function DebugInteractionCast(reason, state)
     interaction_cast = state } or nil, animations, range);
 end
 
-local function DebugSoftTarget(oldGUID, newGUID, target, mode)
-  local source = frame.fromRangeCheck and "range_check" or "target";
-  if not frame.fromRangeCheck and not issecretvalue(oldGUID) and not issecretvalue(newGUID)
+local function DebugSoftTarget(oldGUID, newGUID, target, mode, fromRangeCheck)
+  local source = fromRangeCheck and "range_check" or "target";
+  if not fromRangeCheck and not issecretvalue(oldGUID) and not issecretvalue(newGUID)
       and oldGUID == newGUID then source = "target_repeat"; end
   if not Enabled(source) then return end
   local animations, range = Details(target and target.range);

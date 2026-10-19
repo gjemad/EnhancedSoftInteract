@@ -23,6 +23,12 @@ Helpers\StyleRegistry.lua
 Helpers\ModifierKey.lua
 Helpers\ElvTheme.lua
 Helpers\CastBar.lua
+HUD\KeyCap.lua
+HUD\Interaction.lua
+HUD\Fade.lua
+HUD\Layout.lua
+HUD\Appearance.lua
+HUD\Display.lua
 Styles\LevelUpLine.lua
 Styles\RunicLine.lua
 Styles\FloatingText.lua
