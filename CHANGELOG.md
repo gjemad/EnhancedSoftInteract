@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.3.4-alpha (2026-10-19)
+
+### Improvements
+
+- Cleaned up the addon's code so it is easier to maintain. Nothing should look or work differently.
+
 ## 0.3.3 (2026-10-19)
 
 ### Improvements
