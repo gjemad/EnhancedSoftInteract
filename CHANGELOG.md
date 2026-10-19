@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.3.3 (2026-10-19)
+
+### Improvements
+
+- Elv's sizes are 10% larger, like the other styles.
+- Chat messages now start with "Enhanced Soft Interact:", and Persistence messages say what was put back and point to /esi.
+
+### Bug fixes
+
+- Fixed controller interaction stopping after changing a setting while a controller is connected.
+- Fixed Elv showing only part of controller buttons.
+- Fixed buttons overlapping the lines in Level-Up Line.
+
 ## 0.3.2 (2026-10-19)
 
 ### Features
