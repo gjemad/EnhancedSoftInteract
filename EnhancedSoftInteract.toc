@@ -28,7 +28,6 @@ Styles\RunicLine.lua
 Styles\FloatingText.lua
 Styles\Elv.lua
 EnhancedSoftInteract.lua
-Feat\ElvTheme.lua
 Feat\SkinningRange.lua [ExcludeLoadGameType standard]
 Feat\Gamepad_Camelot.lua [ExcludeLoadGameType standard, classic][AllowLoadGameType camelot]
 Feat\Target.lua
