@@ -32,9 +32,7 @@ local function ShouldHide(cvar)
 end
 
 -- Display hiding takes priority over the Keep Interact Key Icons setting.
-function ns.IsBlizzardDisplayCVarHidden(cvar)
-  return ShouldHide(cvar);
-end
+ns.IsBlizzardDisplayCVarHidden = ShouldHide;
 
 local function RefreshNameplateIcons()
   local driver = NamePlateDriverFrame;
@@ -97,9 +95,7 @@ local function RestorePlayerValues()
 end
 
 -- Called when Enabled or either Show option changes.
-function ns.UpdateBlizzardDisplays()
-  HideBlizzardDisplays();
-end
+ns.UpdateBlizzardDisplays = HideBlizzardDisplays;
 
 -- Settings panels and Blizzard's gamepad mode can change these again; reapply the selected display mode.
 local watcher = CreateFrame("Frame");

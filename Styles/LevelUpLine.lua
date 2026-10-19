@@ -5,9 +5,9 @@ local FLASH_ATLAS = "AftLevelup-GlowLine";
 ns.styles.Register("levelup", {
   name = "Level-Up Line", shadow = true,
   sizes = {
-    small = { fontSize = 14, iconSize = 26, keyHeight = 22.75, glyphHeight = 22.75, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 44, gap = 7, edgeInset = 6 },
-    normal = { fontSize = 16, iconSize = 30, keyHeight = 26, glyphHeight = 26, keyFontSize = 17, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 50, gap = 8, edgeInset = 7 },
-    large = { fontSize = 20, iconSize = 38, keyHeight = 32.5, glyphHeight = 32.5, keyFontSize = 21, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 62, gap = 10, edgeInset = 9 },
+    small = { fontSize = 14, iconSize = 26, keyHeight = 22.75, glyphHeight = 22.75, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 44 },
+    normal = { fontSize = 16, iconSize = 30, keyHeight = 26, glyphHeight = 26, keyFontSize = 17, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 50 },
+    large = { fontSize = 20, iconSize = 38, keyHeight = 32.5, glyphHeight = 32.5, keyFontSize = 21, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 62 },
   },
   -- The native glow line uncovers along the cast (user choice: current bar with C, Glow reveal), and
   -- the start and end markers are wider, taller and in the full object color so they read clearly.

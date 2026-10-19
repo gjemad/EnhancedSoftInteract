@@ -208,9 +208,6 @@ function ns.styles.KeyFaceHeight(frame, db, glyph)
   return (glyph and size.glyphHeight or size.keyHeight) * scale;
 end
 
--- Input centers follow the common HUD origin; cursor-specific art offsets are applied separately.
-function ns.styles.ContentCenterY() return 0 end
-
 function ns.styles.LineY(frame, db, offset)
   if ns.styles.Get().underline then return ns.styles.UnderlineY(frame, db); end
   return -TextClearance(db, offset);
@@ -300,11 +297,4 @@ function ns.styles.Paint(frame, r, g, b)
   -- The holder owns animation opacity; texture alpha stays opaque while its RGB changes.
   frame.flash:SetVertexColor(r * strength, g * strength, b * strength, 1);
   if style.Paint then style.Paint(frame, r, g, b); end
-end
-
--- Shared geometry for styles that decorate only the name column.
-function ns.styles.NameSegment(frame, texture, x, width, y)
-  texture:ClearAllPoints();
-  texture:SetPoint("LEFT", frame.box, "LEFT", x, y);
-  texture:SetSize(width, 1);
 end

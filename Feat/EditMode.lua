@@ -156,7 +156,6 @@ function ns.OpenHUDInEditMode()
     if not EditModeManagerFrame:CanEnterEditMode() then Notify("Edit Mode isn't available right now."); return end
     ShowUIPanel(EditModeManagerFrame);
   end
-
 end
 
 table.insert(ns.onLoad, function()

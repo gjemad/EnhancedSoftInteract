@@ -3,7 +3,7 @@ local media, DEFAULTS, SLIDER_RANGES = ns.media, ns.DEFAULTS, ns.SLIDER_RANGES;
 local SetIconSide, UpdateIcon, UpdateFont = ns.SetIconSide, ns.UpdateIcon, ns.UpdateFont;
 local UpdateKeyCap, UpdateLayout = ns.UpdateKeyCap, ns.UpdateLayout;
 local UpdateColors = ns.UpdateColors;
-ns.SettingType = { Checkbox = 1, Slider = 2, Dropdown = 3, Section = 4, Divider = "divider" };
+ns.SettingType = { Checkbox = 1, Slider = 2, Dropdown = 3, Section = 4 };
 
 -- Shared settings definitions for the Interface AddOns page. Edit Mode only owns HUD positioning.
 function ns.BuildSettings()
@@ -12,7 +12,7 @@ function ns.BuildSettings()
   local settings = {};
   local function AddonOff() return not db.enabled end
 
-  local function Section(_, name)
+  local function Section(name)
     settings[#settings + 1] = { kind = kind.Section, name = name };
   end
   local function Add(setting)
@@ -45,18 +45,18 @@ function ns.BuildSettings()
       db.enabled = value;
       ns.UpdateBlizzardDisplays();
       ns.KeepSettings();
-      if ns.RefreshSettings then ns.RefreshSettings(); end
+      ns.RefreshSettings();
     end,
   };
 
-  Section("appearance", "Appearance");
+  Section("Appearance");
   Add({ kind = kind.Dropdown, name = "Style", default = DEFAULTS.hudStyle,
     values = function() return ns.HUD_STYLES end,
     get = function() return db.hudStyle end,
     set = function(_, value)
       db.hudStyle = value;
       ns.UpdateStyle();
-      if ns.RefreshSettings then ns.RefreshSettings(); end
+      ns.RefreshSettings();
     end });
   Add({ kind = kind.Dropdown, name = "Size", default = DEFAULTS.hudSize,
     values = function() return {
@@ -66,17 +66,17 @@ function ns.BuildSettings()
     set = function(_, value)
       db.hudSize = value;
       ns.UpdateStyle();
-      if ns.RefreshSettings then ns.RefreshSettings(); end
+      ns.RefreshSettings();
     end });
   Checkbox("Enable Animations", "animationsEnabled", ns.UpdateAnimations);
   Checkbox("Enable Cast Bar", "castBarEnabled", function()
     ns.RefreshInteractionCastBar();
-    if ns.RefreshSettings then ns.RefreshSettings(); end
+    ns.RefreshSettings();
   end);
   local function CastBarOff() return not db.castBarEnabled end
   Checkbox("Auto Hide Default Cast Bar", "castBarHideGame", ns.RefreshInteractionCastBar, CastBarOff, true);
   Checkbox("Show for Clicked Objects", "castBarClicked", nil, CastBarOff, true);
-  Section("hud", "HUD Elements");
+  Section("HUD Elements");
   local function IconChanged()
     UpdateIcon();
     UpdateLayout();
@@ -106,7 +106,7 @@ function ns.BuildSettings()
   Slider("Interaction Icon Size", "interactionIconSizePercent", Percent, ns.UpdateStyle,
     function() return not ns.styles.ShowIcon(db) end);
 
-  Section("text", "Text");
+  Section("Text");
   Add({ kind = kind.Dropdown, name = "Font",
     default = function() return db.hudStyle == "elv" and DEFAULTS.elvFont or media:GetDefault("font"); end,
     values = function()
@@ -123,17 +123,17 @@ function ns.BuildSettings()
       if db.hudStyle == "elv" then db.elvFont = value; else db.font = value; end
       UpdateFont();
     end });
-  Section("color", "Colors & Shadow");
+  Section("Colors & Shadow");
   Slider("Color Brightness", "colorBrightness", Percent, UpdateColors);
   local function NoShadow() return not ns.styles.Get().shadow end
   Slider("Shadow Strength", "shadowStrength", Percent, ns.UpdateShadow, NoShadow);
 
-  Section("blizzardDisplays", "Blizzard Displays");
+  Section("Blizzard Displays");
   Checkbox("Show Target Tooltip", "showBlizzardTooltip", ns.UpdateBlizzardDisplays);
   Checkbox("Show Target Icons", "showBlizzardIcons", ns.UpdateBlizzardDisplays);
 
   -- Game settings the HUD needs, kept by Feat\Persistence.lua.
-  Section("persistence", "Persistence");
+  Section("Persistence");
   for _, kept in ipairs(ns.keptSettings) do Checkbox(kept.checkbox, kept.option, ns.KeepSettings); end
 
   -- Tooltip text for each option: one short sentence, then a second paragraph only for details or limits.

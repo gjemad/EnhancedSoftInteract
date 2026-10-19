@@ -555,7 +555,7 @@ local function CreatePage()
         line:SetPoint(side == "LEFT" and "RIGHT" or "LEFT", text, side, side == "LEFT" and -5 or 5, 0);
       end
       y = y + 26;
-    elseif data.kind ~= ns.SettingType.Divider then
+    else
       CreateRow(content, data, y);
       pageItems[#pageItems + 1] = {frame = rows[#rows], inset = 8, y = y};
       y = y + ROW_HEIGHT;

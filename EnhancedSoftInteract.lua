@@ -142,7 +142,7 @@ local function CreateHUD(frame)
   cap.text = cap:CreateFontString(nil, "OVERLAY", "GameFontHighlight");
   cap:Hide();
   frame.keyCap = cap;
-  if ns.ModifierKey then ns.ModifierKey.Create(cap); end
+  ns.ModifierKey.Create(cap);
 
   local function KeyboardArt()
     for _, style in ipairs(KEYCAP_STYLES) do
@@ -250,7 +250,7 @@ local function CreateHUD(frame)
       cap.text:SetTextColor(shade, shade, shade);
       local style = ns.styles.Get();
       if style.PaintKeyCap then style.PaintKeyCap(frame, cap); end
-      if ns.ModifierKey then ns.ModifierKey.Paint(frame); end
+      ns.ModifierKey.Paint(frame);
       return;
     end
     local shade = cap.pressShade or 1;
@@ -266,7 +266,7 @@ local function CreateHUD(frame)
     end
     local style = ns.styles.Get();
     if style.PaintKeyCap then style.PaintKeyCap(frame, cap, shade, blocked); end
-    if ns.ModifierKey then ns.ModifierKey.Paint(frame); end
+    ns.ModifierKey.Paint(frame);
   end
 
   ----
@@ -589,12 +589,11 @@ local function CreateHUD(frame)
       nudgeX, nudgeY = Round(-offset[1] * width / 64), Round(offset[2] * height / 64);
     end
     frame.iconNudgeX, frame.iconNudgeY = nudgeX, nudgeY; --for /esi debug
-    local centerY = ns.styles.ContentCenterY(frame, EnhancedSoftInteractDB);
-    frame.iconCenterY = centerY;
+    frame.iconCenterY = 0;
     frame.icon:SetSize(width, height);
     frame.iconColumnWidth = width;
     frame.icon:ClearAllPoints();
-    frame.icon:SetPoint("CENTER", frame.box, side, Inset(side) + nudgeX, centerY + nudgeY);
+    frame.icon:SetPoint("CENTER", frame.box, side, Inset(side) + nudgeX, nudgeY);
   end
 
   local function SetIconSide()
@@ -676,7 +675,7 @@ local function CreateHUD(frame)
     local buttonScale = ns.styles.ButtonScale(db);
     if style.KeyText then text = style.KeyText(frame, text); end
     if cap.isGlyph or cap.styleArt ~= style or cap.keyStyle ~= db.keyStyle then StyleKeyCap(); end
-    local managed = ns.ModifierKey and ns.ModifierKey.Prepare(frame, cap.key, text) or false;
+    local managed = ns.ModifierKey.Prepare(frame, cap.key, text);
     local glyph = text:match("^|A:([^:|]+):[^|]*|a$");
     glyph = glyph and glyph:gsub("_32$", "_64");
     if glyph and C_Texture.GetAtlasInfo(glyph) then
@@ -750,7 +749,7 @@ local function CreateHUD(frame)
         end
       end
     end
-    if ns.ModifierKey then ns.ModifierKey.Layout(frame, db); end
+    ns.ModifierKey.Layout(frame, db);
     PaintKeyCap();
   end
 
@@ -764,7 +763,7 @@ local function CreateHUD(frame)
     cap:SetShown(text and true or false);
     if text then SetKeyCapText(text);
     else
-      if ns.ModifierKey then ns.ModifierKey.Prepare(frame, nil, nil); end
+      ns.ModifierKey.Prepare(frame, nil, nil);
       PaintKeyCap();
     end
   end
@@ -781,7 +780,7 @@ local function CreateHUD(frame)
       and cap:IsShown()
       and EnhancedSoftInteractDB.animationsEnabled
       and not (GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus());
-    if ns.ModifierKey then ns.ModifierKey.Poll(frame, watching, elapsed); end
+    ns.ModifierKey.Poll(frame, watching, elapsed);
     if not watching then
       if cap.isDown and not cap.tapping then KeyUp(false); end
       cap.consumed = false;
@@ -1050,7 +1049,7 @@ local function CreateHUD(frame)
   local function OnSoftTargetCleared()
     frame.lastTarget, frame.lastSignature, frame.lastAction = nil, nil, nil;
     -- A live cast keeps animating through the fade-out, and a finished cast keeps its outcome.
-    if frame == ns.frame and ns.RefreshInteractionCastBar then ns.RefreshInteractionCastBar();
+    if frame == ns.frame then ns.RefreshInteractionCastBar();
     else ns.CastBar.Hide(frame); end
     -- A running interact pulse or cast outcome finishes before the fade-out (looting clears the target at once).
     local wait = math.max(frame.pulseUntil - GetTime(), ns.CastBar.OutcomeRemaining(frame));
@@ -1134,7 +1133,7 @@ local function CreateHUD(frame)
     cap.isDown, cap.tapping, cap.consumed, cap.releasedAt = false, false, false, nil;
     cap.pressDepth, cap.pressShade = 0, 1; --the key cap repaints with the next target (SetTypeColor)
     frame.statusAmount, frame.statusTarget = nil, nil;
-    if ns.ModifierKey then ns.ModifierKey.Reset(frame); end
+    ns.ModifierKey.Reset(frame);
   end
   frame:HookScript("OnHide", ResetAnimations);
 
@@ -1283,7 +1282,7 @@ local function OnSoftInteractChanged(oldTarget, newTarget)
     frame.inRangeTarget = nil;
     if frame:IsShown() and not frame.fadingOut then hud.OnSoftTargetCleared(); end
   end
-  if ns.RefreshInteractionCastBar then ns.RefreshInteractionCastBar(); end
+  ns.RefreshInteractionCastBar();
   -- Selected debug sources retain clears/repeats while open; unchanged range polls stay silent.
   if ns.DebugSoftTarget and (not frame.fromRangeCheck or changed) then
     ns.DebugSoftTarget(oldTarget, newTarget, target, EnhancedSoftInteractDB.enabled and "active" or "disabled");

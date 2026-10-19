@@ -10,7 +10,7 @@ local function Refresh()
     pending = nil;
     if EnhancedSoftInteractDB and EnhancedSoftInteractDB.hudStyle == "elv" then
       ns.UpdateStyle();
-      if ns.RefreshSettings then ns.RefreshSettings(); end
+      ns.RefreshSettings();
     end
   end);
 end

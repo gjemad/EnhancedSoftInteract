@@ -219,9 +219,9 @@ ns.styles.Register("elv", {
   name = "Elv", underline = true, shadow = false, flatKey = true, ownKey = true,
   scaleButtons = true, noTextShadow = true,
   sizes = {
-    small = { fontSize = 14, iconSize = 28, keyHeight = 28, glyphHeight = 28, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 125, nameMaxWidth = 220, hudHeight = 40, gap = 5, edgeInset = 5, padding = 5 },
-    normal = { fontSize = 16, iconSize = 32, keyHeight = 32, glyphHeight = 32, keyFontSize = 17, inputScale = 1, nameMinWidth = 140, nameMaxWidth = 250, hudHeight = 48, gap = 6, edgeInset = 6, padding = 6 },
-    large = { fontSize = 20, iconSize = 40, keyHeight = 40, glyphHeight = 40, keyFontSize = 21, inputScale = 1.25, nameMinWidth = 175, nameMaxWidth = 310, hudHeight = 60, gap = 7, edgeInset = 7, padding = 7 },
+    small = { fontSize = 14, iconSize = 28, keyHeight = 28, glyphHeight = 28, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 125, nameMaxWidth = 220, hudHeight = 40, padding = 5 },
+    normal = { fontSize = 16, iconSize = 32, keyHeight = 32, glyphHeight = 32, keyFontSize = 17, inputScale = 1, nameMinWidth = 140, nameMaxWidth = 250, hudHeight = 48, padding = 6 },
+    large = { fontSize = 20, iconSize = 40, keyHeight = 40, glyphHeight = 40, keyFontSize = 21, inputScale = 1.25, nameMinWidth = 175, nameMaxWidth = 310, hudHeight = 60, padding = 7 },
   },
   KeyText = KeyText,
   KeyWidth = KeyWidth, keyTextPadding = 4,
