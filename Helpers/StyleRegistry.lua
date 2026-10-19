@@ -5,11 +5,28 @@ local commonLayers = { "iconGlow", "lineLowGlow", "lineLow", "lineHigh" };
 ns.HUD_STYLES = {};
 ns.styles = {};
 
--- A style supplies its label, visible common layers and optional Create/Apply/Layout/Paint hooks.
--- Create returns its extra regions; the registry hides them when another style is selected.
--- Layout uses cached numeric columns, never measurements of the target's secret name.
+-- A style supplies its label, visible common layers and its hooks. Create returns its extra regions; the
+-- registry hides them when another style is selected. Layout uses cached numeric columns, never
+-- measurements of the target's secret name.
+--
+-- Hooks a style may leave out. Register copies these into every style that doesn't define them, so
+-- callers call the hook without checking. A few hooks are absent on purpose, and their callers check for
+-- them: Pixel, IconMax, IconDimensions, KeyText, KeyWidth, PaintKeyCap, KeyOffsetY, RequirementY and
+-- PlaceCast.
+local DEFAULT_HOOKS = {
+  showIconKey = "showIcon", --the saved setting that shows the icon
+};
+function DEFAULT_HOOKS.Create() return {} end
+function DEFAULT_HOOKS.Apply() end
+function DEFAULT_HOOKS.Remove() end
+function DEFAULT_HOOKS.Layout() end
+function DEFAULT_HOOKS.Paint() end
+
 function ns.styles.Register(id, style)
   assert(not styles[id], "Duplicate HUD style: " .. id);
+  for name, default in pairs(DEFAULT_HOOKS) do
+    if style[name] == nil then style[name] = default; end
+  end
   styles[id] = style;
   order[#order + 1] = id;
   ns.HUD_STYLES[#ns.HUD_STYLES + 1] = { text = style.name, value = id };
@@ -49,52 +66,36 @@ function ns.styles.IconScale(db) return (db.interactionIconSizePercent or 100) /
 
 -- Invisible side cells reserve space independently of their artwork and input labels. A style can
 -- own its cells (Elv: a flush square plus the gap to the name).
-function ns.styles.CellSize(db)
-  local style = ns.styles.Get();
-  if style.CellSize then return style.CellSize(db) end
-  return (style.cellSize or 46) * ns.styles.Size(db).inputScale;
-end
+function DEFAULT_HOOKS.CellSize(db) return 46 * ns.styles.Size(db).inputScale end
+function ns.styles.CellSize(db) return ns.styles.Get().CellSize(db) end
 
 -- Distance from the box edge to the center of a side cell's content.
-function ns.styles.CellCenter(db)
-  local style = ns.styles.Get();
-  if style.CellCenter then return style.CellCenter(db) end
-  return ns.styles.CellSize(db) * 0.5;
-end
+function DEFAULT_HOOKS.CellCenter(db) return ns.styles.CellSize(db) * 0.5 end
+function ns.styles.CellCenter(db) return ns.styles.Get().CellCenter(db) end
 
-function ns.styles.SidePadding(db)
-  local style = ns.styles.Get();
-  if style.SidePadding then return style.SidePadding(db) end
-  return 18 * ns.styles.Size(db).inputScale;
-end
+function DEFAULT_HOOKS.SidePadding(db) return 18 * ns.styles.Size(db).inputScale end
+function ns.styles.SidePadding(db) return ns.styles.Get().SidePadding(db) end
 
 -- Font flags for the name, status and key text ("" draws no outline).
-function ns.styles.FontFlags()
-  local style = ns.styles.Get();
-  return style.FontFlags and style.FontFlags() or "";
-end
+function DEFAULT_HOOKS.FontFlags() return "" end
+function ns.styles.FontFlags() return ns.styles.Get().FontFlags() end
 
-function ns.styles.Font(db)
-  local style = ns.styles.Get();
-  return style.Font and style.Font(db) or ns.media:Fetch("font", db.font);
-end
+function DEFAULT_HOOKS.Font(db) return ns.media:Fetch("font", db.font) end
+function ns.styles.Font(db) return ns.styles.Get().Font(db) end
 
-function ns.styles.ShowIcon(db)
-  if db.hudStyle == "elv" then return db.elvShowIcon end
-  return db.showIcon;
-end
+function ns.styles.ShowIcon(db) return db[ns.styles.Get().showIconKey] end
 
 function ns.styles.NameMinWidth(db)
   return ns.styles.Size(db).nameMinWidth;
 end
 
-function ns.styles.NameOffset(frame, db, amount)
+-- Shared names use the HUD origin.
+function DEFAULT_HOOKS.NameOffset(frame, db, amount)
   local style, size = ns.styles.Get(), ns.styles.Size(db);
-  if style.NameOffset then return style.NameOffset(frame, db, amount) end
-  -- Shared names use the HUD origin.
   return (style.nameOffsetY or 0) * size.inputScale + size.fontSize * 0.26 * amount
     + ns.styles.StatusOffset(frame, db) * amount;
 end
+function ns.styles.NameOffset(frame, db, amount) return ns.styles.Get().NameOffset(frame, db, amount) end
 
 function ns.styles.IconDimensions(frame, db)
   local style = ns.styles.Get();
@@ -127,11 +128,13 @@ end
 -- origin in screen space and give explicit whole-pixel sizes.
 function ns.styles.Round(value, pixel) return math.floor(value / pixel + 0.5) * pixel end
 
--- Disable native rounding and texture sampling bias, so they cannot shift a snapped rect.
-function ns.styles.Sampling(texture)
+-- Pixel snapping for a texture. snapped = true lets the client place it on the pixel grid. snapped = false
+-- leaves a rect that was already placed on whole pixels alone, so native rounding and texel bias can't
+-- shift it. Some clients lack these methods.
+function ns.styles.Snap(texture, snapped)
   if texture.SetRoundLayoutToNearestPixel then texture:SetRoundLayoutToNearestPixel(false); end
-  if texture.SetSnapToPixelGrid then texture:SetSnapToPixelGrid(false); end
-  if texture.SetTexelSnappingBias then texture:SetTexelSnappingBias(0); end
+  if texture.SetSnapToPixelGrid then texture:SetSnapToPixelGrid(snapped); end
+  if texture.SetTexelSnappingBias then texture:SetTexelSnappingBias(snapped and 0.5 or 0); end
 end
 
 -- Offsets from the box center, (x, y), moved so they land on the screen's pixel grid.
@@ -144,7 +147,7 @@ end
 
 -- Places a texture by its top-left corner, relative to the box center, with explicit dimensions.
 function ns.styles.Rect(texture, target, x, y, width, height)
-  ns.styles.Sampling(texture);
+  ns.styles.Snap(texture, false);
   texture:ClearAllPoints();
   texture:SetPoint("TOPLEFT", target, "CENTER", x, y);
   texture:SetSize(width, height);
@@ -168,45 +171,23 @@ local function TextClearance(db, offset, clearance)
 end
 
 -- Text and lines use stable font-relative baselines. Outer icon/key sizes do not move them.
-function ns.styles.UnderlineY(frame, db)
-  local style = ns.styles.Get();
-  if style.UnderlineY then return style.UnderlineY(frame, db) end
-  if db.hudStyle == "runic" then
-    local cap = frame.keyCap;
-    if cap:IsShown() and cap.capHeight then
-      local height = cap.capHeight;
-      local bottom = -height * 0.5 + (cap.isGlyph and 0 or 0.5);
-      local art = cap.art;
-      if art and art.bottomBorder and not cap.isGlyph then
-        local m = art.margins;
-        bottom = ((1 + m[2] - m[4]) * 0.5 - art.bottomBorder) / (1 - m[2] - m[4]) * height;
-      end
-      return bottom * (cap.cellScale or 1);
-    end
-    -- Without a visible input, retain the normalized keyboard's measured lower-border reference.
-    return -ns.styles.Size(db).keyHeight * ns.styles.ButtonScale(db) * 31.5 / 65;
-  end
-  -- Underlines sit five preset-scaled units above the side cells' bottom edge, including status text.
+-- Underlines sit five preset-scaled units above the side cells' bottom edge, including status text.
+function DEFAULT_HOOKS.UnderlineY(_, db)
   return -ns.styles.CellSize(db) * 0.5 + 5 * ns.styles.Size(db).inputScale;
 end
+function ns.styles.UnderlineY(frame, db) return ns.styles.Get().UnderlineY(frame, db) end
 
--- Keep status text clear of Runic's ornament.
--- Only the status presentation moves; ready names retain the common content center.
-function ns.styles.StatusOffset(frame, db)
-  if db.hudStyle ~= "runic" then return 0 end
-  local size = ns.styles.Size(db);
-  return math.max(0, size.fontSize * 0.735 + 3 * size.inputScale + ns.styles.UnderlineY(frame, db));
-end
+-- Status text moves clear of a style's ornament. Ready names keep the common content center.
+function DEFAULT_HOOKS.StatusOffset() return 0 end
+function ns.styles.StatusOffset(frame, db) return ns.styles.Get().StatusOffset(frame, db) end
 
 -- Shared buttons use Level-Up's Normal height, uniformly scaled with the preset and slider.
 -- Elv retains its compact style-owned face; native artwork keeps its proportions in either path.
-function ns.styles.KeyFaceHeight(frame, db, glyph)
-  local style = ns.styles.Get();
-  if style.KeyFaceHeight then return style.KeyFaceHeight(db) end
+function DEFAULT_HOOKS.KeyFaceHeight(db, glyph)
   local size = ns.styles.Size(db);
-  local scale = ns.styles.ButtonScale(db);
-  return (glyph and size.glyphHeight or size.keyHeight) * scale;
+  return (glyph and size.glyphHeight or size.keyHeight) * ns.styles.ButtonScale(db);
 end
+function ns.styles.KeyFaceHeight(_, db, glyph) return ns.styles.Get().KeyFaceHeight(db, glyph) end
 
 function ns.styles.LineY(frame, db, offset)
   if ns.styles.Get().underline then return ns.styles.UnderlineY(frame, db); end
@@ -218,7 +199,7 @@ function ns.styles.Create(frame)
   frame.stylePulseLayers = {};
   for _, id in ipairs(order) do
     local style = styles[id];
-    local regions = style.Create and style.Create(frame, MEDIA) or {};
+    local regions = style.Create(frame, MEDIA);
     frame.styleRegions[id] = regions;
     for _, region in ipairs(regions) do region:Hide(); end
   end
@@ -227,7 +208,7 @@ end
 function ns.styles.Apply(frame)
   local style = ns.styles.Get();
   -- A style that changes shared regions (masks, icon tint) undoes that when another style takes over.
-  if frame.appliedStyle and frame.appliedStyle ~= style and frame.appliedStyle.Remove then
+  if frame.appliedStyle and frame.appliedStyle ~= style then
     frame.appliedStyle.Remove(frame);
   end
   frame.appliedStyle = style;
@@ -242,9 +223,7 @@ function ns.styles.Apply(frame)
   for _, name in ipairs({ "lineLow", "lineLowGlow", "lineHigh" }) do
     frame[name]:SetTexture([[Interface\Buttons\WHITE8X8]]);
     frame[name]:SetTexCoord(0, 1, 0, 1);
-    if frame[name].SetRoundLayoutToNearestPixel then frame[name]:SetRoundLayoutToNearestPixel(false); end
-    if frame[name].SetSnapToPixelGrid then frame[name]:SetSnapToPixelGrid(true); end
-    if frame[name].SetTexelSnappingBias then frame[name]:SetTexelSnappingBias(0.5); end
+    ns.styles.Snap(frame[name], true);
   end
   frame.flash:SetTexture(MEDIA .. "SoftGlow");
   frame.flash:SetDesaturated(false);
@@ -252,7 +231,7 @@ function ns.styles.Apply(frame)
   frame.flash:ClearAllPoints();
   frame.flash:SetPoint("TOPLEFT", frame.box, "TOPLEFT", -20, 0);
   frame.flash:SetPoint("BOTTOMRIGHT", frame.box, "BOTTOMRIGHT", 20, 0);
-  if style.Apply then style.Apply(frame); end
+  style.Apply(frame);
   frame.flashHolder:SetAlpha(0);
 end
 
@@ -286,8 +265,7 @@ function ns.styles.BloomSegment(frame, texture, left, width, y)
 end
 
 function ns.styles.Layout(frame)
-  local style = ns.styles.Get();
-  if style.Layout then style.Layout(frame, EnhancedSoftInteractDB); end
+  ns.styles.Get().Layout(frame, EnhancedSoftInteractDB);
 end
 
 function ns.styles.Paint(frame, r, g, b)
@@ -296,5 +274,5 @@ function ns.styles.Paint(frame, r, g, b)
   local strength = style.flashStrength or 1;
   -- The holder owns animation opacity; texture alpha stays opaque while its RGB changes.
   frame.flash:SetVertexColor(r * strength, g * strength, b * strength, 1);
-  if style.Paint then style.Paint(frame, r, g, b); end
+  style.Paint(frame, r, g, b);
 end

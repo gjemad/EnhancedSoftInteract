@@ -56,11 +56,7 @@ local KEYCAP_STYLES = { --in order of preference
 };
 local NO_MARGINS = {0, 0, 0, 0};
 
--- Keeps an animated value inside its range, so no tween or blend can push a glow, color or press depth
--- past its limits.
-local function Clamp(value, low, high) return math.max(low, math.min(high, value)) end
-
-local CreateTween = ns.CreateTween;
+local Clamp, CreateTween = ns.Clamp, ns.CreateTween;
 
 ----
 --  Interact key
@@ -206,14 +202,10 @@ local function CreateHUD(frame)
       cap.icon:SetTexCoord(0, 1, 0, 1);
       cap.textColor = {1, 1, 1};
       cap.text:SetShadowOffset(0, 0);
-      if cap.icon.SetRoundLayoutToNearestPixel then cap.icon:SetRoundLayoutToNearestPixel(false); end
-      if cap.icon.SetSnapToPixelGrid then cap.icon:SetSnapToPixelGrid(false); end
-      if cap.icon.SetTexelSnappingBias then cap.icon:SetTexelSnappingBias(0); end
+      ns.styles.Snap(cap.icon, false);
       return;
     end
-    if cap.icon.SetRoundLayoutToNearestPixel then cap.icon:SetRoundLayoutToNearestPixel(false); end
-    if cap.icon.SetSnapToPixelGrid then cap.icon:SetSnapToPixelGrid(true); end
-    if cap.icon.SetTexelSnappingBias then cap.icon:SetTexelSnappingBias(0.5); end
+    ns.styles.Snap(cap.icon, true);
     local art, style = KeyboardArt();
     cap.art = art;
     if style then

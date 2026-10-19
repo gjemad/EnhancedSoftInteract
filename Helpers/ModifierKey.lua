@@ -13,7 +13,7 @@ local MODIFIERS = {
   META = function() if IsMetaKeyDown then return IsMetaKeyDown(); end return IsKeyDown("META"); end,
 };
 local function Secret(value) return ns.issecretvalue and ns.issecretvalue(value) end
-local function Clamp(value, low, high) return math.max(low, math.min(high, value)) end
+local Clamp = ns.Clamp;
 local function Hide(data)
   data.holder:Hide();
   data.glowHolder:Hide();
@@ -38,9 +38,7 @@ local function Create(cap)
     local glow = data.glowHolder:CreateTexture(nil, "ARTWORK");
     glow:SetTexture(WHITE);
     glow:SetBlendMode("BLEND");
-    if glow.SetRoundLayoutToNearestPixel then glow:SetRoundLayoutToNearestPixel(false); end
-    if glow.SetSnapToPixelGrid then glow:SetSnapToPixelGrid(false); end
-    if glow.SetTexelSnappingBias then glow:SetTexelSnappingBias(0); end
+    ns.styles.Snap(glow, false);
     data.glows[i] = glow;
   end
   cap.modifierKey = data;

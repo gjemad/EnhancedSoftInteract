@@ -17,4 +17,8 @@ local function CreateTween()
   return driver;
 end
 
-ns.CreateTween = CreateTween;
+-- Keeps an animated value inside its range, so no tween or blend can push a glow, color or press depth
+-- past its limits.
+local function Clamp(value, low, high) return math.max(low, math.min(high, value)) end
+
+ns.CreateTween, ns.Clamp = CreateTween, Clamp;

@@ -36,6 +36,27 @@ ns.styles.Register("runic", {
     frame.flash:SetTexture(DIAMOND);
     frame.flash:SetSize(10, 10);
   end,
+  -- The underline sits on the lower border of the visible button.
+  UnderlineY = function(frame, db)
+    local cap = frame.keyCap;
+    if cap:IsShown() and cap.capHeight then
+      local height = cap.capHeight;
+      local bottom = -height * 0.5 + (cap.isGlyph and 0 or 0.5);
+      local art = cap.art;
+      if art and art.bottomBorder and not cap.isGlyph then
+        local m = art.margins;
+        bottom = ((1 + m[2] - m[4]) * 0.5 - art.bottomBorder) / (1 - m[2] - m[4]) * height;
+      end
+      return bottom * (cap.cellScale or 1);
+    end
+    -- Without a visible input, retain the normalized keyboard's measured lower-border reference.
+    return -ns.styles.Size(db).keyHeight * ns.styles.ButtonScale(db) * 31.5 / 65;
+  end,
+  -- Status text stays clear of the ornament.
+  StatusOffset = function(frame, db)
+    local size = ns.styles.Size(db);
+    return math.max(0, size.fontSize * 0.735 + 3 * size.inputScale + ns.styles.UnderlineY(frame, db));
+  end,
   -- The cast track snaps like the line, so both keep the same whole-pixel thickness everywhere.
   PlaceCast = function(frame, texture, left, width, height, y)
     ns.styles.PixelStrip(frame, texture, left, width, y, height);

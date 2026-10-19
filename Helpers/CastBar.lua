@@ -181,9 +181,7 @@ end
 local function Place(frame, texture, left, width, height, holder)
   local style = ns.styles.Get();
   if style.PlaceCast then style.PlaceCast(frame, texture, left, width, height, holder.y); return end
-  if texture.SetRoundLayoutToNearestPixel then texture:SetRoundLayoutToNearestPixel(false); end
-  if texture.SetSnapToPixelGrid then texture:SetSnapToPixelGrid(true); end
-  if texture.SetTexelSnappingBias then texture:SetTexelSnappingBias(0.5); end
+  ns.styles.Snap(texture, true);
   texture:ClearAllPoints();
   texture:SetPoint("LEFT", frame.box, "LEFT", left, holder.y);
   texture:SetSize(width, height);

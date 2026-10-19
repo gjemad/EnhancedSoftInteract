@@ -94,13 +94,10 @@ function ns.BuildSettings()
 
   Section("HUD Elements");
   Add({ kind = kind.Checkbox, name = "Show Icon", desc = "Shows the interaction icon in the HUD.",
-    default = function()
-      if db.hudStyle == "elv" then return DEFAULTS.elvShowIcon; end
-      return DEFAULTS.showIcon;
-    end,
+    default = function() return DEFAULTS[ns.styles.Get().showIconKey] end,
     get = function() return ns.styles.ShowIcon(db) end,
     set = function(_, value)
-      if db.hudStyle == "elv" then db.elvShowIcon = value; else db.showIcon = value; end
+      db[ns.styles.Get().showIconKey] = value;
       UpdateIcon();
       UpdateLayout();
     end });
