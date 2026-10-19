@@ -15,9 +15,10 @@ Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 Libs\LibEditMode\embed.xml
 #@end-no-lib-strip@
 
+Helpers\Text.lua
+Data\CursorData.lua
 Helpers\Cursors.lua
 Helpers\Input.lua
-Helpers\Text.lua
 Helpers\Tween.lua
 Helpers\StyleRegistry.lua
 Helpers\ModifierKey.lua
