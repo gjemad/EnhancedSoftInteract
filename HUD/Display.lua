@@ -76,18 +76,18 @@ function ns.SetupDisplay(hud)
     hud.StopSwitchAnim();
     frame.fadingOut = false;
     frame.colorKey, frame.outOfRange = iconKey, outOfRange;
-    frame.requirementText = target.requirementText;
+    frame.requirementText, frame.skillUp = target.requirementText, target.skillUp;
     hud.UpdateLayout(visible and not switched);
     hud.AnchorIcon();
     hud.SetTypeColor(visible); --blend while the frame is up, set at once when it fades in
     -- Prepare child opacity before the HUD fade starts. Otherwise its completion can restore
     -- the hidden status opacity from before this target was laid out.
-    if visible and EnhancedSoftInteractDB.animationsEnabled then
+    if visible then
       hud.FadeRange(toAlpha, fromAlpha);
     else
       hud.FadeTo(toAlpha, (hud.GetFadeTimes()), false);
     end
-    if switched and EnhancedSoftInteractDB.animationsEnabled then hud.PlaySwitchAnim(); end
+    if switched then hud.PlaySwitchAnim(); end
 
     return target, true;
   end
@@ -118,33 +118,15 @@ function ns.SetupDisplay(hud)
   end
   frame.switchAnim:SetScript("OnFinished", SettleAppearance);
 
-  -- Turning animations off also settles effects that are already playing on either HUD.
-  local function UpdateAnimations()
-    if EnhancedSoftInteractDB.animationsEnabled then return end
-    local hiding = frame.fadingOut or (not frame.sampleName and not frame.targetState);
-    frame.fadeToken = (frame.fadeToken or 0) + 1;
-    ResetAnimations();
-    frame.fader:Stop();
-    frame.fadingOut = false;
-    if hiding then
-      frame:Hide();
-    else
-      frame:SetAlpha(frame.outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA);
-      hud.SetTypeColor(false);
-      hud.UpdateLayout();
-    end
-  end
 
   local function UpdateStyle()
     local size = ns.styles.Size(EnhancedSoftInteractDB);
-    local buttonScale, iconScale = ns.styles.ButtonScale(EnhancedSoftInteractDB), ns.styles.IconScale(EnhancedSoftInteractDB);
     local changed = cap.styleArt ~= ns.styles.Get() or cap.keyStyle ~= EnhancedSoftInteractDB.keyStyle
-      or frame.appliedSize ~= size or frame.appliedButtonScale ~= buttonScale or frame.appliedIconScale ~= iconScale;
+      or frame.appliedSize ~= size;
     -- Native effects retain their old targets and starting appearance. Stop them before changing art.
     if changed then ResetAnimations(); end
     hud.ApplyTextures();
     frame.appliedSize = size;
-    frame.appliedButtonScale, frame.appliedIconScale = buttonScale, iconScale;
     hud.UpdateHeight();
     hud.UpdateIcon();
     hud.StyleKeyCap();
@@ -166,13 +148,15 @@ function ns.SetupDisplay(hud)
     frame:Show();
     frame.sampleName, frame.sampleCursor = name, cursor;
     hud.SetName(name);
-    frame.requirementText = requirementText;
+    -- Gathering samples get a skill-up icon, which a missing profession hides as on a real target.
+    frame.sampleSkillUp = ns.SampleSkillUp(cursor);
+    frame.requirementText, frame.skillUp = requirementText, not requirementText and frame.sampleSkillUp or nil;
     frame.colorKey, frame.outOfRange = ShowCursor(cursor), false;
     hud.SetTypeColor(true);
     hud.AnchorIcon();
     hud.UpdateKeyCap();
     hud.UpdateLayout();
-    if EnhancedSoftInteractDB.animationsEnabled then hud.PlaySwitchAnim(); end
+    hud.PlaySwitchAnim();
   end
 
   -- The settings preview's checkboxes: shows the current sample out of range or with an unmet
@@ -182,12 +166,13 @@ function ns.SetupDisplay(hud)
     local visible = frame:IsShown();
     local fromAlpha = hud.CurrentAlpha();
     frame.sampleCursor, frame.outOfRange, frame.requirementText = cursor, outOfRange, requirementText;
+    frame.skillUp = not requirementText and frame.sampleSkillUp or nil;
     frame.colorKey = ShowCursor(cursor);
     hud.UpdateLayout(visible);
     hud.AnchorIcon();
     hud.SetTypeColor(visible);
     local toAlpha = outOfRange and OUT_OF_RANGE_ALPHA or IN_RANGE_ALPHA;
-    if visible and EnhancedSoftInteractDB.animationsEnabled then hud.FadeRange(toAlpha, fromAlpha);
+    if visible then hud.FadeRange(toAlpha, fromAlpha);
     else frame:SetAlpha(toAlpha); end
   end
 
@@ -202,7 +187,7 @@ function ns.SetupDisplay(hud)
     hud.UpdateColors();
   end
 
-  hud.ApplyAllSettings, hud.UpdateStyle, hud.UpdateAnimations = ApplyAllSettings, UpdateStyle, UpdateAnimations;
+  hud.ApplyAllSettings, hud.UpdateStyle = ApplyAllSettings, UpdateStyle;
   hud.ShowSample, hud.SetSampleState = ShowSample, SetSampleState;
   hud.OnSoftTargetChanged, hud.OnSoftTargetCleared = OnSoftTargetChanged, OnSoftTargetCleared;
   hud.SettleAppearance = SettleAppearance;

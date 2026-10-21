@@ -25,6 +25,9 @@ local DROPDOWN_ART = {
     list = "common-dropdown-classic-bg", listOffsets = { -3, 3, 3, -4 }, listFill = true },
 };
 local LIST_ROW_HEIGHT, LIST_MAX_ROWS, LIST_PADDING = 20, 14, 8;
+-- An entry may have an icon (a texture path), shown ICON_SIZE units square before its text in the list
+-- and on the button.
+local ICON_SIZE, ICON_GAP = 18, 4;
 local list;
 
 local function DropdownArt()
@@ -40,11 +43,17 @@ local function ArrowAtlas(art, state)
   return art.arrow;
 end
 
-local function EntryText(data, value)
+local function FindEntry(data, value)
   for _, entry in ipairs(data.values()) do
-    if entry.value == value then return entry.text end
+    if entry.value == value then return entry end
   end
-  return tostring(value);
+end
+
+-- Shows the entry's icon, if any, and starts the text after it.
+local function ShowIcon(icon, text, entry, left)
+  icon:SetShown(entry and entry.icon ~= nil);
+  if entry and entry.icon then icon:SetTexture(entry.icon); end
+  text:SetPoint("LEFT", left + (icon:IsShown() and ICON_SIZE + ICON_GAP or 0), 0);
 end
 
 local function UpdateDropdownArrow(button)
@@ -73,6 +82,7 @@ local function LayoutList()
     if entry then
       rowButton.entry = entry;
       rowButton.Text:SetText(entry.text);
+      ShowIcon(rowButton.Icon, rowButton.Text, entry, 22);
       rowButton.Check:SetShown(entry.value == selected);
     end
   end
@@ -124,6 +134,10 @@ local function CreateList(parent)
     rowButton.Check:SetTexture([[Interface\Buttons\UI-CheckBox-Check]]);
     rowButton.Check:SetSize(16, 16);
     rowButton.Check:SetPoint("LEFT", 2, 0);
+    rowButton.Icon = rowButton:CreateTexture(nil, "ARTWORK");
+    rowButton.Icon:SetSize(ICON_SIZE, ICON_SIZE);
+    rowButton.Icon:SetPoint("LEFT", 22, 0);
+    rowButton.Icon:Hide();
     rowButton.Text = Label(rowButton, "", "GameFontHighlight");
     rowButton.Text:SetPoint("LEFT", 22, 0);
     rowButton.Text:SetPoint("RIGHT", -4, 0);
@@ -161,7 +175,8 @@ local function OpenList(button)
   local width = button:GetWidth();
   for _, entry in ipairs(list.entries) do
     list.rows[1].Text:SetText(entry.text);
-    width = math.max(width, list.rows[1].Text:GetStringWidth() + 26 + LIST_PADDING * 2);
+    local icon = entry.icon and ICON_SIZE + ICON_GAP or 0;
+    width = math.max(width, list.rows[1].Text:GetStringWidth() + icon + 26 + LIST_PADDING * 2);
   end
   list:SetSize(width, list.visible * LIST_ROW_HEIGHT + LIST_PADDING * 2);
   list:ClearAllPoints();
@@ -192,6 +207,10 @@ local function CreateDropdown(row, data)
     button.Arrow = Label(button, "v", "GameFontHighlight");
     button.Arrow:SetPoint("RIGHT", -8, 0);
   end
+  button.Icon = button:CreateTexture(nil, "ARTWORK");
+  button.Icon:SetSize(ICON_SIZE, ICON_SIZE);
+  button.Icon:SetPoint("LEFT", 8, 0);
+  button.Icon:Hide();
   button.Text = Label(button, "", "GameFontHighlight");
   button.Text:SetPoint("LEFT", 8, 0);
   button.Text:SetPoint("RIGHT", button.Arrow, "LEFT", -4, 0);
@@ -208,9 +227,14 @@ local function CreateDropdown(row, data)
   end
   -- Shows the chosen value and the enabled state; an open list follows the new value.
   function button.Refresh(self)
-    self.Text:SetText(EntryText(data, data.get()));
+    local value = data.get();
+    local entry = FindEntry(data, value);
+    self.Text:SetText(entry and entry.text or tostring(value));
+    ShowIcon(self.Icon, self.Text, entry, 8);
     local shade = self:IsEnabled() and 1 or 0.5;
     self.Text:SetTextColor(shade, shade, shade);
+    self.Icon:SetDesaturated(not self:IsEnabled());
+    self.Icon:SetAlpha(shade);
     if not self:IsEnabled() and list and list.owner == self then CloseList(); end
     if list and list:IsShown() and list.owner == self then LayoutList(); end
     UpdateDropdownArrow(self);

@@ -31,7 +31,7 @@ local function ShouldHide(cvar)
   return db and db.enabled and watched[key] and not db[optionByCVar[key]];
 end
 
--- Display hiding takes priority over the Keep Interact Key Icons setting.
+-- Display hiding takes priority over Always Show All Interact Key Icons.
 ns.IsBlizzardDisplayCVarHidden = ShouldHide;
 
 local function RefreshNameplateIcons()

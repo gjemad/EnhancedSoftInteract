@@ -7,19 +7,20 @@ local Pixel, Round, Snap = ns.styles.Pixel, ns.styles.Round, ns.styles.Snap;
 local Origin, Rect = ns.styles.Origin, ns.styles.Rect;
 
 -- ElvUI conventions, checked against ElvUI main (2026-10-18): a 1-pixel border in ElvUI's border color
--- around its backdrop color, OUTLINE text without a drop shadow, pressed buttons overlaid with
--- (0.9, 0.8, 0.1) at 30% inside the border, and extra black lines outside and inside every border when
--- Pixel Perfect is off. The layout follows the 0.3.1 panel the user chose: the key is a full-height
--- square flush with its side, sharing the panel edge, with 6 units of padding around the name and the
--- underline 6 units above the bottom, grouped with the name. The tables use ElvUI's 32-unit button;
+-- around its backdrop color, OUTLINE text without a drop shadow, and extra black lines outside and
+-- inside every border when Pixel Perfect is off. ElvUI's yellow pressed overlay read as a flash, so a
+-- held key gets a white overlay at 15% instead, and an interaction lights the panel border in the object
+-- color instead of a fill flash (user, 2026-10-21). The layout follows the 0.3.1 panel the user chose:
+-- the key is a full-height square flush with its side, sharing the panel edge, with 6 units of padding
+-- around the name and the underline 6 units above the bottom, grouped with the name. The tables use ElvUI's 32-unit button;
 -- like every style, presets draw them 10% larger, button included (scaleButtons).
 local PADDING = 6;
-local PUSHED = { 0.9, 0.8, 0.1, 0.3 };
+local PUSHED = { 1, 1, 1, 0.15 };
 local BLACK = { 0, 0, 0, 1 };
 
 -- The panel height, which the key and the optional icon cell fill as squares.
 local function Square(db)
-  return ns.styles.Size(db).keyHeight * math.max(1, ns.styles.ButtonScale(db));
+  return ns.styles.Size(db).keyHeight;
 end
 
 local function Padding(db) return PADDING * ns.styles.Size(db).inputScale end
@@ -54,14 +55,18 @@ local function Edges(frame, regions, layer)
   return edges;
 end
 
-local function Border(edges, target, x, y, width, height, pixel, color)
+local function PlaceEdges(edges, target, x, y, width, height, pixel)
   for i, edge in ipairs(edges) do
     local horizontal = i <= 2;
     local edgeX = x + (i == 4 and width - pixel or 0);
     local edgeY = y - (i == 2 and height - pixel or 0);
     Rect(edge, target, edgeX, edgeY, horizontal and width or pixel, horizontal and pixel or height);
-    edge:SetVertexColor(unpack(color));
   end
+end
+
+local function Border(edges, target, x, y, width, height, pixel, color)
+  PlaceEdges(edges, target, x, y, width, height, pixel);
+  for _, edge in ipairs(edges) do edge:SetVertexColor(unpack(color)); end
 end
 
 -- A border with ElvUI's optional thick-mode lines: the main edge in the border color, plus black lines
@@ -158,7 +163,7 @@ local function KeyWidth(frame, height)
   end
   -- Controller symbols fit inside the square key, with the same padding the core adds around key text.
   local db = EnhancedSoftInteractDB;
-  local available = Square(db) - 4 * 1.3 * ns.styles.Size(db).inputScale * ns.styles.ButtonScale(db);
+  local available = Square(db) - 4 * 1.3 * ns.styles.Size(db).inputScale;
   frame.elvInputScale = math.min(1, available / math.max(1, width));
   for _, token in ipairs(tokens) do token.width = token.width * frame.elvInputScale; end
   width = width * frame.elvInputScale;
@@ -209,7 +214,7 @@ local function InputArt(frame)
       region:SetSize(token.width, token.width * info.height / info.width);
     end
     region:Show();
-    if token.text then region:SetFont(ns.styles.Font(EnhancedSoftInteractDB), ns.styles.Size(EnhancedSoftInteractDB).keyFontSize * ns.styles.ButtonScale(EnhancedSoftInteractDB) * frame.elvInputScale, ns.ElvTheme.FontFlags()); end
+    if token.text then region:SetFont(ns.styles.Font(EnhancedSoftInteractDB), ns.styles.Size(EnhancedSoftInteractDB).keyFontSize * frame.elvInputScale, ns.ElvTheme.FontFlags()); end
     left = left + token.width + cap.capHeight * 0.04 * frame.elvInputScale;
   end
   PaintInput(frame);
@@ -230,7 +235,7 @@ ns.styles.Register("elv", {
     frame.elvKeyTokens = nil;
     HideInput(frame);
   end,
-  layers = { lineLow = true }, flashStrength = 0.25,
+  layers = { lineLow = true }, flashStrength = 0, --the border light replaces the fill flash
   Font = ns.ElvTheme.Font, FontFlags = ns.ElvTheme.FontFlags, Pixel = Pixel,
   -- Side cells: a flush square (key or icon) plus the padding before the name. Without one, padding only.
   CellSize = function(db) return Square(db) + Padding(db) end,
@@ -268,7 +273,27 @@ ns.styles.Register("elv", {
     local regions = { frame.elvPlate };
     frame.elvBorder = BorderSets(frame, regions);
     frame.elvIconBorder = BorderSets(frame, regions);
+    -- The panel border lights, above the key and its labels: once with the interaction pulse (its holder
+    -- joins the shared pulse at full strength), and during a cast outcome (OutcomeLight). The outcome's
+    -- holder moves under the outcome overlay in Apply, so it hides with it.
+    for _, name in ipairs({ "elvPulseLight", "elvOutcomeLight" }) do
+      local holder = CreateFrame("Frame", nil, frame);
+      holder:SetAllPoints(frame);
+      holder:SetFrameLevel(frame:GetFrameLevel() + 4);
+      holder.edges = Edges(holder, {}, "OVERLAY");
+      regions[#regions + 1] = holder;
+      frame[name] = holder;
+    end
+    frame.elvPulseLight:SetAlpha(0);
+    frame.elvPulseLight.pulsePeak = 1;
+    frame.stylePulseLayers[#frame.stylePulseLayers + 1] = frame.elvPulseLight;
     return regions;
+  end,
+  Paint = function(frame, r, g, b)
+    for _, edge in ipairs(frame.elvPulseLight.edges) do edge:SetVertexColor(r, g, b, 1); end
+  end,
+  OutcomeLight = function(frame, r, g, b, alpha)
+    for _, edge in ipairs(frame.elvOutcomeLight.edges) do edge:SetVertexColor(r, g, b, alpha); end
   end,
   Apply = function(frame)
     -- The keyboard fill is ARTWORK on a child frame; its edges and pressed overlay sit above it there.
@@ -283,11 +308,12 @@ ns.styles.Register("elv", {
     local data = ns.ElvTheme.Media();
     local backdrop = data and data.backdropcolor or {0.1, 0.1, 0.1, 1};
     frame.elvPlate:SetVertexColor(unpack(backdrop));
-    frame.flash:SetTexture(WHITE);
-    frame.flash:SetGradient("VERTICAL", CreateColor(1, 1, 1, 1), CreateColor(0, 0, 0, 1));
-    frame.flash:ClearAllPoints();
-    frame.flash:SetPoint("TOPLEFT", frame.elvPlate, "TOPLEFT");
-    frame.flash:SetPoint("BOTTOMRIGHT", frame.elvPlate, "BOTTOMRIGHT");
+    local light = frame.elvOutcomeLight;
+    if light:GetParent() ~= frame.castFinish then
+      light:SetParent(frame.castFinish);
+      light:SetFrameLevel(frame:GetFrameLevel() + 4);
+    end
+    for _, edge in ipairs(light.edges) do edge:SetVertexColor(0, 0, 0, 0); end
   end,
   Layout = function(frame, db)
     local pixel = Pixel(frame);
@@ -304,6 +330,9 @@ ns.styles.Register("elv", {
     local _, lineTop = Origin(frame, 0, height * 0.5, pixel);
     frame.elvLineRect = { 0, lineTop, 0, height, pixel };
     DrawBorder(frame.box, frame.elvBorder, x, y, width, height, pixel, border, true);
+    -- The lights trace the panel's own border; their colors come from Paint and the outcomes.
+    PlaceEdges(frame.elvPulseLight.edges, frame.box, x, y, width, height, pixel);
+    PlaceEdges(frame.elvOutcomeLight.edges, frame.box, x, y, width, height, pixel);
     -- Key and icon squares share the panel's outer edges; their inner edge is the divider.
     local keyLeft = db.swapIconAndKey;
     local keyShown = cap:IsShown() and not cap.isGlyph;

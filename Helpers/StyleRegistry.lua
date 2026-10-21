@@ -11,8 +11,8 @@ ns.styles = {};
 --
 -- Hooks a style may leave out. Register copies these into every style that doesn't define them, so
 -- callers call the hook without checking. A few hooks are absent on purpose, and their callers check for
--- them: Pixel, IconMax, IconDimensions, KeyText, KeyWidth, PaintKeyCap, KeyOffsetY, RequirementY and
--- PlaceCast.
+-- them: Pixel, IconMax, IconDimensions, KeyText, KeyWidth, PaintKeyCap, KeyOffsetY, RequirementY,
+-- PlaceCast and OutcomeLight.
 local DEFAULT_HOOKS = {
   showIconKey = "showIcon", --the saved setting that shows the icon
 };
@@ -61,8 +61,6 @@ function ns.styles.Size(db)
 end
 
 -- Fine tuning is relative to the chosen preset; its immutable profile remains the layout baseline.
-function ns.styles.ButtonScale(db) return (db.buttonSizePercent or 100) / 100 end
-function ns.styles.IconScale(db) return (db.interactionIconSizePercent or 100) / 100 end
 
 -- Invisible side cells reserve space independently of their artwork and input labels. A style can
 -- own its cells (Elv: a flush square plus the gap to the name).
@@ -101,8 +99,6 @@ function ns.styles.IconDimensions(frame, db)
   local style = ns.styles.Get();
   local width, height = ns.styles.Size(db).iconSize, ns.styles.Size(db).iconSize;
   if style.IconDimensions then width, height = style.IconDimensions(frame, db); end
-  local scale = ns.styles.IconScale(db);
-  width, height = width * scale, height * scale;
   if style.IconMax then
     local limit = style.IconMax(frame, db);
     width, height = math.min(width, limit), math.min(height, limit);
@@ -162,6 +158,20 @@ function ns.styles.PixelStrip(frame, texture, left, width, y, height)
   ns.styles.Rect(texture, frame.box, x, top, math.max(pixel, ns.styles.Round(width, pixel)), height);
 end
 
+-- A vertical mark on whole pixels (cast markers, end ticks), centered on a line that PixelStrip draws at y
+-- with lineHeight. The mark gets the line's pixel parity, so it reaches as far above the line as below.
+-- Rounded on its own, an even-height mark around a one-pixel line stood a pixel higher or lower
+-- depending on the line's position (user report 2026-10-20: Runic's markers sat higher with keycaps).
+function ns.styles.PixelMark(frame, texture, left, width, y, height, lineHeight)
+  local pixel = ns.styles.Pixel(frame);
+  lineHeight = math.max(pixel, ns.styles.Round(lineHeight, pixel));
+  height = math.max(pixel, ns.styles.Round(height, pixel));
+  if math.floor((height - lineHeight) / pixel + 0.5) % 2 == 1 then height = height + pixel; end
+  local x, lineTop = ns.styles.Origin(frame, -frame.boxWidth * 0.5 + left, y + lineHeight * 0.5, pixel);
+  ns.styles.Rect(texture, frame.box, x, lineTop + (height - lineHeight) * 0.5,
+    math.max(pixel, ns.styles.Round(width, pixel)), height);
+end
+
 local function TextClearance(db, offset, clearance)
   -- The status is centered 0.41 font sizes down and uses a 0.65-size font. Reserve half that font
   -- below its center, plus the style's decoration clearance; retain a larger normal line offset.
@@ -181,11 +191,11 @@ function ns.styles.UnderlineY(frame, db) return ns.styles.Get().UnderlineY(frame
 function DEFAULT_HOOKS.StatusOffset() return 0 end
 function ns.styles.StatusOffset(frame, db) return ns.styles.Get().StatusOffset(frame, db) end
 
--- Shared buttons use Level-Up's Normal height, uniformly scaled with the preset and slider.
+-- Shared buttons use Level-Up's Normal height, scaled with the preset.
 -- Elv retains its compact style-owned face; native artwork keeps its proportions in either path.
 function DEFAULT_HOOKS.KeyFaceHeight(db, glyph)
   local size = ns.styles.Size(db);
-  return (glyph and size.glyphHeight or size.keyHeight) * ns.styles.ButtonScale(db);
+  return (glyph and size.glyphHeight or size.keyHeight);
 end
 function ns.styles.KeyFaceHeight(_, db, glyph) return ns.styles.Get().KeyFaceHeight(db, glyph) end
 

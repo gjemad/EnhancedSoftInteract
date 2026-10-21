@@ -6,7 +6,7 @@ local _, ns = ...;
 -- OUT_OF_RANGE_COLOR, so they have no entries. Each color is an OKLCH hue and chroma picked per family
 -- (related types share a hue band; icons with a strong color of their own, such as quest marks, pawprints
 -- and transmog, use the icon's measured hue), at the lightest lightness sRGB can show, then scaled so the
--- strongest channel is 1. The lines and glows light at full strength, and colorBrightness dims them.
+-- strongest channel is 1. The lines and glows light at full strength.
 ns.typeColors = {
   ["default"] = {1, 0.83, 0.33}, --unknown or secret icon: plain gold
   -- Quests: gold for normal quests and quest objects, blue for repeatable ones, amber for the campaign.

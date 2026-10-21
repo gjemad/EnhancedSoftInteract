@@ -102,7 +102,7 @@ local function Animations()
       for i, region in ipairs(frame[name] or {}) do layers[name .. i] = Layer(region); end
     end
     return { shown = Safe(frame:IsVisible()), alpha = Number(frame:GetAlpha()),
-      style = EnhancedSoftInteractDB.hudStyle, shadow_strength = Number(EnhancedSoftInteractDB.shadowStrength),
+      style = EnhancedSoftInteractDB.hudStyle,
     scale = Number(frame:GetEffectiveScale()), glow_scale = Number(frame.glowScale),
     color = { red = Number(rgb[1]), green = Number(rgb[2]), blue = Number(rgb[3]) },
     flash_opacity = Number(frame.flashHolder:GetAlpha()),
@@ -206,6 +206,9 @@ local function DebugSoftTarget(oldGUID, newGUID, target, mode, fromRangeCheck)
       key = Safe(iconKey), red = Number(r), green = Number(g), blue = Number(b),
       default_color = not (outOfRange or ns.IsUnableKey(iconKey) or ns.typeColors[iconKey]) and true or false,
       talk_badge = Safe(talkBadge), nudge_x = Number(frame.iconNudgeX or 0), nudge_y = Number(frame.iconNudgeY or 0) },
+    skill_up = target.skillInfo and { level = target.skillUp, rank = Number(target.skillInfo.rank),
+      required = Number(target.skillInfo.required), source = target.skillInfo.source,
+      entry = Number(target.skillInfo.entry), shown = Safe(frame.skillIcon:IsShown()) } or nil,
     key = { binding1 = Safe(key1), binding2 = Safe(key2), gamepad_active = Safe(ns.gamepadActive),
       gamepad_ui = ns.IsGamepadUI and ns.IsGamepadUI() or false,
       glyph = Safe(ns.GamepadInteractGlyph and ns.GamepadInteractGlyph()) },

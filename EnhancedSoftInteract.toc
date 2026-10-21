@@ -17,7 +17,9 @@ Libs\LibEditMode\embed.xml
 
 Helpers\Text.lua
 Data\CursorData.lua
+Data\GatherSkill.lua
 Helpers\Cursors.lua
+Helpers\SkillUp.lua
 Helpers\Input.lua
 Helpers\Tween.lua
 Helpers\StyleRegistry.lua
@@ -40,6 +42,7 @@ Feat\Gamepad_Camelot.lua [ExcludeLoadGameType standard, classic][AllowLoadGameTy
 Feat\Target.lua
 Feat\HideBlizzard.lua
 Feat\Persistence.lua
+Feat\Targeting.lua
 Feat\DebugLog.lua
 Feat\InteractionCast.lua
 Feat\Debug.lua

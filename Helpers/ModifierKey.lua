@@ -165,13 +165,12 @@ function ModifierKey.Layout(frame, db)
   local data = cap.modifierKey;
   if not data or not data.managed or cap.isGlyph then return end
   local size = ns.styles.Size(db);
-  local scale = ns.styles.ButtonScale(db);
   local width, height = cap.capWidth, cap.capHeight;
   local pixel = ns.styles.Pixel(frame);
-  local path, maximum = ns.styles.Font(db), size.keyFontSize * scale;
-  local shadow = style.flatKey and 0 or math.min(1, scale);
+  local path, maximum = ns.styles.Font(db), size.keyFontSize;
+  local shadow = style.flatKey and 0 or 1;
   local top, bottom = height * 0.5, -height * 0.5;
-  local padding = math.min(2 * size.inputScale * scale, width * 0.12, height * 0.12);
+  local padding = math.min(2 * size.inputScale, width * 0.12, height * 0.12);
   local left, right = -width * 0.5 + padding, width * 0.5 - padding;
   local slots, fields = {}, {};
   local function Add(text, fontSize, x, y, modifier)
@@ -276,7 +275,7 @@ function ModifierKey.Layout(frame, db)
   if divider then
     data.divider:ClearAllPoints();
     data.divider:SetPoint("CENTER", data.holder, "CENTER", 0, divider);
-    data.divider:SetSize(math.max(pixel, width - padding * 2), 0.45 * size.inputScale * scale);
+    data.divider:SetSize(math.max(pixel, width - padding * 2), 0.45 * size.inputScale);
   end
   ModifierKey.Paint(frame);
 end

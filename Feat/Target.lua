@@ -149,10 +149,13 @@ function ns.ResolveTarget(icon, guid, lastInRangeTarget)
     Replace(inRange and "Speak" or "UnableSpeak");
   end
   local outOfRange = not inRange;
+  local skillUp, skillInfo;
+  if cursor and not requirement and not talkBadge then skillUp, skillInfo = ns.SkillUpFor(cursor, guid, range.name); end
   return { name = range.name, knownTarget = knownTarget, hasCursor = hasCursor, iconSource = source,
     iconFromFileID = fromFileID, resolvedKey = resolvedKey, iconKey = key, overrideCursor = override,
     talkBadge = talkBadge, outOfRange = outOfRange, range = range, inRangeTarget = lastInRangeTarget,
-    requirementText = ns.IsUnableKey(key) and requirement or nil,
-    signature = key .. "|" .. tostring(talkBadge) .. "|" .. tostring(outOfRange) .. "|" .. tostring(requirement),
+    requirementText = ns.IsUnableKey(key) and requirement or nil, skillUp = skillUp, skillInfo = skillInfo,
+    signature = key .. "|" .. tostring(talkBadge) .. "|" .. tostring(outOfRange) .. "|" .. tostring(requirement)
+      .. "|" .. tostring(skillUp),
     action = key:lower():gsub("unable", "") };
 end

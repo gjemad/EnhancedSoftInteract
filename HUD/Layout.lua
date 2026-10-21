@@ -103,6 +103,16 @@ function ns.SetupLayout(hud)
   local REQ_NAME_SCALE, REQ_TEXT_SCALE = 0.82, 0.65;
   local REQ_TEXT_Y = -0.41;
   local REQ_NAME_GREY = 0.8;
+  -- The skill-up icon (Blizzard's 13 x 15 recipe list arrows) is anchored to the name and centered between
+  -- the interaction icon and the name's text, at least SKILL_GAP from the text (user, 2026-10-20). With no
+  -- interaction icon on its left, it centers between the name column's edge and the text. It follows the
+  -- name through the status transition, and with a status line it moves STATUS_PULL of the way toward
+  -- SKILL_GAP from the smaller name (user). It is drawn at SKILL_SCALE at Normal (font size 17.6) and
+  -- follows the font size.
+  local SKILL_W, SKILL_H, SKILL_GAP, SKILL_SCALE, SKILL_FONT, STATUS_PULL = 13, 15, 3, 1, 17.6, 0.5;
+  -- The visible art reaches this far from the interaction icon's center, in icon widths: Forever's
+  -- mining pick fills about 74% of its crosshair texture (user screenshot, 2026-10-20).
+  local ICON_ART_REACH = 0.37;
   local statusTween = CreateTween();
   local function PaintStatus(amount)
     local db = EnhancedSoftInteractDB;
@@ -114,6 +124,13 @@ function ns.SetupLayout(hud)
     frame.name:SetPoint("CENTER", frame.box, "LEFT",
       frame.nameLeft + frame.nameWidth * 0.5, frame.nameOffsetY);
     frame.compactName:SetPoint("CENTER", frame.name, "CENTER");
+    if frame.skillTextWidth then
+      local half = frame.skillTextWidth * (1 - amount + REQ_NAME_SCALE * amount) * 0.5;
+      local closest = half + frame.skillGap + frame.skillIconWidth * 0.5;
+      local centered = math.max(closest, (half + frame.skillEdge) * 0.5);
+      local x = centered + (closest - centered) * STATUS_PULL * amount;
+      frame.skillIcon:SetPoint("CENTER", frame.name, "CENTER", -x, 0);
+    end
     frame.name:SetAlpha(1 - amount);
     frame.compactName:SetAlpha(amount);
     frame.requirement:SetAlpha(amount);
@@ -126,7 +143,7 @@ function ns.SetupLayout(hud)
     local text = frame.requirementText or (frame.outOfRange and "Move closer");
     frame.showRequirement = text ~= nil;
     local to = text and 1 or 0;
-    if not (animate and EnhancedSoftInteractDB.animationsEnabled and frame.statusAmount ~= nil) then
+    if not (animate and frame.statusAmount ~= nil) then
       statusTween:Stop();
       frame.statusTarget = to;
       PaintStatus(to);
@@ -162,20 +179,33 @@ function ns.SetupLayout(hud)
     local edgeLeft, edgeRight = 0, 0;
     frame.cellSize, frame.sidePadding = cell, padding;
     frame.leftCellWidth, frame.rightCellWidth = left, right;
+    -- Returns the column width, and the text's own width when it isn't secret.
     local function FitWidth(text, size, width)
       nameMeasure:SetFont(ns.styles.Font(db), size, ns.styles.FontFlags());
       nameMeasure:SetText(text);
       local textWidth = nameMeasure:GetStringWidth();
       if issecretvalue(textWidth) then return maxName end
-      return math.min(maxName, math.max(width, math.ceil(textWidth) + 1)); --+1: no "..." on an exact fit
+      return math.min(maxName, math.max(width, math.ceil(textWidth) + 1)), textWidth; --+1: no "..." on an exact fit
     end
     local textScale = REQ_TEXT_SCALE;
-    local nameWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "", ns.styles.Size(db).fontSize, minName);
+    local nameWidth, nameTextWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "",
+      ns.styles.Size(db).fontSize, minName);
     local text = frame.requirementText or (frame.outOfRange and "Move closer");
     local statusWidth = minName;
     if text then
       statusWidth = FitWidth(text, ns.styles.Size(db).fontSize * textScale, 0);
       nameWidth = math.max(nameWidth, statusWidth);
+    end
+    -- The skill-up icon needs room before the name's text. What the column doesn't leave is added
+    -- outside it, so the name column and the cast bar keep the text's width (user, 2026-10-20). The same
+    -- room goes on both sides, so full-width lines stay centered on the name and the cast bar.
+    -- A secret name has no width to place the icon by, so it shows none.
+    local skillAtlas = nameTextWidth and db.showSkillUp and ns.SkillUpAtlas(frame.skillUp);
+    local skillUnit = ns.styles.Size(db).fontSize / SKILL_FONT;
+    if skillAtlas then
+      local room = (nameWidth - math.min(nameTextWidth, nameWidth)) * 0.5;
+      edgeLeft = math.max(0, (SKILL_W * SKILL_SCALE + SKILL_GAP) * skillUnit - room);
+      edgeRight = edgeLeft;
     end
     -- Prepare the text and a full line before showing it, including the first target after /reload.
     if text then
@@ -200,6 +230,13 @@ function ns.SetupLayout(hud)
     frame.name:ClearAllPoints();
     frame.name:SetFont(ns.styles.Font(db), ns.styles.Size(db).fontSize, ns.styles.FontFlags());
     frame.name:SetWidth(nameWidth);
+    frame.skillTextWidth = skillAtlas and math.min(nameTextWidth, nameWidth) or nil;
+    frame.skillGap, frame.skillIconWidth = SKILL_GAP * skillUnit, SKILL_W * SKILL_SCALE * skillUnit;
+    frame.skillIcon:SetShown(frame.skillTextWidth ~= nil);
+    if frame.skillTextWidth then
+      frame.skillIcon:SetAtlas(skillAtlas);
+      frame.skillIcon:SetSize(frame.skillIconWidth, SKILL_H * SKILL_SCALE * skillUnit);
+    end
     frame.compactName:SetFont(ns.styles.Font(db), ns.styles.Size(db).fontSize * REQ_NAME_SCALE, ns.styles.FontFlags());
     -- An outlined style draws no drop shadow (ElvUI's convention); others keep the font's own shadow.
     for _, label in ipairs({ frame.name, frame.compactName, frame.requirement }) do
@@ -213,6 +250,11 @@ function ns.SetupLayout(hud)
     frame.box:SetWidth(width);
     frame.boxWidth, frame.nameWidth = width, nameWidth; --for /esi debug; reading them back could be secret
     frame.nameLeft = edgeLeft + left;
+    -- How far left of the name's center the skill-up icon's space starts: the interaction icon's visible
+    -- right edge, or the left cell's edge.
+    local iconRight = ns.styles.ShowIcon(db) and not db.swapIconAndKey
+      and ns.styles.CellCenter(db) + ns.styles.IconDimensions(frame, db) * ICON_ART_REACH;
+    frame.skillEdge = frame.nameLeft + nameWidth * 0.5 - (iconRight or left);
     -- Center the name column, rather than the combined icon/name/key width. Resizing an outer column
     -- must not slide the name and status sideways. The cached offset also informs pixel snapping.
     frame.boxOffsetX = width * 0.5 - frame.nameLeft - nameWidth * 0.5;

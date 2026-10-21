@@ -4,6 +4,7 @@ local Clamp, CreateTween, GetTypeColor = ns.Clamp, ns.CreateTween, ns.GetTypeCol
 
 -- Common shadow and glow textures; style-specific artwork lives in Styles/.
 local SHADOW, GLOW = MEDIA .. "SoftShadow", MEDIA .. "SoftGlow";
+local SHADOW_ALPHA = 0.9; --the soft shadow behind the text, in styles that have one
 
 -- How the HUD looks: the transition when the target changes, the type color, the shadow and the
 -- textures a style applies. hud.SetTypeColor repaints from frame.colorKey and frame.outOfRange.
@@ -37,7 +38,6 @@ function ns.SetupAppearance(hud)
   end
 
   local function PlaySwitchAnim()
-    if not EnhancedSoftInteractDB.animationsEnabled then return end
     frame.switchAnim:Play();
   end
 
@@ -62,15 +62,14 @@ function ns.SetupAppearance(hud)
   end
 
   -- Sets the colors, the key label and the glow size from frame.colorKey and frame.outOfRange. With blend
-  -- (the HUD is visible), the glow animates, and with animations on the color blends over SWITCH_TIME from
-  -- wherever it is now, also from the middle of a running blend.
+  -- (the HUD is visible), the glow animates and the color blends over SWITCH_TIME from wherever it is
+  -- now, also from the middle of a running blend.
   local colorTween = CreateTween();
   local function SetTypeColor(blend)
-    blend = blend and EnhancedSoftInteractDB.animationsEnabled;
     hud.PaintKeyCap();
     hud.SetGlowRange(frame.outOfRange, blend);
     local to = { GetTypeColor(frame.colorKey, frame.outOfRange) };
-    if not (blend and EnhancedSoftInteractDB.animationsEnabled and frame.rgb) then
+    if not (blend and frame.rgb) then
       colorTween:Stop();
       frame.rgb = to;
       PaintColor(unpack(to));
@@ -85,15 +84,12 @@ function ns.SetupAppearance(hud)
 
   local function UpdateColors() SetTypeColor(false); end
 
-  local function UpdateShadow()
-    frame.shadow:SetVertexColor(0, 0, 0, Clamp(EnhancedSoftInteractDB.shadowStrength / 100, 0, 1));
-    frame.shadow:SetShown(ns.styles.Get().shadow == true);
-  end
-
-  -- Each style owns its appearance; targeting, columns and animations stay shared.
+  -- Each style owns its appearance; targeting, columns and animations stay shared. A style with
+  -- shadow set gets the soft shadow behind the text.
   local function ApplyTextures()
     frame.shadow:SetTexture(SHADOW);
-    UpdateShadow();
+    frame.shadow:SetVertexColor(0, 0, 0, SHADOW_ALPHA);
+    frame.shadow:SetShown(ns.styles.Get().shadow == true);
     frame.iconGlow:SetTexture(GLOW);
     ns.styles.Apply(frame);
   end
@@ -105,6 +101,6 @@ function ns.SetupAppearance(hud)
     frame.rgb = nil;
   end
 
-  hud.SetTypeColor, hud.UpdateColors, hud.UpdateShadow, hud.ApplyTextures = SetTypeColor, UpdateColors, UpdateShadow, ApplyTextures;
+  hud.SetTypeColor, hud.UpdateColors, hud.ApplyTextures = SetTypeColor, UpdateColors, ApplyTextures;
   hud.StopSwitchAnim, hud.PlaySwitchAnim = StopSwitchAnim, PlaySwitchAnim;
 end

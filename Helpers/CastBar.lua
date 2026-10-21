@@ -12,7 +12,8 @@ local function CreateHolder(frame)
   holder:SetFrameLevel(frame:GetFrameLevel() + 1);
   for _, name in ipairs(PARTS) do
     local layer = name:match("^backing") and "BACKGROUND" or "ARTWORK";
-    local texture = holder:CreateTexture(nil, layer);
+    -- Fills and markers draw above a track that can cover them (a line fill's interruption).
+    local texture = holder:CreateTexture(nil, layer, nil, name:match("^track") and 0 or 1);
     texture:SetTexture(WHITE);
     holder[name] = texture;
   end
@@ -22,6 +23,11 @@ local function CreateHolder(frame)
   holder.runeGlow:SetBlendMode("ADD");
   holder.runeGlow:SetVertexColor(0, 0, 0, 1);
   holder.runeGlow:Hide();
+  -- A pale diamond over Runic's rune, lit as the cast charges it.
+  holder.runeCore = holder:CreateTexture(nil, "OVERLAY");
+  holder.runeCore:SetTexture(MEDIA .. "RunicDiamond");
+  holder.runeCore:SetBlendMode("ADD");
+  holder.runeCore:Hide();
   -- Optional native line art uncovered along the cast (Level-Up's glow reveal).
   holder.reveal = holder:CreateTexture(nil, "ARTWORK", nil, 2);
   holder.reveal:SetBlendMode("ADD");
@@ -76,8 +82,7 @@ local function PaintTip(frame, holder)
     light:Show();
     return;
   end
-  local animated = EnhancedSoftInteractDB.animationsEnabled;
-  local time = animated and GetTime() or 0;
+  local time = GetTime();
   local approach = Smooth((progress - 0.85) / 0.15);
   local energy = Smooth(progress / 0.03);
   if holder.split then
@@ -95,10 +100,8 @@ local function PaintTip(frame, holder)
       pale and (0.82 + 0.18 * g) or g, pale and (0.82 + 0.18 * b) or b, alpha);
     light:SetShown(alpha > 0);
   end
-  local pulse = 1;
-  if animated and recipe.flicker then
-    pulse = 1 + 0.055 * math.sin(time * 8) + 0.025 * math.sin(time * 13);
-  elseif animated then pulse = 1 + 0.04 * math.sin(time * 5); end
+  local pulse = recipe.flicker and 1 + 0.055 * math.sin(time * 8) + 0.025 * math.sin(time * 13)
+    or 1 + 0.04 * math.sin(time * 5);
   local tail = math.min(recipe.tail * scale, holder.width * progress);
   -- Overlapping soft segments make one continuous tapered trail, bounded by the filled track.
   for i = 1, 8 do
@@ -115,7 +118,7 @@ local function PaintTip(frame, holder)
     Light("needle", tip, holder.y, 0.8 + 3 * approach, 6.2 - 4 * approach, 0.85 * energy, true);
     Light("cross", tip, holder.y, 3.5 + 4 * approach, 0.8, 0.5 * energy, true);
   end
-  local breath = animated and 0.16 * approach or 0;
+  local breath = 0.16 * approach;
   if holder.split then
     local span = holder.width * 0.5 - holder.gap;
     Light("breath1", holder.left + span * 0.5, holder.y, span / scale + 6, recipe.breathHeight, breath, false);
@@ -130,19 +133,37 @@ local function PaintTip(frame, holder)
   end
 end
 
-local function PaintRuneGlow(holder, amount)
-  holder.runeAmount = amount;
-  local strength = 0.24 * amount;
-  holder.runeGlow:SetVertexColor((holder.red or 0) * strength,
-    (holder.green or 0) * strength, (holder.blue or 0) * strength, 1);
+-- Runic's diamond lights faintly once the cast reaches it (amount, from 50% to 55%), then charges: a
+-- little brighter by 75% and as bright as the travelling tip by 100%, its glow at the tip halo's
+-- strength and a pale diamond like the tip's core (user, 2026-10-20). The success effect takes over
+-- from there and fades back to the plain diamond.
+local function PaintRuneGlow(holder, amount, progress)
+  holder.runeAmount, holder.runeProgress = amount, progress or 0;
+  local rise, peak = Smooth(((progress or 0) - 0.5) / 0.25), Smooth(((progress or 0) - 0.75) / 0.25);
+  local r, g, b = holder.red or 0, holder.green or 0, holder.blue or 0;
+  local strength = 0.24 * amount + 0.08 * rise * amount + 0.2 * peak * amount;
+  holder.runeGlow:SetVertexColor(r * strength, g * strength, b * strength, 1);
   holder.runeGlow:SetShown(holder.split and amount > 0);
+  local core = (0.3 * rise + 0.7 * peak) * amount;
+  holder.runeCore:SetVertexColor(0.82 + 0.18 * r, 0.82 + 0.18 * g, 0.82 + 0.18 * b, core);
+  holder.runeCore:SetShown(holder.split and core > 0);
 end
 
+-- A rising fill (Runic) brightens from 40% at the bar's start to full at the tip, across both halves
+-- (option A, user 2026-10-20).
 local function PaintFill(holder, first, second)
-  if not holder.centerBright then return end
+  if not (holder.centerBright or holder.rising) then return end
   local r, g, b = holder.red or 0, holder.green or 0, holder.blue or 0;
   local half = holder.width * 0.5;
   local function Color(strength) return CreateColor(r * strength, g * strength, b * strength, 1); end
+  if holder.rising then
+    local tip = math.max(holder.width * holder.progress, 0.001);
+    local secondLeft = half + (holder.split and holder.gap or 0);
+    local function At(x) return Color(0.4 + 0.6 * x / tip); end
+    if first > 0 then holder.fill1:SetGradient("HORIZONTAL", At(0), At(first)); end
+    if second > 0 then holder.fill2:SetGradient("HORIZONTAL", At(secondLeft), At(secondLeft + second)); end
+    return
+  end
   -- Keep the gradient fixed along the complete track, even while only part is filled.
   holder.fill1:SetGradient("HORIZONTAL", Color(0.45), Color(0.45 + 0.55 * first / half));
   holder.fill2:SetGradient("HORIZONTAL", Color(1), Color(1 - 0.55 * second / half));
@@ -178,6 +199,41 @@ local function PaintReveal(frame, holder)
   reveal:Show();
 end
 
+-- A style with lineFill (Level-Up, Runic Line) fills its own line instead of drawing a bar over it: the
+-- fill is added in the object color, and there is no backing (user report 2026-10-20: an opaque track
+-- and its black backing hid the line). With lineArt (Level-Up) each fill shows the line art's slice
+-- under it; otherwise fills and track are plain strips like the line. The track is drawn in black at
+-- LINE_TRACK_DARK over the unfilled part only, so it darkens the line where the line is and the whole
+-- bar stays readable (user, 2026-10-20: a faint additive track couldn't be seen). The art and its Era
+-- fallback crop match Styles\LevelUpLine.lua, whose line runs from 5 units before the box to 5 units
+-- past it.
+local LINE_TRACK_DARK = 0.6;
+-- An interruption darkens the whole bar more, so the red added over it reads red on any line color
+-- (red light over a green line would make yellow).
+local LINE_TRACK_INTERRUPT = 0.85;
+local LINE_FILL_ATLAS = "LevelUp-Bar-White";
+local function LineFillArt()
+  local info = C_Texture.GetAtlasInfo(LINE_FILL_ATLAS);
+  local file = info and (info.file or info.filename);
+  if file and info.leftTexCoord then
+    return file, info.leftTexCoord, info.rightTexCoord, info.topTexCoord, info.bottomTexCoord;
+  end
+  return MEDIA .. "LevelUpBar", 0, 418 / 512, 0, 7 / 8;
+end
+
+local function PlaceLineFill(frame, holder, fill, left, width)
+  if width <= 0 then return end
+  local file, l, r, t, b = LineFillArt();
+  local lineLeft, lineWidth = -5 * holder.scale, frame.boxWidth + 10 * holder.scale;
+  if fill.lineFile ~= file then fill:SetTexture(file); fill.lineFile = file; end
+  fill:SetTexCoord(l + (r - l) * (left - lineLeft) / lineWidth, l + (r - l) * (left + width - lineLeft) / lineWidth, t, b);
+  local height = 4 * holder.scale;
+  ns.styles.Snap(fill, true);
+  fill:ClearAllPoints();
+  fill:SetPoint("LEFT", frame.box, "LEFT", left, holder.y + height * (frame.lineStrokeShift or 0));
+  fill:SetSize(width, height);
+end
+
 local function Place(frame, texture, left, width, height, holder)
   local style = ns.styles.Get();
   if style.PlaceCast then style.PlaceCast(frame, texture, left, width, height, holder.y); return end
@@ -185,6 +241,14 @@ local function Place(frame, texture, left, width, height, holder)
   texture:ClearAllPoints();
   texture:SetPoint("LEFT", frame.box, "LEFT", left, holder.y);
   texture:SetSize(width, height);
+end
+
+-- Places a line-filled style's part over [left, left + width] of the bar, hidden when empty.
+local function PlacePart(frame, holder, texture, left, width)
+  texture:SetShown(width > 0);
+  if width <= 0 then return end
+  if holder.lineArt then PlaceLineFill(frame, holder, texture, left, width);
+  else Place(frame, texture, left, width, holder.height, holder); end
 end
 
 function bar.SetProgress(frame, progress, holder)
@@ -212,8 +276,23 @@ function bar.SetProgress(frame, progress, holder)
     holder.fill2:Hide();
   end
   PaintFill(holder, first, filled);
+  if holder.lineArt then
+    PlaceLineFill(frame, holder, holder.fill1, holder.left, first);
+    PlaceLineFill(frame, holder, holder.fill2, holder.left + secondLeft, filled);
+  end
+  if holder.lineFill then
+    -- The dark track covers only what is still unfilled in each part of the line.
+    -- An interruption darkens the filled part too (darkenAll), under its red.
+    local firstEnd = holder.split and half - holder.gap or holder.width;
+    local from = holder.darkenAll and 0 or math.min(tip, firstEnd);
+    PlacePart(frame, holder, holder.track1, holder.left + from, firstEnd - from);
+    if holder.split then
+      from = holder.darkenAll and secondLeft or math.max(tip, secondLeft);
+      PlacePart(frame, holder, holder.track2, holder.left + from, holder.width - from);
+    end
+  end
   local light = holder.split and math.max(0, math.min(1, (holder.progress - 0.5) / 0.05)) or 0;
-  PaintRuneGlow(holder, light * light * (3 - 2 * light));
+  PaintRuneGlow(holder, light * light * (3 - 2 * light), holder.progress);
   PaintTip(frame, holder);
   PaintReveal(frame, holder);
   holder:Show();
@@ -228,7 +307,7 @@ function bar.Layout(frame, holder)
   local shown = holder:IsShown();
   local size = ns.styles.Size(EnhancedSoftInteractDB);
   holder.scale, holder.glow, holder.revealConfig = size.inputScale, config.glow, config.reveal;
-  holder.endBright = config.endBright;
+  holder.endBright, holder.endDim = config.endBright, config.endDim;
   holder.gap = 5 * size.inputScale;
   holder.pixel = config.pixel and style.Pixel(frame) or nil;
   holder.width, holder.left = frame.nameWidth, frame.nameLeft;
@@ -237,7 +316,18 @@ function bar.Layout(frame, holder)
   holder.y = ns.styles.LineY(frame, EnhancedSoftInteractDB, config.offset) + (holder.yOffset or 0);
   holder.height, holder.split, holder.centerBright = config.height * size.inputScale, config.split == true, config.centerBright == true;
   if config.pixel then holder.height = style.Pixel(frame) * 2; end
-  for i = 1, 2 do holder["fill" .. i]:SetTexture(config.Texture and config.Texture() or WHITE); end
+  holder.lineFill, holder.lineArt = config.lineFill == true, config.lineArt == true;
+  -- Outcomes paint solid fills, so the outcome overlay never rises.
+  holder.rising = config.rising == true and not holder.outcome;
+  for i = 1, 2 do
+    local fill = holder["fill" .. i];
+    fill:SetBlendMode(holder.lineFill and "ADD" or "BLEND");
+    if not holder.lineArt then
+      fill:SetTexture(config.Texture and config.Texture() or WHITE);
+      fill:SetTexCoord(0, 1, 0, 1);
+      fill.lineFile = nil;
+    end
+  end
   local half = holder.width * 0.5;
   local firstWidth = holder.split and half - holder.gap or (holder.centerBright and half or holder.width);
   Place(frame, holder.fill1, holder.left, 0.1, holder.height, holder);
@@ -245,24 +335,41 @@ function bar.Layout(frame, holder)
   for _, prefix in ipairs({ "backing", "track" }) do
     local backing = holder.pixel and holder.pixel * (config.backingPixels or 1) or 1.2;
     local height = holder.height + (prefix == "backing" and backing or 0);
-    Place(frame, holder[prefix .. "1"], holder.left, holder.split and firstWidth or holder.width, height, holder);
-    holder[prefix .. "1"]:Show();
+    local part = holder[prefix .. "1"];
+    Place(frame, part, holder.left, holder.split and firstWidth or holder.width, height, holder);
+    part:SetBlendMode("BLEND");
+    -- A line-filled style's track is placed by SetProgress, over the unfilled part only.
+    if part.lineFile and not (holder.lineArt and prefix == "track") then
+      part:SetTexture(WHITE);
+      part:SetTexCoord(0, 1, 0, 1);
+      part.lineFile = nil;
+    end
+    part:SetShown(not (holder.lineFill and prefix == "backing"));
     if holder.split then
       Place(frame, holder[prefix .. "2"], holder.left + half + holder.gap, half - holder.gap, height, holder);
-      holder[prefix .. "2"]:Show();
+      holder[prefix .. "2"]:SetBlendMode("BLEND");
+      holder[prefix .. "2"]:SetShown(not (holder.lineFill and prefix == "backing"));
     else
       holder[prefix .. "2"]:Hide();
     end
   end
   local endWidth = holder.pixel or (config.endWidth and config.endWidth * size.inputScale) or 0.9;
   local endHeight = holder.pixel and holder.pixel * (config.endPixels or 4) or (config.endHeight or bar.END_HEIGHT) * size.inputScale;
-  Place(frame, holder.end1, holder.left - endWidth * 0.5, endWidth, endHeight, holder);
-  Place(frame, holder.end2, holder.left + holder.width - endWidth * 0.5, endWidth, endHeight, holder);
+  -- A style can center its markers on its line's pixel row (Runic).
+  local function Marker(texture, left)
+    if style.PlaceMarker then style.PlaceMarker(frame, texture, left, endWidth, endHeight, holder.y);
+    else Place(frame, texture, left, endWidth, endHeight, holder); end
+  end
+  Marker(holder.end1, holder.left - endWidth * 0.5);
+  Marker(holder.end2, holder.left + holder.width - endWidth * 0.5);
   holder.end1:Show();
   holder.end2:Show();
   holder.runeGlow:ClearAllPoints();
   holder.runeGlow:SetPoint("CENTER", frame.box, "LEFT", holder.left + half, holder.y);
   holder.runeGlow:SetSize(16 * size.inputScale, 14 * size.inputScale);
+  holder.runeCore:ClearAllPoints();
+  holder.runeCore:SetPoint("CENTER", frame.box, "LEFT", holder.left + half, holder.y);
+  holder.runeCore:SetSize(6 * size.inputScale, 6 * size.inputScale);
   bar.Paint(frame, holder.sourceRed or 0, holder.sourceGreen or 0, holder.sourceBlue or 0, holder);
   bar.SetProgress(frame, holder.progress, holder);
   if not shown then holder:Hide(); end
@@ -272,29 +379,31 @@ function bar.Paint(frame, r, g, b, holder)
   holder = holder or frame.castBar;
   holder.sourceRed, holder.sourceGreen, holder.sourceBlue = r, g, b;
   if holder.red == r and holder.green == g and holder.blue == b
-      and holder.paintedCenterBright == holder.centerBright and holder.paintedEndBright == holder.endBright then return end
+      and holder.paintedCenterBright == holder.centerBright and holder.paintedEndBright == holder.endBright
+      and holder.paintedEndDim == holder.endDim and holder.paintedLineFill == holder.lineFill
+      and holder.paintedRising == holder.rising then return end
   holder.red, holder.green, holder.blue = r, g, b;
   holder.paintedCenterBright, holder.paintedEndBright = holder.centerBright, holder.endBright;
-  -- A style can lift its start and end markers toward white so they read clearly at the line's ends.
-  local er, eg, eb = r * 0.85, g * 0.85, b * 0.85;
-  if holder.endBright then
-    local lift = holder.endBright;
-    er, eg, eb = r + (1 - r) * lift, g + (1 - g) * lift, b + (1 - b) * lift;
-  end
+  holder.paintedEndDim, holder.paintedLineFill, holder.paintedRising = holder.endDim, holder.lineFill, holder.rising;
+  local er, eg, eb = bar.EndColor(holder, r, g, b);
   for i = 1, 2 do
     holder["backing" .. i]:SetVertexColor(0, 0, 0, 0.8);
-    holder["track" .. i]:SetVertexColor(r * 0.28, g * 0.28, b * 0.28, 1);
+    if holder.lineFill then holder["track" .. i]:SetVertexColor(0, 0, 0, LINE_TRACK_DARK);
+    else holder["track" .. i]:SetVertexColor(r * 0.28, g * 0.28, b * 0.28, 1); end
     local fill = holder["fill" .. i];
     fill:SetGradient("HORIZONTAL", CreateColor(1, 1, 1, 1), CreateColor(1, 1, 1, 1));
-    if holder.centerBright then fill:SetVertexColor(1, 1, 1, 1);
+    if holder.centerBright or holder.rising then fill:SetVertexColor(1, 1, 1, 1);
     else fill:SetVertexColor(r * 0.95, g * 0.95, b * 0.95, 1); end
     holder["end" .. i]:SetVertexColor(er, eg, eb, 1);
   end
   if holder.centerBright and holder.width then
     local tip, half = holder.width * holder.progress, holder.width * 0.5;
     PaintFill(holder, math.min(half, tip), math.max(0, tip - half));
+  elseif holder.rising and holder.width and holder.progress then
+    local tip, half = holder.width * holder.progress, holder.width * 0.5;
+    PaintFill(holder, math.min(half - holder.gap, tip), math.max(0, tip - half - holder.gap));
   end
-  PaintRuneGlow(holder, holder.runeAmount or 0);
+  PaintRuneGlow(holder, holder.runeAmount or 0, holder.runeProgress);
   PaintReveal(frame, holder);
 end
 
@@ -356,7 +465,9 @@ local function Effect(frame, holder, kind, x, y, width, height, r, g, b, strengt
   fx:ClearAllPoints();
   fx:SetPoint("CENTER", frame.box, "LEFT", x, y);
   fx:SetSize(width, height);
-  -- A uniform vertex color replaces any gradient the texture carried from an earlier frame.
+  -- In game a texture keeps its last SetGradient and multiplies it with the vertex color, so a texture
+  -- reused after a wave half drops its gradient first.
+  if fx.wave then fx:SetGradient("HORIZONTAL", CreateColor(1, 1, 1, 1), CreateColor(1, 1, 1, 1)); end
   if blend == "BLEND" then fx:SetVertexColor(r, g, b, math.min(1, strength));
   else fx:SetVertexColor(r * strength, g * strength, b * strength, 1); end
   fx.wave = nil;
@@ -373,6 +484,8 @@ local function WaveHalf(frame, holder, crest, direction, limit, y, half, height,
   if not fx then return end
   local edge = strength * (1 - length / half);
   local near, far = CreateColor(r * strength, g * strength, b * strength, 1), CreateColor(r * edge, g * edge, b * edge, 1);
+  -- The gradient alone carries the color; a vertex color would multiply into it.
+  fx:SetVertexColor(1, 1, 1, 1);
   if direction > 0 then fx:SetGradient("HORIZONTAL", near, far); else fx:SetGradient("HORIZONTAL", far, near); end
   fx.wave = true;
 end
@@ -381,7 +494,11 @@ end
 local function PaintBar(holder, alpha, fr, fg, fb, tr, tg, tb, er, eg, eb)
   for i = 1, 2 do
     holder["backing" .. i]:SetVertexColor(0, 0, 0, 0.8 * alpha);
-    holder["track" .. i]:SetVertexColor(tr, tg, tb, alpha);
+    -- A line-filled track keeps darkening the line, tinted by the outcome (Runic's interruption turns red).
+    -- An interruption's darkening fades out a little later than its red, so the red never mixes with the
+    -- returning line color (red over green reads yellow).
+    local dark = holder.darkenAll and LINE_TRACK_INTERRUPT * math.sqrt(alpha) or LINE_TRACK_DARK * alpha;
+    holder["track" .. i]:SetVertexColor(tr, tg, tb, holder.lineFill and dark or alpha);
     holder["fill" .. i]:SetVertexColor(fr, fg, fb, alpha);
     holder["end" .. i]:SetVertexColor(er, eg, eb, alpha);
   end
@@ -389,16 +506,20 @@ end
 
 -- Each effect draws one frame; LENGTH holds how long it runs, in seconds.
 local OUTCOMES = {};
-local LENGTH = { afterglow = 0.8, redGlowLine = 0.5, runeIgnition = 0.65, tipSparks = 0.65, softBloom = 0.7, sink = 0.5, flashFill = 0.4, redBar = 0.65 };
+local LENGTH = { converge = 0.8, redGlowLine = 0.5, runeIgnition = 0.65, tipSparks = 0.65, softBloom = 0.7, sink = 0.5, flashFill = 0.4, redBar = 0.65 };
 
--- Level-Up success: the bar warms slightly, lingers, then melts into the line while the upper line echoes it.
--- The lifted start and end markers, matching bar.Paint.
-local function EndColor(h, r, g, b)
-  if not h.endBright then return r * 0.85, g * 0.85, b * 0.85 end
-  return Mix(r, g, b, 1, 1, 1, h.endBright);
+-- The start and end markers' color: the object color at endDim (default 85%), or lifted toward white by
+-- endBright so they read clearly at the line's ends.
+function bar.EndColor(h, r, g, b)
+  if h.endBright then return Mix(r, g, b, 1, 1, 1, h.endBright) end
+  local dim = h.endDim or 0.85;
+  return r * dim, g * dim, b * dim;
 end
+local EndColor = bar.EndColor;
 
-function OUTCOMES.afterglow(frame, h, e, r, g, b)
+-- The Level-Up afterglow: the bar warms slightly, lingers, then melts into the line while the upper line
+-- echoes it. `base` scales its light.
+local function Afterglow(frame, h, e, r, g, b, base)
   local s, middle = h.scale, frame.boxWidth * 0.5;
   local alpha = 1 - Smooth((e - 0.25) / 0.5);
   local warm = Smooth(e / 0.08);
@@ -410,11 +531,33 @@ function OUTCOMES.afterglow(frame, h, e, r, g, b)
   -- Everything sits on the line strokes, exactly like the Level-Up interaction flash. The upper
   -- line mirrors the lower one at -h.y, inset 20 units each side.
   Effect(frame, h, "line", middle, h.y + 4 * s * (frame.lineStrokeShift or 0), frame.boxWidth + 10 * s, 4 * s,
-    r, g, b, 0.6 * warm * alpha);
-  Effect(frame, h, "glowLine", middle, h.y, frame.boxWidth + 26 * s, 12 * s, r, g, b, 0.55 * alpha);
-  Effect(frame, h, "glow", middle, h.y, frame.boxWidth + 20 * s, 8 * s, r, g, b, 0.3 * alpha);
+    r, g, b, 0.6 * warm * alpha * base);
+  Effect(frame, h, "glowLine", middle, h.y, frame.boxWidth + 26 * s, 12 * s, r, g, b, 0.55 * alpha * base);
+  Effect(frame, h, "glow", middle, h.y, frame.boxWidth + 20 * s, 8 * s, r, g, b, 0.3 * alpha * base);
   Effect(frame, h, "glowLine", middle, -h.y, frame.boxWidth - 30 * s, 9 * s, r, g, b,
-    0.25 * Smooth(e / 0.1) * alpha);
+    0.25 * Smooth(e / 0.1) * alpha * base);
+end
+
+-- Level-Up success (option B, user 2026-10-20): two soft crests start at the end markers and run inward,
+-- and where they meet in the middle the afterglow swells to full strength. Every light is additive, so
+-- where the crest, its halo and the glow line overlap they sum in game; CREST_WHITE keeps that sum in the
+-- interaction color instead of washing out to white.
+local CREST_WHITE, CREST_STRENGTH = 0.15, 0.75;
+function OUTCOMES.converge(frame, h, e, r, g, b)
+  local meet = Smooth((e - 0.25) / 0.15);
+  Afterglow(frame, h, e, r, g, b, 0.35 + 0.65 * meet);
+  local s, center, half = h.scale, h.left + h.width * 0.5, 16 * h.scale;
+  local wr, wg, wb = Mix(r, g, b, 1, 1, 1, CREST_WHITE);
+  local travel = OutQuad(e / 0.35);
+  local wave = CREST_STRENGTH * Smooth(e / 0.05) * (1 - Smooth((e - 0.25) / 0.15));
+  local left, right = h.left, h.left + h.width;
+  for side = -1, 1, 2 do
+    local crest = center + side * h.width * 0.5 * (1 - travel);
+    WaveHalf(frame, h, crest, 1, right, h.y, half, h.height, wr, wg, wb, wave);
+    WaveHalf(frame, h, crest, -1, left, h.y, half, h.height, wr, wg, wb, wave);
+    Effect(frame, h, "glow", crest, h.y, 2 * half, 7 * s, r, g, b, 0.7 * wave);
+    Effect(frame, h, "glowLine", crest, h.y, 44 * s, 10 * s, r, g, b, 0.6 * wave);
+  end
 end
 
 -- Level-Up interruption: the success flare's glow line, in red.
@@ -422,9 +565,14 @@ function OUTCOMES.redGlowLine(frame, h, e, r, g, b)
   local s, stopped = h.scale, h.width * h.progress;
   local flash = Smooth(e / 0.05) * (1 - Smooth((e - 0.05) / 0.4));
   local fr, fg, fb = Mix(r, g, b, RED_R, RED_G, RED_B, Smooth(e / 0.05));
-  local er, eg, eb = EndColor(h, r, g, b);
-  PaintBar(h, 1 - Smooth(e / 0.3), fr, fg, fb, r * 0.28, g * 0.28, b * 0.28, er, eg, eb);
-  Effect(frame, h, "glowLine", frame.boxWidth * 0.5, h.y, frame.boxWidth + 26 * s, 12 * s, RED_R, RED_G, RED_B, 0.8 * flash);
+  -- The end markers turn red with the fill, like Runic's (user, 2026-10-20).
+  local er, eg, eb = EndColor(h, fr, fg, fb);
+  -- The line under the bar turns dark red with the fill.
+  local tr, tg, tb = Mix(r * 0.28, g * 0.28, b * 0.28, RED_R * 0.28, RED_G * 0.28, RED_B * 0.28, Smooth(e / 0.05));
+  PaintBar(h, 1 - Smooth(e / 0.3), fr, fg, fb, tr, tg, tb, er, eg, eb);
+  -- The glow line tints the Level-Up line red with normal blending: added red light over a green line
+  -- reads yellow (renders 2026-10-20).
+  Effect(frame, h, "glowLine", frame.boxWidth * 0.5, h.y, frame.boxWidth + 26 * s, 12 * s, RED_R, RED_G, RED_B, 0.8 * flash, "BLEND");
   Effect(frame, h, "glow", h.left + stopped * 0.5, h.y, stopped + 20 * s, 12 * s, RED_R, RED_G, RED_B, 0.35 * flash);
 end
 
@@ -499,20 +647,35 @@ function OUTCOMES.sink(frame, h, e, r, g, b)
     h.yOffset = -4 * s * q;
     bar.Layout(frame, h);
   end
-  local rr, rg, rb = Mix(r, g, b, RED_R, RED_G, RED_B, 0.75);
-  local fr, fg, fb = Mix(r, g, b, rr, rg, rb, Smooth(e / 0.08));
-  PaintBar(h, 1 - q, fr, fg, fb, r * 0.28, g * 0.28, b * 0.28, r * 0.85, g * 0.85, b * 0.85);
+  -- The fill, track and end markers all turn red, like the line styles' (user, 2026-10-20).
+  local red = Smooth(e / 0.05);
+  local fr, fg, fb = Mix(r, g, b, RED_R, RED_G, RED_B, red);
+  local tr, tg, tb = Mix(r * 0.28, g * 0.28, b * 0.28, RED_R * 0.28, RED_G * 0.28, RED_B * 0.28, red);
+  local er, eg, eb = EndColor(h, fr, fg, fb);
+  PaintBar(h, 1 - q, fr, fg, fb, tr, tg, tb, er, eg, eb);
 end
 
--- Elv success: the bar flashes white, then fades. Flat, with no glow.
+-- Lights the style's panel border during an outcome (Elv), if the style has one.
+local function OutcomeLight(frame, r, g, b, alpha)
+  local light = ns.styles.Get().OutcomeLight;
+  if light then light(frame, r, g, b, alpha); end
+end
+
+-- Elv success: the bar flashes white, then fades. Flat, with no glow. The panel border lights in the
+-- object color and fades (option B, user 2026-10-21).
 function OUTCOMES.flashFill(frame, h, e, r, g, b)
   local fr, fg, fb = Mix(r, g, b, 1, 1, 1, 1 - Smooth(e / 0.12));
   PaintBar(h, 1 - Smooth((e - 0.06) / 0.3), fr, fg, fb, r * 0.28, g * 0.28, b * 0.28, r * 0.85, g * 0.85, b * 0.85);
+  OutcomeLight(frame, r, g, b, 1 - Smooth(e / 0.4));
 end
 
--- Elv interruption: the stopped bar turns red, holds, then fades.
-function OUTCOMES.redBar(frame, h, e, r, g, b)
-  PaintBar(h, 1 - Smooth((e - 0.3) / 0.3), 0.78, 0.17, 0.14, r * 0.28, g * 0.28, b * 0.28, r * 0.85, g * 0.85, b * 0.85);
+-- Elv interruption: the stopped bar, its track and end markers turn red, hold, then fade, and the panel
+-- border flashes red.
+local ELV_RED = { 0.78, 0.17, 0.14 };
+function OUTCOMES.redBar(frame, h, e)
+  local r, g, b = ELV_RED[1], ELV_RED[2], ELV_RED[3];
+  PaintBar(h, 1 - Smooth((e - 0.3) / 0.3), r, g, b, r * 0.28, g * 0.28, b * 0.28, r * 0.85, g * 0.85, b * 0.85);
+  OutcomeLight(frame, r, g, b, 1 - Smooth(e / 0.5));
 end
 bar.OUTCOMES = OUTCOMES;
 
@@ -523,22 +686,24 @@ function bar.Outcome(frame, objectGUID, kind, progress, sample)
   local style, db = ns.styles.Get(), EnhancedSoftInteractDB;
   local name = style.castBar and style.castBar[kind];
   local effect, length = OUTCOMES[name], LENGTH[name];
-  if not db.animationsEnabled or not effect then return end
+  if not effect then return end
   local holder = frame.castFinish;
   holder.sourceRed, holder.sourceGreen, holder.sourceBlue = frame.castBar.sourceRed, frame.castBar.sourceGreen, frame.castBar.sourceBlue;
   holder.progress = kind == "success" and 1 or math.max(0, math.min(1, progress or 0));
   holder.outcome, holder.yOffset, holder.fx = true, nil, holder.fx or {};
+  holder.darkenAll = kind ~= "success";
   bar.Layout(frame, holder);
   -- Outcomes paint solid fills; the next normal Paint restores gradients and colors.
   for i = 1, 2 do holder["fill" .. i]:SetGradient("HORIZONTAL", CreateColor(1, 1, 1, 1), CreateColor(1, 1, 1, 1)); end
   holder.red = nil;
   holder.runeGlow:Hide();
+  holder.runeCore:Hide();
   holder:Show();
   local started, size = GetTime(), ns.styles.Size(db);
   holder.endsAt = started + length;
   local r, g, b = holder.sourceRed or 0, holder.sourceGreen or 0, holder.sourceBlue or 0;
   local function Eligible()
-    if not db.castBarEnabled or not db.animationsEnabled or not frame:IsShown()
+    if not db.castBarEnabled or not frame:IsShown()
         or ns.styles.Get() ~= style or ns.styles.Size(db) ~= size then return false end
     if sample then return frame.sampleName == sample end
     if not db.enabled or frame.inEditMode or frame.sampleName then return false end
@@ -553,7 +718,7 @@ function bar.Outcome(frame, objectGUID, kind, progress, sample)
     local running = elapsed < length and Eligible();
     if running then effect(frame, holder, elapsed, r, g, b); end
     for i = holder.fxUsed + 1, #holder.fx do holder.fx[i]:Hide(); end
-    if not running then holder:Hide(); end
+    if not running then holder:Hide(); OutcomeLight(frame, 0, 0, 0, 0); end
   end
   holder:SetScript("OnUpdate", Update);
   Update();

@@ -71,6 +71,180 @@ local function DefaultValue(data)
   return data.default;
 end
 
+----
+--  Sliders: a plain Slider with the art of Blizzard's settings slider (MinimalSliderWithSteppersTemplate in
+--  Blizzard_SharedXML: the Minimal_SliderBar track and thumb, with a stepper arrow at each end), built
+--  from the addon's own frames like the dropdowns. A client without that art gets OptionsSliderTemplate.
+----
+local STEPPER_DISABLED_ALPHA = 0.5; --Blizzard's value
+local THUMB_DISABLED_ALPHA = 0.7;
+
+local function CreateSlider(row, data)
+  local native = C_Texture.GetAtlasInfo("Minimal_SliderBar_Button") ~= nil;
+  local slider = CreateFrame("Slider", nil, row, not native and "OptionsSliderTemplate" or nil);
+  slider:SetMinMaxValues(data.minValue, data.maxValue);
+  slider:SetValueStep(data.valueStep);
+  slider:SetObeyStepOnDrag(true);
+  if not native then
+    slider:SetSize(160, 16);
+    if slider.Low then slider.Low:Hide(); end
+    if slider.High then slider.High:Hide(); end
+    if slider.Text then slider.Text:Hide(); end
+    return slider;
+  end
+  slider:SetOrientation("HORIZONTAL");
+  slider:SetSize(136, 19);
+  slider:EnableMouse(true);
+  local function Art(atlas, layer)
+    local texture = slider:CreateTexture(nil, layer or "ARTWORK");
+    texture:SetAtlas(atlas, true);
+    return texture;
+  end
+  local left, right = Art("Minimal_SliderBar_Left"), Art("Minimal_SliderBar_Right");
+  left:SetPoint("LEFT");
+  right:SetPoint("RIGHT");
+  local middle = Art("_Minimal_SliderBar_Middle");
+  middle:SetPoint("TOPLEFT", left, "TOPRIGHT");
+  middle:SetPoint("TOPRIGHT", right, "TOPLEFT");
+  slider:SetThumbTexture(Art("Minimal_SliderBar_Button", "OVERLAY"));
+
+  -- The arrows step by one value; each turns grey at its end of the range, as Blizzard's do.
+  slider.steppers = {};
+  for i, step in ipairs({ -1, 1 }) do
+    local button = CreateFrame("Button", nil, row);
+    button.art = button:CreateTexture(nil, "BACKGROUND");
+    button.art:SetAtlas(step < 0 and "Minimal_SliderBar_Button_Left" or "Minimal_SliderBar_Button_Right", true);
+    button.art:SetPoint("CENTER");
+    button:SetSize(step < 0 and 11 or 9, 19);
+    if step < 0 then
+      button:SetPoint("RIGHT", slider, "LEFT", -4, 0);
+    else
+      button:SetPoint("LEFT", slider, "RIGHT", 4, 0);
+    end
+    button:SetScript("OnClick", function()
+      slider:SetValue(slider:GetValue() + step * data.valueStep);
+      if PlaySound and SOUNDKIT and SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON then PlaySound(SOUNDKIT.IG_MAINMENU_OPTION_CHECKBOX_ON); end
+    end);
+    Hover(button, data, row);
+    slider.steppers[i] = button;
+  end
+  function slider.UpdateSteppers(self)
+    local enabled = self:IsEnabled();
+    local low, high = self:GetMinMaxValues();
+    local value = self:GetValue() or low;
+    local half = data.valueStep * 0.5;
+    for i, button in ipairs(self.steppers) do
+      local on = enabled and (i == 1 and value > low + half or i == 2 and value < high - half);
+      button:SetEnabled(on and true or false);
+      button:SetAlpha(on and 1 or STEPPER_DISABLED_ALPHA);
+      button.art:SetDesaturated(not on);
+    end
+    self:GetThumbTexture():SetAlpha(enabled and 1 or THUMB_DISABLED_ALPHA);
+  end
+  slider:HookScript("OnValueChanged", slider.UpdateSteppers);
+  return slider;
+end
+ns.CreateSettingsSlider = CreateSlider; --for the test tools
+
+----
+--  Binding slots: two buttons for a game binding, like the game's Keybindings page. Click a slot, then
+--  press a key or click it with a middle or side mouse button; Escape or another click cancels, and
+--  right-click clears the slot. Controller buttons stay in the game's controller settings. The slot
+--  takes keyboard input only while it waits for a key.
+----
+local MOUSE_BUTTONS = { MiddleButton = "BUTTON3", Button4 = "BUTTON4", Button5 = "BUTTON5" };
+local MODIFIER_KEYS = { LALT = true, RALT = true, LCTRL = true, RCTRL = true, LSHIFT = true, RSHIFT = true,
+  LMETA = true, RMETA = true, UNKNOWN = true };
+local listening; --the slot waiting for a key
+
+-- The binding string for a key with the held modifiers, in the game's ALT-CTRL-SHIFT order.
+local function Chord(key)
+  local chord = "";
+  if IsAltKeyDown() then chord = chord .. "ALT-"; end
+  if IsControlKeyDown() then chord = chord .. "CTRL-"; end
+  if IsShiftKeyDown() then chord = chord .. "SHIFT-"; end
+  if IsMetaKeyDown and IsMetaKeyDown() then chord = chord .. "META-"; end
+  return chord .. key;
+end
+
+local function StopListening()
+  local slot = listening;
+  if not slot then return end
+  listening = nil;
+  slot:EnableKeyboard(false);
+  slot:SetScript("OnKeyDown", nil);
+  slot:UnlockHighlight();
+  ns.RefreshSettings();
+end
+
+-- Puts key in the action's slot (1 or 2), or clears the slot when key is nil. The other slot keeps its
+-- key. A key taken from another action is named in chat, since the game unbinds it there.
+function ns.SetBindingSlot(action, slot, key)
+  if InCombatLockdown() then ns.Notify("Key bindings can't change during combat."); return end
+  local keys = { GetBindingKey(action) };
+  local wanted = { keys[1], keys[2] };
+  for i = 1, 2 do if wanted[i] == key then wanted[i] = nil; end end
+  wanted[slot] = key;
+  for _, old in ipairs(keys) do SetBinding(old, nil); end
+  if key then
+    local previous = GetBindingAction(key);
+    if previous ~= "" and previous ~= action then
+      SetBinding(key, nil);
+      ns.Notify(('%s no longer does "%s".'):format(GetBindingText(key), _G["BINDING_NAME_" .. previous] or previous));
+    end
+  end
+  for i = 1, 2 do if wanted[i] then SetBinding(wanted[i], action); end end
+  SaveBindings(GetCurrentBindingSet());
+end
+
+local function CreateBindingSlots(row, data)
+  local holder = CreateFrame("Frame", nil, row);
+  holder:SetSize(224, 22);
+  holder.slots = {};
+  local function Bind(i, key)
+    data.set(i, key);
+    ns.RefreshSettings();
+  end
+  for i = 1, 2 do
+    local slot = CreateFrame("Button", nil, holder, "UIPanelButtonTemplate");
+    slot:SetSize(108, 22);
+    slot:SetPoint(i == 1 and "LEFT" or "RIGHT");
+    slot:RegisterForClicks("AnyUp");
+    slot:SetScript("OnClick", function(self, button)
+      if listening == self then
+        StopListening();
+        if MOUSE_BUTTONS[button] then Bind(i, Chord(MOUSE_BUTTONS[button])); end
+        return;
+      end
+      StopListening();
+      if button == "RightButton" then Bind(i, nil); return end
+      if button ~= "LeftButton" then return end
+      listening = self;
+      self:LockHighlight();
+      self:SetText("Press a key");
+      self:EnableKeyboard(true);
+      self:SetScript("OnKeyDown", function(_, key)
+        if key == "ESCAPE" then StopListening(); return end
+        if MODIFIER_KEYS[key] then return end
+        StopListening();
+        Bind(i, Chord(key));
+      end);
+    end);
+    Hover(slot, data, row);
+    holder.slots[i] = slot;
+  end
+  function holder.SetEnabled(self, enabled)
+    for _, slot in ipairs(self.slots) do slot:SetEnabled(enabled); end
+  end
+  function holder.Refresh(self)
+    local keys = { data.get() };
+    for i, slot in ipairs(self.slots) do
+      if listening ~= slot then slot:SetText(keys[i] and GetBindingText(keys[i]) or NOT_BOUND or "Not Bound"); end
+    end
+  end
+  return holder;
+end
+
 local function CreateRow(content, data, y)
   local row = CreateFrame("Frame", nil, content);
   row:SetPoint("TOPLEFT", 8, -y);
@@ -85,8 +259,8 @@ local function CreateRow(content, data, y)
   row.highlight:SetAlpha(0.15);
   row.highlight:Hide();
   Hover(row, data);
-  -- Sub-options sit one checkbox width further in, under their parent option.
-  row.indent = data.indent and SUB_OPTION_INDENT or 0;
+  -- Sub-options sit one checkbox width further in per level, under their parent option.
+  row.indent = (data.indent or 0) * SUB_OPTION_INDENT;
   row.label = Label(row, data.name);
   row.label:SetPoint("LEFT", 32 + row.indent, 0);
   row.label:SetWidth(200);
@@ -97,15 +271,8 @@ local function CreateRow(content, data, y)
     row.control:SetPoint("LEFT", row.indent, 0);
     row.control:SetScript("OnClick", function(self) Changed(data, not not self:GetChecked()); end);
   elseif data.kind == ns.SettingType.Slider then
-    row.control = CreateFrame("Slider", nil, row, "OptionsSliderTemplate");
-    row.control:SetSize(160, 16);
+    row.control = CreateSlider(row, data);
     row.control:SetPoint("RIGHT", -64, 0);
-    row.control:SetMinMaxValues(data.minValue, data.maxValue);
-    row.control:SetValueStep(data.valueStep);
-    row.control:SetObeyStepOnDrag(true);
-    if row.control.Low then row.control.Low:Hide(); end
-    if row.control.High then row.control.High:Hide(); end
-    if row.control.Text then row.control.Text:Hide(); end
     row.value = Label(row, "", "GameFontHighlightSmall");
     row.value:SetPoint("RIGHT", -2, 0);
     row.control:SetScript("OnValueChanged", function(_, value)
@@ -116,6 +283,9 @@ local function CreateRow(content, data, y)
   elseif data.kind == ns.SettingType.Dropdown then
     row.control = ns.SettingsDropdown.Create(row, data);
     row.control:SetSize(224, 25);
+    row.control:SetPoint("RIGHT", -8, 0);
+  elseif data.kind == ns.SettingType.Keybind then
+    row.control = CreateBindingSlots(row, data);
     row.control:SetPoint("RIGHT", -8, 0);
   end
   if row.control then Hover(row.control, data, row); end
@@ -162,7 +332,7 @@ function ns.RefreshSettings()
     row.control:SetEnabled(not disabled);
     row.label:SetTextColor(disabled and 0.45 or 1, disabled and 0.45 or 1, disabled and 0.45 or 1);
     local value = data.get();
-    row.reset:SetShown(value ~= DefaultValue(data));
+    row.reset:SetShown(data.kind ~= ns.SettingType.Keybind and value ~= DefaultValue(data)); --a binding has no default
     row.reset:SetEnabled(not disabled); --the button shows Blizzard's own disabled art
     local textWidth = math.min(row.label:GetStringWidth(), data.kind == ns.SettingType.Checkbox and 480 - row.indent or 200);
     row.reset:SetPoint("LEFT", row, "LEFT", math.max(238, 32 + row.indent + textWidth + 8), 0);
@@ -170,8 +340,9 @@ function ns.RefreshSettings()
       row.control:SetChecked(value);
     elseif data.kind == ns.SettingType.Slider then
       row.control:SetValue(value);
+      if row.control.UpdateSteppers then row.control:UpdateSteppers(); end --also when the value didn't change
       row.value:SetText(data.formatter and data.formatter(value) or tostring(value));
-    elseif data.kind == ns.SettingType.Dropdown then
+    elseif data.kind == ns.SettingType.Dropdown or data.kind == ns.SettingType.Keybind then
       row.control:Refresh();
     end
     row.refreshing = false;
@@ -189,10 +360,10 @@ end
 -- Checkboxes under the preview show states a sample can't reach on its own. They change only the
 -- preview and are not saved. Animate plays the interaction every few seconds, or loops the cast.
 local PREVIEW_TOGGLES = {
-  { key = "animate", name = "Animate", desc = "Plays the interaction every few seconds.\n\nWith Cast bar checked, plays a finished cast and an interrupted one." },
+  { key = "animate", name = "Animate", desc = "Plays the interaction every few seconds." },
   { key = "range", name = "Move closer", desc = "Shows the target as out of range." },
-  { key = "requires", name = "Requires profession", desc = "Shows the missing profession message.\n\nOnly for herbs and ore." },
-  { key = "cast", name = "Cast bar", desc = "Shows a cast bar on targets you gather or open.\n\nNot available out of range, with a missing profession, or when Enable Cast Bar is off." },
+  { key = "requires", name = "Requires profession", desc = "Shows the missing profession message." },
+  { key = "cast", name = "Cast bar", desc = "Shows a cast bar on targets you gather or open." },
 };
 local PREVIEW_PULSE_EVERY = 3;
 
@@ -285,7 +456,7 @@ local function CreatePage()
   move:SetPoint("TOPRIGHT", -20, -14);
   move:SetText("Move HUD in Edit Mode");
   move:SetScript("OnClick", ns.OpenHUDInEditMode);
-  Hover(move, { name = "Move HUD in Edit Mode", desc = "Opens Edit Mode so you can drag the HUD.\n\nEach Edit Mode layout keeps its own position." });
+  Hover(move, { name = "Move HUD in Edit Mode", desc = "Opens Edit Mode so you can drag the HUD." });
   -- The preview sits in a fixed frame above the scrolling options, like Blizzard's nameplate preview,
   -- so it stays in view while options change. Clients without that frame art get a plain border.
   local previewFrame = CreateFrame("Frame", nil, panel, "BackdropTemplate");
@@ -355,7 +526,9 @@ local function CreatePage()
   CreateCard();
   ns.SettingsDropdown.CreateList(panel);
   panel:SetScript("OnShow", ns.RefreshSettings);
-  panel:SetScript("OnHide", function() card:Hide(); ns.SettingsDropdown.Close(); end);
+  panel:SetScript("OnHide", function() card:Hide(); ns.SettingsDropdown.Close(); StopListening(); end);
+  panel:RegisterEvent("UPDATE_BINDINGS"); --bindings changed outside the page
+  panel:SetScript("OnEvent", function() if panel:IsShown() then ns.RefreshSettings(); end end);
   local category = Settings.RegisterCanvasLayoutCategory(panel, panel.name);
   Settings.RegisterAddOnCategory(category);
   ns.settingsCategory = category;

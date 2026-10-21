@@ -37,7 +37,7 @@ end
 local OUT_OF_RANGE_COLOR = {.35, .35, .35};
 local UNABLE_COLOR = {.5, .5, .5};
 
--- The color for an icon key (frame.colorKey) and range, dimmed by colorBrightness (percent).
+-- The color for an icon key (frame.colorKey) and range.
 local function GetTypeColor(key, outOfRange)
   local color;
   if outOfRange then
@@ -47,8 +47,7 @@ local function GetTypeColor(key, outOfRange)
   else
     color = TYPE_COLORS[key] or TYPE_COLORS["default"];
   end
-  local scale = EnhancedSoftInteractDB.colorBrightness / 100;
-  return color[1] * scale, color[2] * scale, color[3] * scale;
+  return color[1], color[2], color[3];
 end
 
 ns.CursorName, ns.NormalizeCursorKey, ns.ColorKeyFor = CursorName, NormalizeCursorKey, ColorKeyFor;

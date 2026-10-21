@@ -180,7 +180,6 @@ function ns.SetupKeyCap(hud)
     local db = EnhancedSoftInteractDB;
     local style = ns.styles.Get();
     local size = ns.styles.Size(db);
-    local buttonScale = ns.styles.ButtonScale(db);
     if style.KeyText then text = style.KeyText(frame, text); end
     if cap.isGlyph or cap.styleArt ~= style or cap.keyStyle ~= db.keyStyle then StyleKeyCap(); end
     local managed = ns.ModifierKey.Prepare(frame, cap.key, text);
@@ -205,9 +204,9 @@ function ns.SetupKeyCap(hud)
     local faceHeight = ns.styles.KeyFaceHeight(frame, db, false);
     local height = faceHeight / faceShareY;
     local gamepadText = text:find("|A:Gamepad_", 1, true);
-    if gamepadText then text = ScaleGamepadText(text, size.inputScale * buttonScale, faceHeight - 2 * size.inputScale * buttonScale); end
+    if gamepadText then text = ScaleGamepadText(text, size.inputScale, faceHeight - 2 * size.inputScale); end
     local fontPath = ns.styles.Font(db);
-    local fontSize = size.keyFontSize * buttonScale;
+    local fontSize = size.keyFontSize;
     cap.text:SetFont(fontPath, fontSize, ns.styles.FontFlags());
     local textNudge = style.flatKey and 0 or KEY_TEXT_NUDGE_X;
     cap.textX = gamepadText and 0 or fontSize * (textNudge - InkOffset(text, fontPath));
@@ -221,7 +220,7 @@ function ns.SetupKeyCap(hud)
     if style.KeyWidth and not managed then textWidth = math.max(textWidth, style.KeyWidth(frame, height)); end
     local naturalWidth = height * cap.art.aspect * faceShareX;
     cap.capWidth = managed and naturalWidth or math.max(naturalWidth,
-      textWidth + (style.keyTextPadding or KEY_TEXT_PAD) * 1.3 * size.inputScale * buttonScale);
+      textWidth + (style.keyTextPadding or KEY_TEXT_PAD) * 1.3 * size.inputScale);
     cap.capHeight = faceHeight;
     if style.Pixel then
       local pixel = style.Pixel(frame);

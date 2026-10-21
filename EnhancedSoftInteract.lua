@@ -16,16 +16,16 @@ local function Notify(msg) print("|cffffd100Enhanced Soft Interact:|r " .. msg) 
 local DEFAULTS = {
   enabled = true, showBlizzardTooltip = false, showBlizzardIcons = true,
   forceInteractKey = true, forceInteractIcons = true,
-  showIcon = true, elvShowIcon = false, swapIconAndKey = false, showKey = true, hudSize = "normal", colorBrightness = 100,
-  animationsEnabled = true, castBarEnabled = true, castBarHideGame = true, castBarClicked = false, hudStyle = "levelup", shadowStrength = 90,
+  showIcon = true, elvShowIcon = false, swapIconAndKey = false, showKey = true, hudSize = "normal",
+  showSkillUp = true, castBarEnabled = true, castBarHideGame = true, castBarClicked = true, hudStyle = "levelup",
   -- Retail defaults to Plunderstorm keys; Forever and the Classic clients default to the Classic keys.
   elvFont = "PT Sans Narrow", keyStyle = select(4, GetBuildInfo()) >= 100000 and "plunderstorm" or "classic",
-  buttonSizePercent = 100, interactionIconSizePercent = 100,
+  -- The game's own defaults are 10 yards, straight ahead.
+  interactRange = 20, interactArc = 1,
 };
 -- Each settings slider's {min, max, step}.
 local SLIDER_RANGES = {
-  colorBrightness = {30, 100, 5}, shadowStrength = {0, 100, 5},
-  buttonSizePercent = {75, 125, 5}, interactionIconSizePercent = {75, 125, 5},
+  interactRange = {5, 45, 1},
 };
 
 local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
@@ -72,6 +72,8 @@ local function CreateHUD(frame)
   frame.compactName:SetWordWrap(false);
   frame.compactName:SetJustifyH("CENTER");
   frame.compactName:SetAlpha(0);
+  frame.skillIcon = frame.nameHolder:CreateTexture(nil, "ARTWORK"); --skill-up arrows before the name
+  frame.skillIcon:Hide();
   frame.requirement = frame:CreateFontString(nil, "ARTWORK", NAME_FONT);
   frame.requirement:SetWordWrap(false);
   frame.requirement:SetJustifyH("CENTER");
@@ -248,9 +250,6 @@ ns.RefreshKeyCap = RefreshKeyCap;
 -- A setting changes the real HUD and the settings preview alike, so each of these runs on every HUD.
 function ns.ShowSample(...) for _, h in ipairs(huds) do h.ShowSample(...); end end
 function ns.UpdateStyle() for _, h in ipairs(huds) do h.UpdateStyle(); end end
-function ns.UpdateColors() for _, h in ipairs(huds) do h.UpdateColors(); end end
-function ns.UpdateShadow() for _, h in ipairs(huds) do h.UpdateShadow(); end end
-function ns.UpdateAnimations() for _, h in ipairs(huds) do h.UpdateAnimations(); end end
 function ns.UpdateIcon() for _, h in ipairs(huds) do h.UpdateIcon(); end end
 function ns.SetIconSide() for _, h in ipairs(huds) do h.SetIconSide(); end end
 function ns.UpdateFont() for _, h in ipairs(huds) do h.UpdateFont(); end end

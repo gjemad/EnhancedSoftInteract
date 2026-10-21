@@ -24,9 +24,8 @@ function ns.SetupFade(hud)
     hud.SettleAppearance();
   end);
 
-  -- Returns the fade-in and fade-out durations, or 0 (instant) when fade animations are off.
+  -- Returns the fade-in and fade-out durations.
   local function GetFadeTimes()
-    if not EnhancedSoftInteractDB.animationsEnabled then return 0, 0 end
     return FADE_IN_TIME, FADE_OUT_TIME;
   end
 

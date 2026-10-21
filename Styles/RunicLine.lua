@@ -8,7 +8,9 @@ ns.styles.Register("runic", {
     normal = { fontSize = 16, iconSize = 28, keyHeight = 26, glyphHeight = 26, keyFontSize = 16, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 48 },
     large = { fontSize = 20, iconSize = 34, keyHeight = 32.5, glyphHeight = 32.5, keyFontSize = 20, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 60 },
   },
-  castBar = { height = 1.2, offset = 6.5, split = true, success = "runeIgnition", interrupt = "tipSparks",
+  -- The cast fills the line itself (lineFill): additive in the object color, the unfilled part darkened,
+  -- no backing (user, 2026-10-20, same as Level-Up Line). The fill rises in brightness toward the tip.
+  castBar = { height = 1.2, offset = 6.5, split = true, lineFill = true, rising = true, success = "runeIgnition", interrupt = "tipSparks",
     glow = { tail = 17, tailHeight = 5, tailAlpha = 0.48, haloWidth = 10, haloHeight = 9, haloAlpha = 0.52,
       coreWidth = 4.2, coreHeight = 5.2, coreAlpha = 1, diamond = true, breathHeight = 7 } },
   layers = { lineLow = true, lineHigh = true }, highLineAlpha = 1,
@@ -50,7 +52,7 @@ ns.styles.Register("runic", {
       return bottom * (cap.cellScale or 1);
     end
     -- Without a visible input, retain the normalized keyboard's measured lower-border reference.
-    return -ns.styles.Size(db).keyHeight * ns.styles.ButtonScale(db) * 31.5 / 65;
+    return -ns.styles.Size(db).keyHeight * 31.5 / 65;
   end,
   -- Status text stays clear of the ornament.
   StatusOffset = function(frame, db)
@@ -60,6 +62,10 @@ ns.styles.Register("runic", {
   -- The cast track snaps like the line, so both keep the same whole-pixel thickness everywhere.
   PlaceCast = function(frame, texture, left, width, height, y)
     ns.styles.PixelStrip(frame, texture, left, width, y, height);
+  end,
+  -- The cast's start and end markers center on the one-unit line's pixel row.
+  PlaceMarker = function(frame, texture, left, width, height, y)
+    ns.styles.PixelMark(frame, texture, left, width, y, height, 1);
   end,
   Layout = function(frame, db)
     local scale = ns.styles.Size(db).inputScale;
@@ -82,9 +88,7 @@ ns.styles.Register("runic", {
     local tickWidth = math.max(pixel, ns.styles.Round(1, pixel));
     local tickHeight = math.max(pixel, ns.styles.Round(4 * scale, pixel));
     for i, tick in ipairs(frame.runeTicks) do
-      local x, top = ns.styles.Origin(frame, -frame.boxWidth * 0.5 + left + (i - 1) * width - tickWidth * 0.5,
-        y + tickHeight * 0.5, pixel);
-      ns.styles.Rect(tick, frame.box, x, top, tickWidth, tickHeight);
+      ns.styles.PixelMark(frame, tick, left + (i - 1) * width - tickWidth * 0.5, tickWidth, y, tickHeight, 1);
     end
   end,
   Paint = function(frame, r, g, b)

@@ -22,9 +22,11 @@ function ns.SetupInteraction(hud)
     { "Scale", frame.icon, 1, 0.08, smoothing = "OUT", scale = POP },
     { "Scale", frame.icon, 2, 0.2, smoothing = "IN_OUT", scale = 1 / POP },
   };
+  -- A style's pulse layer can set its own peak opacity (pulsePeak; Elv's border light is fully lit).
   for _, glow in ipairs(frame.stylePulseLayers) do
-    pulseSteps[#pulseSteps + 1] = { "Alpha", glow, 1, 0.06, smoothing = "OUT", alpha = {0, 0.45} };
-    pulseSteps[#pulseSteps + 1] = { "Alpha", glow, 2, 0.24, smoothing = "IN", alpha = {0.45, 0} };
+    local peak = glow.pulsePeak or 0.45;
+    pulseSteps[#pulseSteps + 1] = { "Alpha", glow, 1, 0.06, smoothing = "OUT", alpha = {0, peak} };
+    pulseSteps[#pulseSteps + 1] = { "Alpha", glow, 2, 0.24, smoothing = "IN", alpha = {peak, 0} };
   end
   frame.pulse = ns.CreateAnimationGroup(frame, pulseSteps);
   -- Return every pulse layer to its idle opacity on completion, interruption or hide.
@@ -173,7 +175,6 @@ function ns.SetupInteraction(hud)
   local RELEASE_GRACE = 0.15;
   local samplePulseAt;
   local function PlayInteractPulse(source)
-    if not EnhancedSoftInteractDB.animationsEnabled then return end
     -- A sample can animate key-up before the game sends its interaction event in the same frame.
     -- Keep that pulse instead of restarting it and pressing the key cap a second time.
     if source == "game" and samplePulseAt and GetTime() - samplePulseAt < RELEASE_GRACE then
@@ -199,14 +200,12 @@ function ns.SetupInteraction(hud)
   -- Watches the interact key every frame while the key cap is showing, and presses the cap with it. Letting
   -- go comes up without a ripple; the interaction adds that (PlayInteractPulse). A key whose hold already
   -- interacted (cap.consumed) stays up until it's let go. While a text box has the keyboard (typing in
-  -- chat), the key types instead, so the cap stays up. With animations off, or when the HUD goes away, a
-  -- held cap comes up. An Edit Mode sample has no target for the game to interact with, so letting go of
+  -- chat), the key types instead, so the cap stays up. When the HUD goes away, a held cap comes up. An Edit Mode sample has no target for the game to interact with, so letting go of
   -- the key plays the whole interaction there, ripple, flash and icon pop included.
   local keyWatcher = CreateFrame("Frame", nil, frame);
   keyWatcher:SetScript("OnUpdate", function(_, elapsed)
     local watching = cap.key and frame:IsShown() and not frame.fadingOut
       and cap:IsShown()
-      and EnhancedSoftInteractDB.animationsEnabled
       and not (GetCurrentKeyBoardFocus and GetCurrentKeyBoardFocus());
     ns.ModifierKey.Poll(frame, watching, elapsed);
     if not watching then

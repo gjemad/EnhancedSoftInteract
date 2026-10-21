@@ -4,8 +4,8 @@ local _, ns = ...;
 --  Persistence: game settings the HUD needs, which the addon puts back when something changes them.
 --  Turning the gamepad off can turn the Interact Key off with it, and the Interact Key Icons setting
 --  (Options > Accessibility) decides which targets get a cursor at all; below Show All, corpses and
---  objects show the plain cog. While the addon is enabled and a setting's Keep option is checked, the
---  addon sets its CVars back. Native option changes explain which Keep checkbox controls them; automatic
+--  objects show the plain cog. While the addon is enabled and a setting's Always option is checked, the
+--  addon sets its CVars back. Native option changes explain which checkbox controls them; automatic
 --  gamepad changes stay quiet. It checks on every CVar change and once every CHECK_INTERVAL seconds, in case the
 --  game changes a CVar without telling addons. CVars a client doesn't have (GetCVar gives nil) are
 --  skipped. While Forever's gamepad UI is on, Blizzard holds these CVars at temporary values (Interact
@@ -14,21 +14,21 @@ local _, ns = ...;
 ----
 local CHECK_INTERVAL = 1;
 
--- option: the EnhancedSoftInteractDB key of its Keep checkbox, which Feat\SettingsDefinitions.lua builds from this
--- list with checkbox as its name and desc as its tooltip. cvars: the values to keep, the way Blizzard's settings set them (Show
+-- option: the EnhancedSoftInteractDB key of its Always checkbox, which Feat\SettingsDefinitions.lua builds from this
+-- list with checkbox as its name and desc as its tooltip, under Enabled. cvars: the values to keep, the way Blizzard's settings set them (Show
 -- All is Blizzard_SettingsDefinitions_Frame\Accessibility.lua). notice: the chat line after the addon
 -- undoes a change in the game's options, with the game's option name and the checkbox.
 local KEPT = {
   {
-    option = "forceInteractKey", checkbox = "Keep Interact Key On",
-    desc = "Turns the game's Interact Key option back on if something turns it off.\n\nThe HUD needs it to find targets.",
+    option = "forceInteractKey", checkbox = "Always Enable Interact Key",
+    desc = "Turns the game's interact key back on if something turns it off.",
     notice = '"%s" was turned back on. To turn it off, first uncheck "%s" in /esi.',
     setting = "PROXY_ENABLE_INTERACT", value = true, name = "Enable Interact Key",
     cvars = { softTargetInteract = Enum.SoftTargetEnableFlags.Any },
   },
   {
-    option = "forceInteractIcons", checkbox = "Keep Interact Key Icons on Show All",
-    desc = "Keeps the game's Interact Key Icons option on Show All.\n\nWith fewer icons, the HUD can't show the right icon for every target, such as corpses you can loot.",
+    option = "forceInteractIcons", checkbox = "Always Show All Interact Key Icons",
+    desc = "Keeps the game's Interact Key Icons on Show All, so the HUD can show the right icon for every target.",
     notice = '"%s" was set back to Show All. To change it, first uncheck "%s" in /esi.',
     setting = "PROXY_INTERACT_ICONS", value = 2, name = "Interact Key Icons",
     cvars = { SoftTargetIconEnemy = 1, SoftTargetIconInteract = 1, SoftTargetIconGameObject = 1, SoftTargetLowPriorityIcons = 1 },
@@ -49,6 +49,8 @@ local function SetBack(cvar, value)
     SetCVar(cvar, value);
   end
 end
+
+ns.SetGameCVar = SetBack; --also used by Feat\Targeting.lua
 
 local restoring = false;
 local function KeepSettings()
@@ -112,3 +114,16 @@ table.insert(ns.onLoad, function()
   watcher:RegisterEvent("CVAR_UPDATE");
   C_Timer.NewTicker(CHECK_INTERVAL, KeepSettings);
 end);
+
+----
+--  The game's own Interact Key Sound Cue checkbox, set the way Blizzard's settings set it
+--  (Blizzard_SettingsDefinitions_Frame\Controls.lua). It is nil on a client without the CVar.
+----
+local SOUND_CVAR = "softTargettingInteractKeySound";
+if GetCVar(SOUND_CVAR) ~= nil then
+  ns.gameInteractSound = {
+    Get = function() return GetCVar(SOUND_CVAR) == "1" end,
+    Set = function(on) SetCVar(SOUND_CVAR, on and 1 or 0); end,
+    Default = function() return C_CVar.GetCVarDefault ~= nil and C_CVar.GetCVarDefault(SOUND_CVAR) == "1" end,
+  };
+end
