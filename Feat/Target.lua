@@ -17,6 +17,20 @@ local function Accessible(value)
   return value;
 end
 
+-- Corpses keep the Unable loot cursor and UnitIsInInteractRange false out to where the interact key still
+-- loots, though the mouse cursor is right. Forever's key loots a Young Wolf at a squared distance of 35 and
+-- not at 36 (UnitDistanceSquared gives whole numbers there).
+local LOOT_CURSORS = { Loot = true, LootAll = true, Pickup = true };
+local LOOT_RANGE_SQUARED = 35;
+local function LootRange(cursor, unit)
+  if not (LOOT_CURSORS[cursor] and UnitDistanceSquared) then return nil end
+  local dead = UnitIsDead(unit);
+  if issecretvalue(dead) or not dead then return nil end
+  local distance, checked = UnitDistanceSquared(unit);
+  if issecretvalue(distance) or issecretvalue(checked) or not checked or type(distance) ~= "number" then return nil end
+  return distance <= LOOT_RANGE_SQUARED, distance;
+end
+
 -- A looted object can report Unable while its loot window is open. Match actual loot sources so an
 -- unrelated soft target never inherits that object's availability.
 local lootOpen, lootSources = false, {};
@@ -46,7 +60,7 @@ lootWatcher:RegisterEvent("LOOT_OPENED");
 lootWatcher:RegisterEvent("LOOT_CLOSED");
 lootWatcher:RegisterEvent("PLAYER_ENTERING_WORLD");
 lootWatcher:SetScript("OnEvent", function(_, event)
-  local before = ns.DebugLoot and ns.LootSnapshot();
+  local before = ns.DebugLoot and LootSnapshot();
   lootToken = lootToken + 1;
   local token = lootToken;
   if event == "LOOT_CLOSED" then
@@ -107,8 +121,9 @@ end
 function ns.ReadTargetRange(cursor, lastInRangeTarget)
   local unit, guid = "softinteract", UnitGUID("softinteract");
   local spellRange = cursor and ns.SpellRangeCheck and ns.SpellRangeCheck(cursor, unit);
+  local lootRange, distanceSquared = LootRange(cursor, unit);
   return { name = UnitName(unit), guid = guid, cursor = cursor, interactRange = InInteractRange(),
-    spellRange = spellRange, casting = UnitCastingInfo("player"), channeling = UnitChannelInfo("player"),
+    spellRange = spellRange, lootRange = lootRange, distanceSquared = distanceSquared, casting = UnitCastingInfo("player"), channeling = UnitChannelInfo("player"),
     looting = lootOpen and not issecretvalue(guid) and lootSources[guid] or false,
     loot_closing = GetTime() < closingUntil and not issecretvalue(guid) and closingSources[guid] or false,
     lastInRangeTarget = lastInRangeTarget };
@@ -132,8 +147,11 @@ function ns.ResolveTarget(icon, guid, lastInRangeTarget)
   local unable = key:match("^Cursor Unable(.+)$");
   -- Release immediately when the native cursor recovers, so later movement is checked normally.
   if not unable and knownTarget then closingSources[knownTarget] = nil; end
-  local canInteract = interactRange;
-  if spellRange ~= nil then canInteract = spellRange; end
+  -- On game objects the cursor is already right, and UnitIsInInteractRange stays true a few steps past the
+  -- distance where the object can be used, so only units take their range from it.
+  local object = UnitIsGameObject and UnitIsGameObject("softinteract");
+  local canInteract = not (object or issecretvalue(object)) and interactRange or nil;
+  if spellRange ~= nil then canInteract = spellRange; elseif range.lootRange ~= nil then canInteract = range.lootRange; end
   local busy = range.casting or range.channeling;
   local settling = range.loot_closing and interactRange ~= false and spellRange ~= false;
   if unable and (canInteract or range.looting or settling

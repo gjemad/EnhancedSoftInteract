@@ -138,6 +138,7 @@ local function Range(evidence)
   return { name = Safe(evidence.name), guid = Safe(guid), drawn = Safe(frame.iconSource),
     shown = Safe(frame.colorKey), cursor = Safe(evidence.cursor),
     interact_range = Safe(evidence.interactRange), spell_range = Safe(evidence.spellRange),
+    loot_range = Safe(evidence.lootRange), distance_squared = Safe(evidence.distanceSquared),
     casting = Safe(evidence.casting), channeling = Safe(evidence.channeling), looting = Safe(evidence.looting),
     loot_closing = Safe(evidence.loot_closing),
     out_of_range = Safe(frame.outOfRange), last_in_range_target = same,
