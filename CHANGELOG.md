@@ -1,5 +1,36 @@
 # Changelog
 
+## 0.4.0 (2026-10-21)
+
+### Features
+
+- Added Interaction Range and Interaction Arc options, which set how far away and how wide an area your interact key searches for targets.
+- Herbs, ore and skinnable corpses can show a skill-up icon next to the name when they can raise your profession skill.
+
+### Improvements
+
+- You can now set your interact key and the game's interact sound cue from the settings page.
+- The HUD now fades in and out a little faster.
+- Updated the cast bar effects.
+- Elv's panel lights up when you interact.
+- The settings page is simpler, with shorter tooltips.
+- The preview shows skill-up icons.
+
+### Changes
+
+- Removed the size, color, shadow and animation options. Each style now sets its own look.
+- Renamed some options to make them clearer.
+- Show for Clicked Objects is now on by default.
+
+### Bug fixes
+
+- Fixed the Elv button flashing yellow when pressed.
+- Fixed cast bar markers sometimes sitting slightly off the line.
+
+### Package
+
+- Shrunk some custom art to reduce package size.
+
 ## 0.3.4-alpha (2026-10-19)
 
 ### Improvements
