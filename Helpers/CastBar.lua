@@ -29,8 +29,10 @@ local function CreateHolder(frame)
   holder.runeCore:SetBlendMode("ADD");
   holder.runeCore:Hide();
   -- Optional native line art uncovered along the cast (Level-Up's glow reveal).
+  -- Normal blending tints the line in the object color. Additive light over the lit fill washes it out
+  -- to white in game.
   holder.reveal = holder:CreateTexture(nil, "ARTWORK", nil, 2);
-  holder.reveal:SetBlendMode("ADD");
+  holder.reveal:SetBlendMode("BLEND");
   holder.reveal:Hide();
   holder.lights = {};
   for _, name in ipairs({ "halo", "core", "needle", "cross", "tail1", "tail2", "tail3", "tail4", "tail5", "tail6", "tail7", "tail8", "breath1", "breath2", "breathRune" }) do
@@ -100,8 +102,7 @@ local function PaintTip(frame, holder)
       pale and (0.82 + 0.18 * g) or g, pale and (0.82 + 0.18 * b) or b, alpha);
     light:SetShown(alpha > 0);
   end
-  local pulse = recipe.flicker and 1 + 0.055 * math.sin(time * 8) + 0.025 * math.sin(time * 13)
-    or 1 + 0.04 * math.sin(time * 5);
+  local pulse = 1 + 0.04 * math.sin(time * 5);
   local tail = math.min(recipe.tail * scale, holder.width * progress);
   -- Overlapping soft segments make one continuous tapered trail, bounded by the filled track.
   for i = 1, 8 do
@@ -135,7 +136,7 @@ end
 
 -- Runic's diamond lights faintly once the cast reaches it (amount, from 50% to 55%), then charges: a
 -- little brighter by 75% and as bright as the travelling tip by 100%, its glow at the tip halo's
--- strength and a pale diamond like the tip's core (user, 2026-10-20). The success effect takes over
+-- strength and a pale diamond like the tip's core. The success effect takes over
 -- from there and fades back to the plain diamond.
 local function PaintRuneGlow(holder, amount, progress)
   holder.runeAmount, holder.runeProgress = amount, progress or 0;
@@ -149,8 +150,7 @@ local function PaintRuneGlow(holder, amount, progress)
   holder.runeCore:SetShown(holder.split and core > 0);
 end
 
--- A rising fill (Runic) brightens from 40% at the bar's start to full at the tip, across both halves
--- (option A, user 2026-10-20).
+-- A rising fill (Runic) brightens from 40% at the bar's start to full at the tip, across both halves.
 local function PaintFill(holder, first, second)
   if not (holder.centerBright or holder.rising) then return end
   local r, g, b = holder.red or 0, holder.green or 0, holder.blue or 0;
@@ -190,21 +190,15 @@ local function PaintReveal(frame, holder)
   reveal:ClearAllPoints();
   reveal:SetPoint("LEFT", frame.box, "LEFT", holder.left, holder.y);
   reveal:SetSize(width, config.height * holder.scale);
-  local r, g, b, strength = holder.red or 0, holder.green or 0, holder.blue or 0, config.strength;
-  -- Normal blending tints the line in the object color. Additive light over the lit fill washed it out
-  -- to white in game (user report 2026-10-18), so ADD stays available only as an explicit choice.
-  reveal:SetBlendMode(config.blend or "BLEND");
-  if config.blend == "ADD" then reveal:SetVertexColor(r * strength, g * strength, b * strength, 1);
-  else reveal:SetVertexColor(r, g, b, strength); end
+  reveal:SetVertexColor(holder.red or 0, holder.green or 0, holder.blue or 0, config.strength);
   reveal:Show();
 end
 
 -- A style with lineFill (Level-Up, Runic Line) fills its own line instead of drawing a bar over it: the
--- fill is added in the object color, and there is no backing (user report 2026-10-20: an opaque track
--- and its black backing hid the line). With lineArt (Level-Up) each fill shows the line art's slice
--- under it; otherwise fills and track are plain strips like the line. The track is drawn in black at
--- LINE_TRACK_DARK over the unfilled part only, so it darkens the line where the line is and the whole
--- bar stays readable (user, 2026-10-20: a faint additive track couldn't be seen). The art and its Era
+-- fill is added in the object color, and there is no backing, which would hide the line. With lineArt
+-- (Level-Up) each fill shows the line art's slice under it; otherwise fills and track are plain strips
+-- like the line. The track is drawn in black at LINE_TRACK_DARK over the unfilled part only, so it
+-- darkens the line where the line is and the whole bar stays readable. The art and its Era
 -- fallback crop match Styles\LevelUpLine.lua, whose line runs from 5 units before the box to 5 units
 -- past it.
 local LINE_TRACK_DARK = 0.6;
@@ -307,7 +301,7 @@ function bar.Layout(frame, holder)
   local shown = holder:IsShown();
   local size = ns.styles.Size(EnhancedSoftInteractDB);
   holder.scale, holder.glow, holder.revealConfig = size.inputScale, config.glow, config.reveal;
-  holder.endBright, holder.endDim = config.endBright, config.endDim;
+  holder.endDim = config.endDim;
   holder.gap = 5 * size.inputScale;
   holder.pixel = config.pixel and style.Pixel(frame) or nil;
   holder.width, holder.left = frame.nameWidth, frame.nameLeft;
@@ -379,11 +373,11 @@ function bar.Paint(frame, r, g, b, holder)
   holder = holder or frame.castBar;
   holder.sourceRed, holder.sourceGreen, holder.sourceBlue = r, g, b;
   if holder.red == r and holder.green == g and holder.blue == b
-      and holder.paintedCenterBright == holder.centerBright and holder.paintedEndBright == holder.endBright
+      and holder.paintedCenterBright == holder.centerBright
       and holder.paintedEndDim == holder.endDim and holder.paintedLineFill == holder.lineFill
       and holder.paintedRising == holder.rising then return end
   holder.red, holder.green, holder.blue = r, g, b;
-  holder.paintedCenterBright, holder.paintedEndBright = holder.centerBright, holder.endBright;
+  holder.paintedCenterBright = holder.centerBright;
   holder.paintedEndDim, holder.paintedLineFill, holder.paintedRising = holder.endDim, holder.lineFill, holder.rising;
   local er, eg, eb = bar.EndColor(holder, r, g, b);
   for i = 1, 2 do
@@ -508,10 +502,8 @@ end
 local OUTCOMES = {};
 local LENGTH = { converge = 0.8, redGlowLine = 0.5, runeIgnition = 0.65, tipSparks = 0.65, softBloom = 0.7, sink = 0.5, flashFill = 0.4, redBar = 0.65 };
 
--- The start and end markers' color: the object color at endDim (default 85%), or lifted toward white by
--- endBright so they read clearly at the line's ends.
+-- The start and end markers' color: the object color at endDim (default 85%).
 function bar.EndColor(h, r, g, b)
-  if h.endBright then return Mix(r, g, b, 1, 1, 1, h.endBright) end
   local dim = h.endDim or 0.85;
   return r * dim, g * dim, b * dim;
 end
@@ -526,7 +518,7 @@ local function Afterglow(frame, h, e, r, g, b, base)
   local fr, fg, fb = Mix(r, g, b, 1, 1, 1, 0.2 * warm);
   local er, eg, eb = EndColor(h, r, g, b);
   PaintBar(h, alpha, fr, fg, fb, r * 0.28, g * 0.28, b * 0.28, er, eg, eb);
-  -- The warmth spreads over the whole lower line (user request), not just the cast bar: its own
+  -- The warmth spreads over the whole lower line, not just the cast bar: its own
   -- artwork brightens end to end, with the glow line and a soft glow along the full width.
   -- Everything sits on the line strokes, exactly like the Level-Up interaction flash. The upper
   -- line mirrors the lower one at -h.y, inset 20 units each side.
@@ -538,7 +530,7 @@ local function Afterglow(frame, h, e, r, g, b, base)
     0.25 * Smooth(e / 0.1) * alpha * base);
 end
 
--- Level-Up success (option B, user 2026-10-20): two soft crests start at the end markers and run inward,
+-- Level-Up success: two soft crests start at the end markers and run inward,
 -- and where they meet in the middle the afterglow swells to full strength. Every light is additive, so
 -- where the crest, its halo and the glow line overlap they sum in game; CREST_WHITE keeps that sum in the
 -- interaction color instead of washing out to white.
@@ -565,13 +557,13 @@ function OUTCOMES.redGlowLine(frame, h, e, r, g, b)
   local s, stopped = h.scale, h.width * h.progress;
   local flash = Smooth(e / 0.05) * (1 - Smooth((e - 0.05) / 0.4));
   local fr, fg, fb = Mix(r, g, b, RED_R, RED_G, RED_B, Smooth(e / 0.05));
-  -- The end markers turn red with the fill, like Runic's (user, 2026-10-20).
+  -- The end markers turn red with the fill, like Runic's.
   local er, eg, eb = EndColor(h, fr, fg, fb);
   -- The line under the bar turns dark red with the fill.
   local tr, tg, tb = Mix(r * 0.28, g * 0.28, b * 0.28, RED_R * 0.28, RED_G * 0.28, RED_B * 0.28, Smooth(e / 0.05));
   PaintBar(h, 1 - Smooth(e / 0.3), fr, fg, fb, tr, tg, tb, er, eg, eb);
   -- The glow line tints the Level-Up line red with normal blending: added red light over a green line
-  -- reads yellow (renders 2026-10-20).
+  -- reads yellow.
   Effect(frame, h, "glowLine", frame.boxWidth * 0.5, h.y, frame.boxWidth + 26 * s, 12 * s, RED_R, RED_G, RED_B, 0.8 * flash, "BLEND");
   Effect(frame, h, "glow", h.left + stopped * 0.5, h.y, stopped + 20 * s, 12 * s, RED_R, RED_G, RED_B, 0.35 * flash);
 end
@@ -583,7 +575,7 @@ function OUTCOMES.runeIgnition(frame, h, e, r, g, b)
   local flare = Smooth(e / 0.06) * (1 - Smooth((e - 0.08) / 0.5));
   PaintBar(h, 1 - Smooth(e / 0.4), r * 0.95, g * 0.95, b * 0.95, r * 0.28, g * 0.28, b * 0.28, r * 0.85, g * 0.85, b * 0.85);
   Effect(frame, h, "glow", center, h.y, 26 * s, 22 * s, r, g, b, 0.8 * flare);
-  -- The pale rune and points stay translucent so the interaction color shows through (user request).
+  -- The pale rune and points stay translucent so the interaction color shows through.
   Effect(frame, h, "rune", center, h.y, (6 + 7 * flare) * s, (6 + 7 * flare) * s, pr, pg, pb, 0.65 * flare);
   local spread = OutQuad(e / 0.55);
   local size, points = (8 + 26 * spread) * s, 0.6 * (1 - spread);
@@ -647,7 +639,7 @@ function OUTCOMES.sink(frame, h, e, r, g, b)
     h.yOffset = -4 * s * q;
     bar.Layout(frame, h);
   end
-  -- The fill, track and end markers all turn red, like the line styles' (user, 2026-10-20).
+  -- The fill, track and end markers all turn red, like the line styles'.
   local red = Smooth(e / 0.05);
   local fr, fg, fb = Mix(r, g, b, RED_R, RED_G, RED_B, red);
   local tr, tg, tb = Mix(r * 0.28, g * 0.28, b * 0.28, RED_R * 0.28, RED_G * 0.28, RED_B * 0.28, red);
@@ -662,7 +654,7 @@ local function OutcomeLight(frame, r, g, b, alpha)
 end
 
 -- Elv success: the bar flashes white, then fades. Flat, with no glow. The panel border lights in the
--- object color and fades (option B, user 2026-10-21).
+-- object color and fades.
 function OUTCOMES.flashFill(frame, h, e, r, g, b)
   local fr, fg, fb = Mix(r, g, b, 1, 1, 1, 1 - Smooth(e / 0.12));
   PaintBar(h, 1 - Smooth((e - 0.06) / 0.3), fr, fg, fb, r * 0.28, g * 0.28, b * 0.28, r * 0.85, g * 0.85, b * 0.85);

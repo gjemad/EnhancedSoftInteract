@@ -10,8 +10,7 @@ end
 ----
 --  Dropdowns: a button and a list made of the addon's own frames. Blizzard's dropdown menus register
 --  with Forever's gamepad UI, and a menu or settings control built from addon data taints its
---  controller bindings, which blocked controller interaction after Settings closed (taint log and
---  scans, 2026-10-19). The art is the client's own dropdown art: Mainline (Forever, Retail), the
+--  controller bindings, which blocks controller interaction after Settings closes. The art is the client's own dropdown art: Mainline (Forever, Retail), the
 --  Classic set, or a plain border where neither exists.
 --  Every frame on this page, the list included, is created with the page. Forever's gamepad
 --  navigation hooks CreateFrame and rebuilds the open panel's navigation, so a frame created here
@@ -159,7 +158,7 @@ local function CreateList(parent)
     local owner = list.owner;
     if owner then UpdateDropdownArrow(owner); end
   end);
-  ns.settingsDropdownList = list;
+  ns.settingsDropdownList = list; --for the test tools
 end
 
 local function OpenList(button)

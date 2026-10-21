@@ -2,14 +2,12 @@ local ADDON_NAME, ns = ...; --the addon folder name, and the table this addon's 
 local media = LibStub:GetLibrary("LibSharedMedia-3.0", true);
 media:Register("font", "PT Sans Narrow", [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\Fonts\PTSansNarrow-Regular.ttf]]);
 
--- Fallbacks for APIs that some clients lack.
 local issecretvalue = ns.issecretvalue;
 
 -- The Feat files add functions to run once the saved settings are ready, and /esi subcommands.
 ns.onLoad = {};
 ns.slashCommands = {};
 
--- Every chat message of the addon starts with "Enhanced Soft Interact:".
 local function Notify(msg) print("|cffffd100Enhanced Soft Interact:|r " .. msg) end
 
 -- Saved-setting defaults. LoadSettings fills in unset keys from here.
@@ -30,8 +28,9 @@ local SLIDER_RANGES = {
 
 local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
 
+-- The soft shadow behind the text, and how far it reaches past the box's ends (x) and above and below it (y).
 local SHADOW = MEDIA .. "SoftShadow";
-ns.HUD_SHADOW_PADDING = { x = 75, y = 16 };
+local SHADOW_PADDING = { x = 75, y = 16 };
 
 ----
 --  CreateHUD builds the real HUD and UI previews. Each owns its textures, animations and state.
@@ -43,6 +42,7 @@ local function CreateHUD(frame)
   frame.box = frame:CreateTexture(nil, "BACKGROUND");
   frame.box:SetPoint("CENTER"); --layout keeps the name column centered on the HUD
   frame.shadow = frame:CreateTexture(nil, "BACKGROUND", nil, -1);
+  frame.shadow:SetTexture(SHADOW); --HUD\Appearance.lua sets its strength and shows it for styles with a shadow
   frame.iconGlow = frame:CreateTexture(nil, "BACKGROUND", nil, 1);
   frame.iconGlow:SetBlendMode("ADD");
   frame.lineLowGlow = frame:CreateTexture(nil, "BORDER", nil, -1);
@@ -86,11 +86,9 @@ local function CreateHUD(frame)
   frame.statusShadow:Hide();
   ns.CastBar.Create(frame);
 
-  -- The shadow reaches SHADOW_PAD_X past both ends of the box and SHADOW_PAD_Y above and below it. The
-  -- interact flash covers the box and 20 units past its ends. The icon glow follows the icon.
-  local SHADOW_PAD_X, SHADOW_PAD_Y = ns.HUD_SHADOW_PADDING.x, ns.HUD_SHADOW_PADDING.y;
-  frame.shadow:SetPoint("TOPLEFT", frame.box, "TOPLEFT", -SHADOW_PAD_X, SHADOW_PAD_Y);
-  frame.shadow:SetPoint("BOTTOMRIGHT", frame.box, "BOTTOMRIGHT", SHADOW_PAD_X, -SHADOW_PAD_Y);
+  -- The interact flash covers the box and 20 units past its ends. The icon glow follows the icon.
+  frame.shadow:SetPoint("TOPLEFT", frame.box, "TOPLEFT", -SHADOW_PADDING.x, SHADOW_PADDING.y);
+  frame.shadow:SetPoint("BOTTOMRIGHT", frame.box, "BOTTOMRIGHT", SHADOW_PADDING.x, -SHADOW_PADDING.y);
   frame.flash:SetPoint("TOPLEFT", frame.box, "TOPLEFT", -20, 0);
   frame.flash:SetPoint("BOTTOMRIGHT", frame.box, "BOTTOMRIGHT", 20, 0);
   frame.iconGlow:SetPoint("CENTER", frame.icon, "CENTER");
@@ -122,7 +120,7 @@ frame:Hide();
 frame.editModeName = "Enhanced Soft Interact";
 
 -- With the addon disabled, every target counts as none.
--- A success or interrupt outcome finishes before the HUD follows new target state (user request).
+-- A success or interrupt outcome finishes before the HUD follows new target state.
 -- Right after a cast the game re-sends the corpse or node as Unable, can clear it and returns it as
 -- LootAll within a few frames. Only the latest state matters, so it is applied once the outcome ends.
 local targetQueued = false;
@@ -255,4 +253,5 @@ function ns.SetIconSide() for _, h in ipairs(huds) do h.SetIconSide(); end end
 function ns.UpdateFont() for _, h in ipairs(huds) do h.UpdateFont(); end end
 function ns.UpdateKeyCap() for _, h in ipairs(huds) do h.UpdateKeyCap(); end end
 function ns.UpdateLayout() for _, h in ipairs(huds) do h.UpdateLayout(); end end
+-- Only the test tools call this one.
 function ns.PlayInteractPulse(source) for _, h in ipairs(huds) do h.PlayInteractPulse(source); end end

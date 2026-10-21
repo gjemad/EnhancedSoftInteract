@@ -20,12 +20,12 @@ end
 -- A looted object can report Unable while its loot window is open. Match actual loot sources so an
 -- unrelated soft target never inherits that object's availability.
 local lootOpen, lootSources = false, {};
--- Era kept UnableGatherHerbs for 152ms after LOOT_CLOSED in the captured trace. Allow one normal
+-- Era keeps UnableGatherHerbs for about 150 ms after LOOT_CLOSED. Allow one normal
 -- range-check interval for that cursor to settle, only for the just-closed loot sources.
 local LOOT_CLOSE_SETTLE = 0.2;
 local closingSources, closingUntil, lootToken = {}, 0, 0;
 local lootWatcher = CreateFrame("Frame");
-function ns.LootSnapshot()
+local function LootSnapshot()
   local sources = {};
   for guid in pairs(lootSources) do sources[#sources + 1] = guid; end
   table.sort(sources);
@@ -71,7 +71,7 @@ lootWatcher:SetScript("OnEvent", function(_, event)
     end
   end
   RefreshLootTarget();
-  if ns.DebugLoot then ns.DebugLoot(event, before, ns.LootSnapshot()); end
+  if ns.DebugLoot then ns.DebugLoot(event, before, LootSnapshot()); end
 end);
 
 local function IsTalkableNPC()

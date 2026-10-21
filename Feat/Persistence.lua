@@ -71,9 +71,10 @@ local function KeepSettings()
 end
 ns.KeepSettings = KeepSettings;
 
--- CVAR_UPDATE has no source: Blizzard's automatic gamepad changes look like player changes there.
--- These native proxies retain the requested choice even when our synchronous restoration wins.
--- Refreshes/no-op choices already agree with GetValue, even when display hiding owns an icon CVar.
+-- Notices come from the Options page's setting callbacks, not CVAR_UPDATE, which doesn't say who made a
+-- change: the gamepad UI's automatic changes would look like the player's. The callback still has the
+-- player's choice after the addon has put the CVar back. A refresh, or a choice that changes nothing,
+-- already matches GetValue and shows no notice, also when display hiding owns an icon CVar.
 local noticesRegistered = false;
 local function RegisterNotices()
   if noticesRegistered then return true end

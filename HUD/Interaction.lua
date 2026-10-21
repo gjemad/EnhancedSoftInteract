@@ -239,5 +239,5 @@ function ns.SetupInteraction(hud)
     cap.pressDepth, cap.pressShade = 0, 1; --the key cap repaints with the next target (SetTypeColor)
   end
 
-  hud.PlayInteractPulse, hud.ClearPulseLight = PlayInteractPulse, ClearPulseLight;
+  hud.PlayInteractPulse = PlayInteractPulse;
 end

@@ -39,9 +39,8 @@ function ns.SetupLayout(hud)
       nudgeX, nudgeY = Round(-offset[1] * width / 64), Round(offset[2] * height / 64);
     end
     frame.iconNudgeX, frame.iconNudgeY = nudgeX, nudgeY; --for /esi debug
-    frame.iconCenterY = 0;
     frame.icon:SetSize(width, height);
-    frame.iconColumnWidth = width;
+    frame.iconCenterY, frame.iconColumnWidth = 0, width; --for the test tools
     frame.icon:ClearAllPoints();
     frame.icon:SetPoint("CENTER", frame.box, side, Inset(side) + nudgeX, nudgeY);
   end
@@ -50,8 +49,7 @@ function ns.SetupLayout(hud)
     local keySide = EnhancedSoftInteractDB.swapIconAndKey and "LEFT" or "RIGHT";
     AnchorIcon();
     cap:ClearAllPoints();
-    local style = ns.styles.Get();
-    cap:SetPoint("CENTER", frame.box, keySide, Inset(keySide), style.KeyOffsetY and style.KeyOffsetY(frame, EnhancedSoftInteractDB) or 0);
+    cap:SetPoint("CENTER", frame.box, keySide, Inset(keySide), 0);
   end
 
   -- The glow behind the icon is GLOW_W x GLOW_H icon sizes in range and shrinks to GLOW_OUT_OF_RANGE_SCALE
@@ -104,14 +102,14 @@ function ns.SetupLayout(hud)
   local REQ_TEXT_Y = -0.41;
   local REQ_NAME_GREY = 0.8;
   -- The skill-up icon (Blizzard's 13 x 15 recipe list arrows) is anchored to the name and centered between
-  -- the interaction icon and the name's text, at least SKILL_GAP from the text (user, 2026-10-20). With no
+  -- the interaction icon and the name's text, at least SKILL_GAP from the text. With no
   -- interaction icon on its left, it centers between the name column's edge and the text. It follows the
   -- name through the status transition, and with a status line it moves STATUS_PULL of the way toward
-  -- SKILL_GAP from the smaller name (user). It is drawn at SKILL_SCALE at Normal (font size 17.6) and
+  -- SKILL_GAP from the smaller name. It is drawn at SKILL_SCALE at Normal (font size 17.6) and
   -- follows the font size.
   local SKILL_W, SKILL_H, SKILL_GAP, SKILL_SCALE, SKILL_FONT, STATUS_PULL = 13, 15, 3, 1, 17.6, 0.5;
   -- The visible art reaches this far from the interaction icon's center, in icon widths: Forever's
-  -- mining pick fills about 74% of its crosshair texture (user screenshot, 2026-10-20).
+  -- mining pick fills about 74% of its crosshair texture.
   local ICON_ART_REACH = 0.37;
   local statusTween = CreateTween();
   local function PaintStatus(amount)
@@ -141,7 +139,6 @@ function ns.SetupLayout(hud)
 
   local function StyleName(animate)
     local text = frame.requirementText or (frame.outOfRange and "Move closer");
-    frame.showRequirement = text ~= nil;
     local to = text and 1 or 0;
     if not (animate and frame.statusAmount ~= nil) then
       statusTween:Stop();
@@ -162,8 +159,8 @@ function ns.SetupLayout(hud)
   end
 
   -- The box is a table of three columns: icon | name | key cap (swapIconAndKey swaps the outer two). The icon
-  -- and key columns are as wide as their contents plus COLUMN_GAP; an empty column takes no room. The name
-  -- column fits the name (and the requirement line) between nameMinWidth and nameMaxWidth, and cuts a longer
+  -- and key columns are fixed cells (CellSize); a hidden one shrinks to the edge padding (SidePadding). The
+  -- name column fits the name (and the requirement line) between nameMinWidth and nameMaxWidth, and cuts a longer
   -- name short with "...". A secret name has a secret width; its column then takes nameMaxWidth.
   local function UpdateLayout(animate)
     local db = EnhancedSoftInteractDB;
@@ -177,8 +174,7 @@ function ns.SetupLayout(hud)
     if db.swapIconAndKey then left, right = right, left; end
     local style = ns.styles.Get();
     local edgeLeft, edgeRight = 0, 0;
-    frame.cellSize, frame.sidePadding = cell, padding;
-    frame.leftCellWidth, frame.rightCellWidth = left, right;
+    frame.cellSize, frame.sidePadding = cell, padding; --for the test tools
     -- Returns the column width, and the text's own width when it isn't secret.
     local function FitWidth(text, size, width)
       nameMeasure:SetFont(ns.styles.Font(db), size, ns.styles.FontFlags());
@@ -197,7 +193,7 @@ function ns.SetupLayout(hud)
       nameWidth = math.max(nameWidth, statusWidth);
     end
     -- The skill-up icon needs room before the name's text. What the column doesn't leave is added
-    -- outside it, so the name column and the cast bar keep the text's width (user, 2026-10-20). The same
+    -- outside it, so the name column and the cast bar keep the text's width. The same
     -- room goes on both sides, so full-width lines stay centered on the name and the cast bar.
     -- A secret name has no width to place the icon by, so it shows none.
     local skillAtlas = nameTextWidth and db.showSkillUp and ns.SkillUpAtlas(frame.skillUp);

@@ -6,7 +6,7 @@ local ROW_HEIGHT = 36;
 local SUB_OPTION_INDENT = 24;
 local pageItems, pageContent, pageHeight = {};
 local RefreshPreview;
-ns.settingsRows = rows;
+ns.settingsRows = rows; --for the test tools, like settingsCard, settingsPreview and previewToggles
 
 local function Label(parent, text, fontObject)
   local label = parent:CreateFontString(nil, "ARTWORK", fontObject or "GameFontHighlight");
@@ -177,26 +177,6 @@ local function StopListening()
   ns.RefreshSettings();
 end
 
--- Puts key in the action's slot (1 or 2), or clears the slot when key is nil. The other slot keeps its
--- key. A key taken from another action is named in chat, since the game unbinds it there.
-function ns.SetBindingSlot(action, slot, key)
-  if InCombatLockdown() then ns.Notify("Key bindings can't change during combat."); return end
-  local keys = { GetBindingKey(action) };
-  local wanted = { keys[1], keys[2] };
-  for i = 1, 2 do if wanted[i] == key then wanted[i] = nil; end end
-  wanted[slot] = key;
-  for _, old in ipairs(keys) do SetBinding(old, nil); end
-  if key then
-    local previous = GetBindingAction(key);
-    if previous ~= "" and previous ~= action then
-      SetBinding(key, nil);
-      ns.Notify(('%s no longer does "%s".'):format(GetBindingText(key), _G["BINDING_NAME_" .. previous] or previous));
-    end
-  end
-  for i = 1, 2 do if wanted[i] then SetBinding(wanted[i], action); end end
-  SaveBindings(GetCurrentBindingSet());
-end
-
 local function CreateBindingSlots(row, data)
   local holder = CreateFrame("Frame", nil, row);
   holder:SetSize(224, 22);
@@ -290,7 +270,7 @@ local function CreateRow(content, data, y)
   end
   if row.control then Hover(row.control, data, row); end
   if row.control and row.control.HookHover then row.control:HookHover(); end
-  -- Blizzard's shop camera undo button (user choice), bundled so every client shows it. SettingsReset
+  -- Blizzard's shop camera undo button, bundled so every client shows it. SettingsReset
   -- holds its default, hover, pressed and disabled art in 64-pixel cells, each 62 pixels inside a margin.
   row.reset = CreateFrame("Button", nil, row);
   row.reset:SetSize(22, 22);
@@ -538,5 +518,4 @@ function ns.OpenSettings()
   if ns.settingsCategory then Settings.OpenToCategory(ns.settingsCategory:GetID()); end
 end
 
-ns.slashCommands.move = ns.OpenHUDInEditMode;
 table.insert(ns.onLoad, CreatePage);

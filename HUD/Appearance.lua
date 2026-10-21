@@ -2,9 +2,9 @@ local ADDON_NAME, ns = ...;
 local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
 local Clamp, CreateTween, GetTypeColor = ns.Clamp, ns.CreateTween, ns.GetTypeColor;
 
--- Common shadow and glow textures; style-specific artwork lives in Styles/.
-local SHADOW, GLOW = MEDIA .. "SoftShadow", MEDIA .. "SoftGlow";
-local SHADOW_ALPHA = 0.9; --the soft shadow behind the text, in styles that have one
+-- The common icon glow texture; style-specific artwork lives in Styles/.
+local GLOW = MEDIA .. "SoftGlow";
+local SHADOW_ALPHA = 0.9; --the soft shadow behind the text (set in CreateHUD), in styles that have one
 
 -- How the HUD looks: the transition when the target changes, the type color, the shadow and the
 -- textures a style applies. hud.SetTypeColor repaints from frame.colorKey and frame.outOfRange.
@@ -87,7 +87,6 @@ function ns.SetupAppearance(hud)
   -- Each style owns its appearance; targeting, columns and animations stay shared. A style with
   -- shadow set gets the soft shadow behind the text.
   local function ApplyTextures()
-    frame.shadow:SetTexture(SHADOW);
     frame.shadow:SetVertexColor(0, 0, 0, SHADOW_ALPHA);
     frame.shadow:SetShown(ns.styles.Get().shadow == true);
     frame.iconGlow:SetTexture(GLOW);

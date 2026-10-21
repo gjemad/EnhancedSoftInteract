@@ -57,7 +57,7 @@ end
 -- (and then hides) a finished bar whose alpha is above zero, and every client resets alpha to 1 when
 -- its next cast starts. So only a bar that is still casting gets its alpha back; a finished bar stays
 -- transparent, which also hides its end flash, until the game's next cast restores it.
--- (A finished bar restored to alpha 1 would stay on screen, full and frozen; user report 2026-10-18.)
+-- A finished bar restored to alpha 1 would stay on screen, full and frozen.
 local GAME_CAST_BARS = { "PlayerCastingBarFrame", "GamepadPlayerCastingBarFrame" };
 local gameBarHidden = false;
 local function SetGameCastBarHidden(hidden)

@@ -11,8 +11,8 @@ ns.styles = {};
 --
 -- Hooks a style may leave out. Register copies these into every style that doesn't define them, so
 -- callers call the hook without checking. A few hooks are absent on purpose, and their callers check for
--- them: Pixel, IconMax, IconDimensions, KeyText, KeyWidth, PaintKeyCap, KeyOffsetY, RequirementY,
--- PlaceCast and OutcomeLight.
+-- them: Pixel, IconMax, IconDimensions, KeyText, KeyWidth, PaintKeyCap, RequirementY, PlaceCast and
+-- OutcomeLight.
 local DEFAULT_HOOKS = {
   showIconKey = "showIcon", --the saved setting that shows the icon
 };
@@ -37,11 +37,10 @@ function ns.styles.Get()
 end
 
 -- Size profiles are style-owned geometry, never copied into or derived from saved dimension values.
--- Every preset draws 10% larger than its table (user, 2026-10-18). All profile fields are dimensions,
--- including inputScale, so the whole HUD grows together. Scaled copies are made once per profile.
--- Buttons and their labels keep their table size, so a key stays clear of Level-Up's lines (user,
--- 2026-10-19: the scaled key overlapped them). A style with scaleButtons scales them too (Elv, whose
--- panel is one button tall: user, 2026-10-19).
+-- Every preset draws 10% larger than its table. All profile fields are dimensions, including inputScale,
+-- so the whole HUD grows together. Scaled copies are made once per profile. Buttons and their labels keep
+-- their table size, so a key stays clear of Level-Up's lines. A style with scaleButtons scales them too
+-- (Elv, whose panel is one button tall).
 local PRESET_SCALE = 1.1;
 local UNSCALED = { keyHeight = true, glyphHeight = true, keyFontSize = true };
 local scaled = {};
@@ -59,8 +58,6 @@ function ns.styles.Size(db)
   end
   return size;
 end
-
--- Fine tuning is relative to the chosen preset; its immutable profile remains the layout baseline.
 
 -- Invisible side cells reserve space independently of their artwork and input labels. A style can
 -- own its cells (Elv: a flush square plus the gap to the name).
@@ -87,7 +84,8 @@ function ns.styles.NameMinWidth(db)
   return ns.styles.Size(db).nameMinWidth;
 end
 
--- Shared names use the HUD origin.
+-- The name's height above the HUD center. amount (0 to 1) is how far a status line has faded in; the
+-- name rises with it to make room.
 function DEFAULT_HOOKS.NameOffset(frame, db, amount)
   local style, size = ns.styles.Get(), ns.styles.Size(db);
   return (style.nameOffsetY or 0) * size.inputScale + size.fontSize * 0.26 * amount
@@ -160,8 +158,8 @@ end
 
 -- A vertical mark on whole pixels (cast markers, end ticks), centered on a line that PixelStrip draws at y
 -- with lineHeight. The mark gets the line's pixel parity, so it reaches as far above the line as below.
--- Rounded on its own, an even-height mark around a one-pixel line stood a pixel higher or lower
--- depending on the line's position (user report 2026-10-20: Runic's markers sat higher with keycaps).
+-- Rounded on its own, an even-height mark around a one-pixel line stands a pixel higher or lower
+-- depending on the line's position.
 function ns.styles.PixelMark(frame, texture, left, width, y, height, lineHeight)
   local pixel = ns.styles.Pixel(frame);
   lineHeight = math.max(pixel, ns.styles.Round(lineHeight, pixel));
@@ -224,7 +222,7 @@ function ns.styles.Apply(frame)
   frame.appliedStyle = style;
   for _, region in ipairs(frame.stylePulseLayers) do region:SetAlpha(0); end
   for _, name in ipairs(commonLayers) do
-    frame[name]:SetShown(style.layers and style.layers[name] and (name ~= "iconGlow" or EnhancedSoftInteractDB.showIcon) or false);
+    frame[name]:SetShown(style.layers and style.layers[name] and (name ~= "iconGlow" or ns.styles.ShowIcon(EnhancedSoftInteractDB)) or false);
   end
   for id, regions in pairs(frame.styleRegions) do
     for _, region in ipairs(regions) do region:SetShown(styles[id] == style); end

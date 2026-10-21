@@ -6,14 +6,13 @@ local WHITE = [[Interface\Buttons\WHITE8X8]];
 local Pixel, Round, Snap = ns.styles.Pixel, ns.styles.Round, ns.styles.Snap;
 local Origin, Rect = ns.styles.Origin, ns.styles.Rect;
 
--- ElvUI conventions, checked against ElvUI main (2026-10-18): a 1-pixel border in ElvUI's border color
--- around its backdrop color, OUTLINE text without a drop shadow, and extra black lines outside and
--- inside every border when Pixel Perfect is off. ElvUI's yellow pressed overlay read as a flash, so a
--- held key gets a white overlay at 15% instead, and an interaction lights the panel border in the object
--- color instead of a fill flash (user, 2026-10-21). The layout follows the 0.3.1 panel the user chose:
--- the key is a full-height square flush with its side, sharing the panel edge, with 6 units of padding
--- around the name and the underline 6 units above the bottom, grouped with the name. The tables use ElvUI's 32-unit button;
--- like every style, presets draw them 10% larger, button included (scaleButtons).
+-- ElvUI conventions: a 1-pixel border in ElvUI's border color around its backdrop color, OUTLINE text
+-- without a drop shadow, and extra black lines outside and inside every border when Pixel Perfect is off.
+-- ElvUI's yellow pressed overlay reads as a flash, so a held key gets a white overlay at 15% instead, and
+-- an interaction lights the panel border in the object color instead of a fill flash. The key is a
+-- full-height square flush with its side, sharing the panel edge, with 6 units of padding around the name
+-- and the underline 6 units above the bottom, grouped with the name. The tables use ElvUI's 32-unit
+-- button; presets draw them 10% larger, button included (scaleButtons).
 local PADDING = 6;
 local PUSHED = { 1, 1, 1, 0.15 };
 local BLACK = { 0, 0, 0, 1 };
@@ -200,8 +199,8 @@ local function InputArt(frame)
     region:SetPoint("CENTER", cap, "CENTER", cx, 0);
     if token.atlas then
       local info = token.info;
-      -- After SetAtlas, SetTexCoord crops inside the atlas, so the atlas's file coordinates showed only
-      -- a sliver of the symbol (user screenshot, 2026-10-19). Draw the file with its coordinates instead,
+      -- After SetAtlas, SetTexCoord crops inside the atlas, so the atlas's file coordinates show only
+      -- a sliver of the symbol. Draw the file with its coordinates instead,
       -- like the cast bar's reveal; that also clears coordinates kept from an earlier symbol.
       local file = info.file or info.filename;
       if file and info.leftTexCoord then
@@ -224,9 +223,9 @@ ns.styles.Register("elv", {
   name = "Elv", underline = true, shadow = false, flatKey = true, ownKey = true,
   scaleButtons = true, noTextShadow = true, showIconKey = "elvShowIcon",
   sizes = {
-    small = { fontSize = 14, iconSize = 28, keyHeight = 28, glyphHeight = 28, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 125, nameMaxWidth = 220, hudHeight = 40, padding = 5 },
-    normal = { fontSize = 16, iconSize = 32, keyHeight = 32, glyphHeight = 32, keyFontSize = 17, inputScale = 1, nameMinWidth = 140, nameMaxWidth = 250, hudHeight = 48, padding = 6 },
-    large = { fontSize = 20, iconSize = 40, keyHeight = 40, glyphHeight = 40, keyFontSize = 21, inputScale = 1.25, nameMinWidth = 175, nameMaxWidth = 310, hudHeight = 60, padding = 7 },
+    small = { fontSize = 14, iconSize = 28, keyHeight = 28, glyphHeight = 28, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 125, nameMaxWidth = 220, hudHeight = 40 },
+    normal = { fontSize = 16, iconSize = 32, keyHeight = 32, glyphHeight = 32, keyFontSize = 17, inputScale = 1, nameMinWidth = 140, nameMaxWidth = 250, hudHeight = 48 },
+    large = { fontSize = 20, iconSize = 40, keyHeight = 40, glyphHeight = 40, keyFontSize = 21, inputScale = 1.25, nameMinWidth = 175, nameMaxWidth = 310, hudHeight = 60 },
   },
   KeyText = KeyText,
   KeyWidth = KeyWidth, keyTextPadding = 4,
@@ -244,7 +243,7 @@ ns.styles.Register("elv", {
   KeyFaceHeight = Square,
   -- The name and its underline form one group: the line sits 6 units above the panel bottom and the
   -- ready name 2 units above center. A status line lifts the name and sits between it and the line.
-  -- The one-pixel line's bottom edge sits the padding above the panel bottom, as in 0.3.1. Measure
+  -- The one-pixel line's bottom edge sits the padding above the panel bottom. Measure
   -- from the snapped panel, so the line and cast bar keep that gap when the panel rounds to pixels.
   UnderlineY = function(frame, db)
     local pixel, height = Pixel(frame), PanelHeight(frame, db);
@@ -253,7 +252,7 @@ ns.styles.Register("elv", {
   end,
   NameOffset = function(_, db, amount)
     local size = ns.styles.Size(db);
-    -- 0.3 font sizes keeps the smaller name's descenders clear of the status line (0.3.1 used 0.1875).
+    -- 0.3 font sizes keeps the smaller name's descenders clear of the status line.
     return 2 * size.inputScale + size.fontSize * 0.3 * amount;
   end,
   RequirementY = function(_, db) return -ns.styles.Size(db).fontSize * 0.25 end,
@@ -325,7 +324,7 @@ ns.styles.Register("elv", {
     local width = Round(frame.boxWidth, pixel);
     local x, y = Origin(frame, -frame.boxWidth * 0.5, height * 0.5, pixel);
     Rect(frame.elvPlate, frame.box, x, y, width, height);
-    frame.plateInsetLeft, frame.plateInsetRight = 0, 0;
+    frame.plateInsetLeft, frame.plateInsetRight = 0, 0; --for the test tools, like elvRect
     frame.elvRect = { x, y, width, height, pixel };
     local _, lineTop = Origin(frame, 0, height * 0.5, pixel);
     frame.elvLineRect = { 0, lineTop, 0, height, pixel };

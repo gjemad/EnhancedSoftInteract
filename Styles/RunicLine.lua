@@ -1,6 +1,5 @@
 local ADDON_NAME, ns = ...;
 local DIAMOND = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\RunicDiamond]];
--- Preserve the original diamond size, scaled with the HUD preset.
 ns.styles.Register("runic", {
   name = "Runic Line", underline = true, shadow = true,
   sizes = {
@@ -9,7 +8,7 @@ ns.styles.Register("runic", {
     large = { fontSize = 20, iconSize = 34, keyHeight = 32.5, glyphHeight = 32.5, keyFontSize = 20, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 60 },
   },
   -- The cast fills the line itself (lineFill): additive in the object color, the unfilled part darkened,
-  -- no backing (user, 2026-10-20, same as Level-Up Line). The fill rises in brightness toward the tip.
+  -- no backing, like Level-Up Line. The fill rises in brightness toward the tip.
   castBar = { height = 1.2, offset = 6.5, split = true, lineFill = true, rising = true, success = "runeIgnition", interrupt = "tipSparks",
     glow = { tail = 17, tailHeight = 5, tailAlpha = 0.48, haloWidth = 10, haloHeight = 9, haloAlpha = 0.52,
       coreWidth = 4.2, coreHeight = 5.2, coreAlpha = 1, diamond = true, breathHeight = 7 } },

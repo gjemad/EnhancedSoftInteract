@@ -38,4 +38,24 @@ local function IsChordDown(chord)
   return IsKeyDown(key) and true or false;
 end
 
-ns.GetInteractKeyText, ns.IsChordDown = GetInteractKeyText, IsChordDown;
+-- Puts key in the action's slot (1 or 2), or clears the slot when key is nil. The other slot keeps its
+-- key. A key taken from another action is named in chat, since the game unbinds it there.
+local function SetBindingSlot(action, slot, key)
+  if InCombatLockdown() then ns.Notify("Key bindings can't change during combat."); return end
+  local keys = { GetBindingKey(action) };
+  local wanted = { keys[1], keys[2] };
+  for i = 1, 2 do if wanted[i] == key then wanted[i] = nil; end end
+  wanted[slot] = key;
+  for _, old in ipairs(keys) do SetBinding(old, nil); end
+  if key then
+    local previous = GetBindingAction(key);
+    if previous ~= "" and previous ~= action then
+      SetBinding(key, nil);
+      ns.Notify(('%s no longer does "%s".'):format(GetBindingText(key), _G["BINDING_NAME_" .. previous] or previous));
+    end
+  end
+  for i = 1, 2 do if wanted[i] then SetBinding(wanted[i], action); end end
+  SaveBindings(GetCurrentBindingSet());
+end
+
+ns.GetInteractKeyText, ns.IsChordDown, ns.SetBindingSlot = GetInteractKeyText, IsChordDown, SetBindingSlot;

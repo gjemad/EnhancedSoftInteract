@@ -46,6 +46,7 @@ Feat\Targeting.lua
 Feat\DebugLog.lua
 Feat\InteractionCast.lua
 Feat\Debug.lua
+Feat\PreviewTargets.lua
 Feat\EditMode.lua
 Feat\SettingsDefinitions.lua
 Feat\SettingsDropdown.lua

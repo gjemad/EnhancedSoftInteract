@@ -4,7 +4,7 @@ local issecretvalue = ns.issecretvalue;
 -- The skill-up icon before a herb, ore or skinnable corpse's name: Blizzard's recipe list arrows, orange
 -- (High), yellow (Medium) or green (Low). A target that gives no skill (grey) or needs more skill than the
 -- character has shows none. Retail shows none either: its gathering skill-ups don't follow these
--- thresholds (user, 2026-10-20).
+-- thresholds.
 local RETAIL = select(4, GetBuildInfo()) >= 100000;
 ns.SkillUpSupported = not RETAIL; --for the settings page
 -- Forever has C_SkillInfo, the Classic clients the older Skills panel functions.

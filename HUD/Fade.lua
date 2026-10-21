@@ -1,7 +1,6 @@
 local _, ns = ...;
 local CreateTween = ns.CreateTween;
 
--- Animation timings match the user's chosen settings.
 local FADE_IN_TIME, FADE_OUT_TIME = 0.12, 0.15;
 
 -- How the HUD fades in and out, and dims or brightens when the range changes. Other parts call
@@ -24,7 +23,6 @@ function ns.SetupFade(hud)
     hud.SettleAppearance();
   end);
 
-  -- Returns the fade-in and fade-out durations.
   local function GetFadeTimes()
     return FADE_IN_TIME, FADE_OUT_TIME;
   end
