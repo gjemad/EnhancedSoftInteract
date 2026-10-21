@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.4.1 (2026-10-21)
+
+### Bug fixes
+
+- Fixed out of range issues when looting NPCs.
+- Fixed out of range issues when using game objects.
+
 ## 0.4.0 (2026-10-21)
 
 ### Features
