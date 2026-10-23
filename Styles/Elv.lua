@@ -10,8 +10,8 @@ local Origin, Rect = ns.styles.Origin, ns.styles.Rect;
 -- without a drop shadow, and extra black lines outside and inside every border when Pixel Perfect is off.
 -- ElvUI's yellow pressed overlay reads as a flash, so a held key gets a white overlay at 15% instead, and
 -- an interaction lights the panel border in the object color instead of a fill flash. The key is a
--- full-height square flush with its side, sharing the panel edge, with 6 units of padding around the name
--- and the underline 6 units above the bottom, grouped with the name. The tables use ElvUI's 32-unit
+-- full-height square flush with its side, sharing the panel edge, with 6 units of padding around the name.
+-- The underline and cast bar run along the bottom edge, docked to the key and icon squares. The tables use ElvUI's 32-unit
 -- button; presets draw them 10% larger, button included (scaleButtons).
 local PADDING = 6;
 local PUSHED = { 1, 1, 1, 0.15 };
@@ -219,6 +219,24 @@ local function InputArt(frame)
   PaintInput(frame);
 end
 
+-- The cast timer counts down inside the key, like ElvUI's cooldown text on an action button, in the
+-- key label's font, size and position. Its cover hides a keyboard label and dims controller art under the
+-- number. With the key hidden there is no timer.
+local CONTROLLER_COVER = 0.75;
+local function PlaceTimer(frame, timer)
+  local cap = frame.keyCap;
+  if not cap:IsShown() then return false end
+  timer.text:ClearAllPoints();
+  timer.text:SetPoint("CENTER", cap, "CENTER", 0, -timer.size * 0.04);
+  local data = ns.ElvTheme.Media();
+  local bg = data and data.backdropcolor or {0.1, 0.1, 0.1};
+  timer.cover:ClearAllPoints();
+  timer.cover:SetAllPoints(cap.icon);
+  timer.cover:SetColorTexture(bg[1] * 0.6, bg[2] * 0.6, bg[3] * 0.6, frame.elvKeyTokens and CONTROLLER_COVER or 1);
+  timer.cover:Show();
+  return true;
+end
+
 ns.styles.Register("elv", {
   name = "Elv", underline = true, shadow = false, flatKey = true, ownKey = true,
   scaleButtons = true, noTextShadow = true, showIconKey = "elvShowIcon",
@@ -241,15 +259,15 @@ ns.styles.Register("elv", {
   CellCenter = function(db) return Square(db) * 0.5 end,
   SidePadding = Padding,
   KeyFaceHeight = Square,
-  -- The name and its underline form one group: the line sits 6 units above the panel bottom and the
-  -- ready name 2 units above center. A status line lifts the name and sits between it and the line.
-  -- The one-pixel line's bottom edge sits the padding above the panel bottom. Measure
-  -- from the snapped panel, so the line and cast bar keep that gap when the panel rounds to pixels.
+  -- The two-pixel cast bar sits on the panel's bottom border, inside it; this is its center, and the
+  -- one-pixel underline is its lower row. Measured from the snapped panel, so both stay on whole pixels.
   UnderlineY = function(frame, db)
     local pixel, height = Pixel(frame), PanelHeight(frame, db);
     local _, top = Origin(frame, 0, height * 0.5, pixel);
-    return top - height + Round(Padding(db), pixel) + pixel * 0.5;
+    return top - height + FillInset(pixel) + pixel;
   end,
+  CastSpan = function(frame) return frame.elvCastLeft, frame.elvCastWidth end, --set by Layout
+  -- The ready name sits 2 units above center. A status line lifts the name and sits between it and the line.
   NameOffset = function(_, db, amount)
     local size = ns.styles.Size(db);
     -- 0.3 font sizes keeps the smaller name's descenders clear of the status line.
@@ -266,6 +284,7 @@ ns.styles.Register("elv", {
   end,
   castBar = { height = 1.7, offset = 6.5, pixel = true, endPixels = 2, backingPixels = 0,
     glow = { spark = true }, success = "flashFill", interrupt = "redBar",
+    timer = { flat = true, Place = PlaceTimer, FontSize = function(size) return size.keyFontSize end },
     Texture = function() local data = ns.ElvTheme.Media(); return data and data.normTex or WHITE end },
   Create = function(frame)
     frame.elvPlate = Region(frame, "BACKGROUND");
@@ -350,12 +369,21 @@ ns.styles.Register("elv", {
     local iconShown = ns.styles.ShowIcon(db) and true or false;
     DrawBorder(frame.box, frame.elvIconBorder, keyLeft and x + width - height or x, y, height, height, pixel, border, iconShown);
     PaintInput(frame);
-    -- Snap the name column itself. Snapping the growing panel origin and then adding its inset
-    -- can move the line by one pixel even though the name column has not moved.
+    -- The underline and cast bar dock to the squares: they span the panel's inside between the key's and
+    -- the icon's dividers, or reach the inner border where a square is hidden. Thick borders add a black
+    -- line outside each divider, which the span leaves clear.
+    local thick = inset - pixel;
+    local spanLeft, spanRight = x + inset, x + width - inset;
+    if keyShown then
+      if keyLeft then spanLeft = x + cap.capWidth + thick; else spanRight = x + width - cap.capWidth - thick; end
+    end
+    if iconShown then
+      if keyLeft then spanRight = x + width - height - thick; else spanLeft = x + height + thick; end
+    end
+    frame.elvCastLeft, frame.elvCastWidth = spanLeft + frame.boxWidth * 0.5, spanRight - spanLeft;
     local line = frame.lineLow;
-    local lineX, lineY = Origin(frame, -frame.nameWidth * 0.5 - frame.boxOffsetX,
-      ns.styles.UnderlineY(frame, db) + pixel * 0.5, pixel);
-    Rect(line, frame.box, lineX, LineTop(frame, lineY, pixel, pixel), Round(frame.nameWidth, pixel), pixel);
+    local lineX, lineY = Origin(frame, spanLeft, ns.styles.UnderlineY(frame, db), pixel);
+    Rect(line, frame.box, lineX, LineTop(frame, lineY, pixel, pixel), Round(spanRight - spanLeft, pixel), pixel);
     line:Show();
   end,
 });

@@ -11,8 +11,8 @@ ns.styles = {};
 --
 -- Hooks a style may leave out. Register copies these into every style that doesn't define them, so
 -- callers call the hook without checking. A few hooks are absent on purpose, and their callers check for
--- them: Pixel, IconMax, IconDimensions, KeyText, KeyWidth, PaintKeyCap, RequirementY, PlaceCast and
--- OutcomeLight.
+-- them: Pixel, IconMax, IconDimensions, KeyText, KeyWidth, PaintKeyCap, RequirementY, PlaceCast, CastY,
+-- CastSpan and OutcomeLight.
 local DEFAULT_HOOKS = {
   showIconKey = "showIcon", --the saved setting that shows the icon
 };
@@ -196,6 +196,23 @@ function DEFAULT_HOOKS.KeyFaceHeight(db, glyph)
   return (glyph and size.glyphHeight or size.keyHeight);
 end
 function ns.styles.KeyFaceHeight(_, db, glyph) return ns.styles.Get().KeyFaceHeight(db, glyph) end
+
+-- The visible button's lower border, where Runic Line draws its line and Plain Text its cast bar.
+function ns.styles.ButtonBottom(frame, db)
+  local cap = frame.keyCap;
+  if cap:IsShown() and cap.capHeight then
+    local height = cap.capHeight;
+    local bottom = -height * 0.5 + (cap.isGlyph and 0 or 0.5);
+    local art = cap.art;
+    if art and art.bottomBorder and not cap.isGlyph then
+      local m = art.margins;
+      bottom = ((1 + m[2] - m[4]) * 0.5 - art.bottomBorder) / (1 - m[2] - m[4]) * height;
+    end
+    return bottom * (cap.cellScale or 1);
+  end
+  -- Without a visible input, retain the normalized keyboard's measured lower-border reference.
+  return -ns.styles.Size(db).keyHeight * 31.5 / 65;
+end
 
 function ns.styles.LineY(frame, db, offset)
   if ns.styles.Get().underline then return ns.styles.UnderlineY(frame, db); end

@@ -12,7 +12,7 @@ ns.styles.Register("levelup", {
   -- The native glow line uncovers along the cast. The cast fills the Level-Up line itself (lineFill),
   -- lighting its art in the object color, and darkens the line ahead of the tip. The start and end markers
   -- are small, at 95% of the object color. Both stay in the object color: whiter versions wash out in game.
-  castBar = { height = 1.2, offset = 6.5, centerBright = true, lineFill = true, lineArt = true, success = "converge", interrupt = "redGlowLine",
+  castBar = { height = 1.2, offset = 6.5, centerBright = true, lineFill = true, lineArt = true, timer = true, success = "converge", interrupt = "redGlowLine",
     reveal = { atlas = FLASH_ATLAS, height = 14, strength = 0.7 }, endWidth = 1.2, endHeight = 5, endDim = 0.95,
     glow = { tail = 16, tailHeight = 3.6, tailAlpha = 0.5, haloWidth = 7, haloHeight = 9, haloAlpha = 0.4,
       coreWidth = 3, coreHeight = 5.5, coreAlpha = 0.82, needle = true, lineTexture = BAR_TEXTURE } },

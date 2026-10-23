@@ -12,10 +12,10 @@ local function Notify(msg) print("|cffffd100Enhanced Soft Interact:|r " .. msg) 
 
 -- Saved-setting defaults. LoadSettings fills in unset keys from here.
 local DEFAULTS = {
-  enabled = true, showBlizzardTooltip = false, showBlizzardIcons = true,
+  enabled = true, showBlizzardTooltip = false, showBlizzardIcons = false, showObjectNames = true,
   forceInteractKey = true, forceInteractIcons = true,
   showIcon = true, elvShowIcon = false, swapIconAndKey = false, showKey = true, hudSize = "normal",
-  showSkillUp = true, castBarEnabled = true, castBarHideGame = true, castBarClicked = true, hudStyle = "levelup",
+  showSkillUp = true, castBarEnabled = true, castBarTimer = true, castBarHideGame = true, castBarClicked = true, hudStyle = "levelup",
   -- Retail defaults to Plunderstorm keys; Forever and the Classic clients default to the Classic keys.
   elvFont = "PT Sans Narrow", keyStyle = select(4, GetBuildInfo()) >= 100000 and "plunderstorm" or "classic",
   -- The game's own defaults are 10 yards, straight ahead.
@@ -152,6 +152,7 @@ local function OnSoftInteractChanged(oldTarget, newTarget, fromRangeCheck)
     if frame:IsShown() and not frame.fadingOut then hud.OnSoftTargetCleared(); end
   end
   ns.RefreshInteractionCastBar();
+  if ns.UpdateObjectName then ns.UpdateObjectName(); end
   -- Selected debug sources retain clears/repeats while open; unchanged range polls stay silent.
   if ns.DebugSoftTarget and (not fromRangeCheck or changed) then
     ns.DebugSoftTarget(oldTarget, newTarget, target, EnhancedSoftInteractDB.enabled and "active" or "disabled", fromRangeCheck);

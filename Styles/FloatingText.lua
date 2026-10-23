@@ -5,7 +5,9 @@ ns.styles.Register("floating", { name = "Plain Text", shadow = true,
     normal = { fontSize = 16, iconSize = 28, keyHeight = 26, glyphHeight = 26, keyFontSize = 16, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 46 },
     large = { fontSize = 20, iconSize = 34, keyHeight = 32.5, glyphHeight = 32.5, keyFontSize = 20, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 58 },
   },
-  castBar = { height = 1.2, offset = 5.5, success = "softBloom", interrupt = "sink",
+  castBar = { height = 1.2, offset = 5.5, timer = true, success = "softBloom", interrupt = "sink",
     glow = { tail = 24, tailHeight = 7, tailAlpha = 0.78, haloWidth = 7, haloHeight = 9, haloAlpha = 0.4,
       coreWidth = 2.8, coreHeight = 2.8, coreAlpha = 0.95, needle = true, breathHeight = 7, breathStrength = 0.75 } },
+  -- The cast bar sits on the button's lower border, level with Runic Line's line.
+  CastY = ns.styles.ButtonBottom,
 });

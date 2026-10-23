@@ -39,6 +39,7 @@ Styles\Elv.lua
 EnhancedSoftInteract.lua
 Feat\SkinningRange.lua [ExcludeLoadGameType standard]
 Feat\Gamepad_Camelot.lua [ExcludeLoadGameType standard, classic][AllowLoadGameType camelot]
+Feat\ObjectNames.lua [ExcludeLoadGameType classic]
 Feat\Target.lua
 Feat\HideBlizzard.lua
 Feat\Persistence.lua

@@ -50,6 +50,7 @@ function ns.BuildSettings()
       ns.UpdateBlizzardDisplays();
       ns.KeepSettings();
       ns.UpdateTargeting();
+      if ns.UpdateObjectName then ns.UpdateObjectName(); end
       ns.RefreshSettings();
     end,
   };
@@ -171,6 +172,10 @@ function ns.BuildSettings()
       ns.RefreshSettings();
     end });
   local function CastBarOff() return not db.castBarEnabled end
+  Checkbox("Show Cast Bar Timer", "castBarTimer", {
+    desc = "Shows the seconds left on your cast.",
+    hidden = function() return not ns.styles.Get().castBar.timer end,
+    onChange = ns.RefreshInteractionCastBar, disabled = CastBarOff, indent = 1 });
   Checkbox("Auto Hide Default Cast Bar", "castBarHideGame", {
     desc = "Hides the default cast bar while the HUD shows a cast.",
     onChange = ns.RefreshInteractionCastBar, disabled = CastBarOff, indent = 1 });
@@ -185,6 +190,10 @@ function ns.BuildSettings()
   Checkbox("Show Target Icons", "showBlizzardIcons", {
     desc = "Shows the game's interaction icon above your soft target.",
     onChange = ns.UpdateBlizzardDisplays });
+  Checkbox("Show Object Names", "showObjectNames", {
+    desc = "Shows the name above your soft target when it's an object.",
+    hidden = function() return not ns.ObjectNamesSupported end,
+    onChange = function() ns.UpdateObjectName(); end });
 
   return settings;
 end

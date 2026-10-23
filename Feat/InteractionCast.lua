@@ -98,6 +98,7 @@ function ns.RefreshInteractionCastBar()
   if not Visible() then ns.CastBar.Hide(frame, not active); return end
   ns.CastBar.Paint(frame, ns.GetTypeColor(active.colorKey, false));
   ns.CastBar.SetProgress(frame, Progress());
+  ns.CastBar.SetTimer(frame, active.endTime - GetTime());
 end
 
 function ns.InteractionCastSnapshot()

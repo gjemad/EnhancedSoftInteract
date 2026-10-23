@@ -9,7 +9,7 @@ ns.styles.Register("runic", {
   },
   -- The cast fills the line itself (lineFill): additive in the object color, the unfilled part darkened,
   -- no backing, like Level-Up Line. The fill rises in brightness toward the tip.
-  castBar = { height = 1.2, offset = 6.5, split = true, lineFill = true, rising = true, success = "runeIgnition", interrupt = "tipSparks",
+  castBar = { height = 1.2, offset = 6.5, split = true, lineFill = true, rising = true, timer = true, success = "runeIgnition", interrupt = "tipSparks",
     glow = { tail = 17, tailHeight = 5, tailAlpha = 0.48, haloWidth = 10, haloHeight = 9, haloAlpha = 0.52,
       coreWidth = 4.2, coreHeight = 5.2, coreAlpha = 1, diamond = true, breathHeight = 7 } },
   layers = { lineLow = true, lineHigh = true }, highLineAlpha = 1,
@@ -38,21 +38,7 @@ ns.styles.Register("runic", {
     frame.flash:SetSize(10, 10);
   end,
   -- The underline sits on the lower border of the visible button.
-  UnderlineY = function(frame, db)
-    local cap = frame.keyCap;
-    if cap:IsShown() and cap.capHeight then
-      local height = cap.capHeight;
-      local bottom = -height * 0.5 + (cap.isGlyph and 0 or 0.5);
-      local art = cap.art;
-      if art and art.bottomBorder and not cap.isGlyph then
-        local m = art.margins;
-        bottom = ((1 + m[2] - m[4]) * 0.5 - art.bottomBorder) / (1 - m[2] - m[4]) * height;
-      end
-      return bottom * (cap.cellScale or 1);
-    end
-    -- Without a visible input, retain the normalized keyboard's measured lower-border reference.
-    return -ns.styles.Size(db).keyHeight * 31.5 / 65;
-  end,
+  UnderlineY = ns.styles.ButtonBottom,
   -- Status text stays clear of the ornament.
   StatusOffset = function(frame, db)
     local size = ns.styles.Size(db);

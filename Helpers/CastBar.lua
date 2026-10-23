@@ -46,10 +46,49 @@ local function CreateHolder(frame)
   return holder;
 end
 
+-- The cast timer: the seconds left, for styles whose castBar recipe sets timer. By default it sits
+-- centered under the fill tip in the status line's font and size. A timer table can change that:
+-- Place(frame, timer) puts the text somewhere else and returns false where it has no place, FontSize(size)
+-- gives its font size from the size profile, and flat drops the rise, glow, swell and sink, and turns an
+-- interrupted timer the red bar's red (ElvUI's look).
+local TIMER_TEXT_SCALE, TIMER_GAP = 0.65, 4;
+local TIMER_FADE_IN, TIMER_RISE = 0.3, 3;
+local TIMER_RED_IN, TIMER_FADE_OUT, TIMER_SINK = 0.12, 0.2, 2;
+
+local function HideTimer(frame)
+  frame.castTimer.state = nil;
+  frame.castTimer:Hide();
+end
+
+local function CreateTimer(frame)
+  local timer = CreateFrame("Frame", nil, frame);
+  timer:SetAllPoints(frame);
+  -- Above the key's modifier labels (key level + 2), so a timer placed on the key covers them.
+  timer:SetFrameLevel(frame:GetFrameLevel() + 4);
+  timer.glow = timer:CreateTexture(nil, "BACKGROUND");
+  timer.glow:SetTexture(MEDIA .. "SoftGlow");
+  timer.glow:SetBlendMode("ADD");
+  timer.glow:Hide();
+  -- Covers what a Place hook draws over, such as the key's label.
+  timer.cover = timer:CreateTexture(nil, "BACKGROUND");
+  timer.cover:Hide();
+  -- The same template as the name: Era has no Game17Font_Shadow.
+  timer.text = timer:CreateFontString(nil, "OVERLAY", _G.Game17Font_Shadow and "Game17Font_Shadow" or "GameFontHighlightLarge");
+  timer.text:SetWordWrap(false);
+  timer.baseShadow = { timer.text:GetShadowOffset() };
+  timer:Hide();
+  frame.castTimer = timer;
+  -- An outcome's timer ends with its overlay, however the overlay is hidden.
+  frame.castFinish:SetScript("OnHide", function()
+    if timer.state ~= "live" then HideTimer(frame); end
+  end);
+end
+
 function bar.Create(frame)
   local holder = CreateHolder(frame);
   frame.castBar = holder;
   frame.castFinish = CreateHolder(frame);
+  CreateTimer(frame);
   bar.CreatePreviewDriver(frame);
   frame:HookScript("OnHide", function()
     if frame.previewCast then frame.previewCast:Hide(); end
@@ -66,6 +105,72 @@ local function HideLights(holder)
   for _, light in pairs(holder.lights) do light:Hide(); end
 end
 
+-- The style's timer table, or an empty one for timer = true.
+local NO_RECIPE = {};
+local function TimerRecipe()
+  local timer = ns.styles.Get().castBar.timer;
+  return type(timer) == "table" and timer or NO_RECIPE;
+end
+
+local function TimerFont(frame)
+  local timer, db = frame.castTimer, EnhancedSoftInteractDB;
+  local size, recipe = ns.styles.Size(db), TimerRecipe();
+  timer.size = recipe.FontSize and recipe.FontSize(size) or size.fontSize * TIMER_TEXT_SCALE;
+  timer.text:SetFont(ns.styles.Font(db), timer.size, ns.styles.FontFlags());
+  if ns.styles.Get().noTextShadow then timer.text:SetShadowOffset(0, 0);
+  else timer.text:SetShadowOffset(unpack(timer.baseShadow)); end
+end
+
+-- Places the timer under the tip of the holder's bar, `drop` units lower. A flash swells the number
+-- slightly and lights a soft glow behind it in the object color.
+local function PaintTimer(frame, holder, alpha, drop, r, g, b, flash)
+  local timer = frame.castTimer;
+  if alpha <= 0 or not holder.width then timer:Hide(); return end
+  local text, place = timer.text, TimerRecipe().Place;
+  if place then
+    if not place(frame, timer) then timer:Hide(); return end
+  else
+    timer.cover:Hide();
+    text:ClearAllPoints();
+    text:SetPoint("CENTER", frame.box, "LEFT", holder.left + holder.width * holder.progress,
+      holder.y - timer.size * 0.5 - TIMER_GAP * holder.scale - drop);
+  end
+  text:SetTextColor(r, g, b);
+  if text.SetTextScale then text:SetTextScale(1 + 0.08 * flash); end
+  if flash > 0 then
+    local strength = 0.6 * flash;
+    timer.glow:ClearAllPoints();
+    timer.glow:SetPoint("CENTER", text, "CENTER");
+    timer.glow:SetSize(text:GetStringWidth() + 18 * holder.scale, timer.size + 10 * holder.scale);
+    timer.glow:SetVertexColor((holder.sourceRed or 0) * strength, (holder.sourceGreen or 0) * strength,
+      (holder.sourceBlue or 0) * strength, 1);
+    timer.glow:Show();
+  else
+    timer.glow:Hide();
+  end
+  timer:SetAlpha(alpha);
+  timer:Show();
+end
+
+-- Shows `remaining` seconds on the live bar. It fades in while rising into place (only fading when flat),
+-- or appears at once with `instant` (the preview's still cast).
+function bar.SetTimer(frame, remaining, instant)
+  local timer = frame.castTimer;
+  local config = ns.styles.Get().castBar;
+  if not (config and config.timer and EnhancedSoftInteractDB.castBarTimer) then HideTimer(frame); return end
+  if timer.state ~= "live" then
+    timer.state, timer.started = "live", instant and -math.huge or GetTime();
+    TimerFont(frame);
+  end
+  timer.remaining = math.max(0, remaining);
+  local text = string.format("%.1f", timer.remaining);
+  if timer.shown ~= text then timer.text:SetText(text); timer.shown = text; end
+  local arrive = 1 - (1 - math.max(0, math.min(1, (GetTime() - timer.started) / TIMER_FADE_IN))) ^ 3;
+  local holder = frame.castBar;
+  local rise = TimerRecipe().flat and 0 or TIMER_RISE * (holder.scale or 1);
+  PaintTimer(frame, holder, arrive, rise * (1 - arrive), 1, 1, 1, 0);
+end
+
 -- Recipes belong to each style; this shared path only places and animates their reusable regions.
 local function PaintTip(frame, holder)
   HideLights(holder);
@@ -79,7 +184,9 @@ local function PaintTip(frame, holder)
     local pixel = holder.pixel;
     local light = holder.lights.core;
     light:SetTexture(WHITE);
-    ns.styles.Get().PlaceCast(frame, light, tip - pixel, pixel * 2, holder.height, holder.y);
+    -- Kept inside the bar's ends, which can touch a border (Elv's docked bar).
+    local left = math.max(holder.left, math.min(tip - pixel, holder.left + holder.width - pixel * 2));
+    ns.styles.Get().PlaceCast(frame, light, left, pixel * 2, holder.height, holder.y);
     light:SetVertexColor(0.9, 0.9, 0.9, 0.6);
     light:Show();
     return;
@@ -304,10 +411,15 @@ function bar.Layout(frame, holder)
   holder.endDim = config.endDim;
   holder.gap = 5 * size.inputScale;
   holder.pixel = config.pixel and style.Pixel(frame) or nil;
-  holder.width, holder.left = frame.nameWidth, frame.nameLeft;
+  -- The bar spans the name column, or the style's own span (Elv, docked to its squares).
+  if style.CastSpan then holder.left, holder.width = style.CastSpan(frame, EnhancedSoftInteractDB);
+  else holder.width, holder.left = frame.nameWidth, frame.nameLeft; end
   -- Share the idle line or selected key baseline, including the style's text clearance.
   -- Only an outcome overlay sets yOffset, for an interrupted bar that sinks away.
-  holder.y = ns.styles.LineY(frame, EnhancedSoftInteractDB, config.offset) + (holder.yOffset or 0);
+  -- A style with CastY places its bar itself (Plain Text, on the button's lower border).
+  local y = style.CastY and style.CastY(frame, EnhancedSoftInteractDB)
+    or ns.styles.LineY(frame, EnhancedSoftInteractDB, config.offset);
+  holder.y = y + (holder.yOffset or 0);
   holder.height, holder.split, holder.centerBright = config.height * size.inputScale, config.split == true, config.centerBright == true;
   if config.pixel then holder.height = style.Pixel(frame) * 2; end
   holder.lineFill, holder.lineArt = config.lineFill == true, config.lineArt == true;
@@ -354,8 +466,10 @@ function bar.Layout(frame, holder)
     if style.PlaceMarker then style.PlaceMarker(frame, texture, left, endWidth, endHeight, holder.y);
     else Place(frame, texture, left, endWidth, endHeight, holder); end
   end
-  Marker(holder.end1, holder.left - endWidth * 0.5);
-  Marker(holder.end2, holder.left + holder.width - endWidth * 0.5);
+  -- A pixel bar (Elv) keeps its markers inside its ends, clear of the borders it docks to.
+  local inside = holder.pixel and endWidth * 0.5 or 0;
+  Marker(holder.end1, holder.left - endWidth * 0.5 + inside);
+  Marker(holder.end2, holder.left + holder.width - endWidth * 0.5 - inside);
   holder.end1:Show();
   holder.end2:Show();
   holder.runeGlow:ClearAllPoints();
@@ -367,6 +481,11 @@ function bar.Layout(frame, holder)
   bar.Paint(frame, holder.sourceRed or 0, holder.sourceGreen or 0, holder.sourceBlue or 0, holder);
   bar.SetProgress(frame, holder.progress, holder);
   if not shown then holder:Hide(); end
+  -- A new size, font or style moves the live timer with its bar.
+  if holder == frame.castBar and shown and frame.castTimer.state == "live" then
+    TimerFont(frame);
+    bar.SetTimer(frame, frame.castTimer.remaining);
+  end
 end
 
 function bar.Paint(frame, r, g, b, holder)
@@ -408,6 +527,7 @@ function bar.Hide(frame, keepFinish)
   HideLights(frame.castBar);
   local finish = frame.castFinish;
   if keepFinish and finish:IsShown() then finish:GetScript("OnUpdate")(); else finish:Hide(); end
+  if frame.castTimer.state == "live" or not finish:IsShown() then HideTimer(frame); end
 end
 
 -- Cast outcomes. Styles name one success and one interrupt effect in their castBar recipe;
@@ -671,6 +791,28 @@ function OUTCOMES.redBar(frame, h, e)
 end
 bar.OUTCOMES = OUTCOMES;
 
+-- The timer's part in an outcome. On a success it flashes with the soft bloom's peak and fades out; a
+-- flat timer only fades, with the flash fill. On an interruption it turns red, lingers, and fades out by
+-- the end of the style's red effect. A bar that sinks away (Plain Text) carries the timer down with it;
+-- otherwise the timer sinks a little as it fades, unless it is flat.
+local function TimerOutcome(frame, h, kind, e, length)
+  local flat = TimerRecipe().flat;
+  if kind == "success" and flat then
+    PaintTimer(frame, h, 1 - Smooth((e - 0.1) / (length - 0.1)), 0, 1, 1, 1, 0);
+    return;
+  end
+  if kind == "success" then
+    local flash = Smooth(e / 0.1) * (1 - Smooth((e - 0.1) / 0.25));
+    PaintTimer(frame, h, 1 - Smooth((e - 0.08) / 0.3), 0, 1, 1, 1 - 0.1 * flash, flash);
+    return;
+  end
+  local out = Smooth((e - (length - TIMER_FADE_OUT)) / TIMER_FADE_OUT);
+  local r, g, b = RED_FONT_COLOR:GetRGB();
+  if flat then r, g, b = unpack(ELV_RED); end
+  r, g, b = Mix(1, 1, 1, r, g, b, Smooth(e / TIMER_RED_IN));
+  PaintTimer(frame, h, 1 - out, (h.yOffset or flat) and 0 or TIMER_SINK * h.scale * out, r, g, b, 0);
+end
+
 -- A separate overlay lets tracking clear immediately while the outcome plays on the same object.
 -- Stale casts, target changes, settings and layout changes never keep an outcome overlay.
 -- A preview outcome passes the sample name instead of an object GUID and stays on that sample.
@@ -693,6 +835,13 @@ function bar.Outcome(frame, objectGUID, kind, progress, sample)
   holder:Show();
   local started, size = GetTime(), ns.styles.Size(db);
   holder.endsAt = started + length;
+  local timer = frame.castTimer;
+  local timed = style.castBar.timer and db.castBarTimer;
+  if timed then
+    timer.state = kind;
+    TimerFont(frame);
+    if kind == "success" then timer.text:SetText("0.0"); timer.shown = "0.0"; end
+  end
   local r, g, b = holder.sourceRed or 0, holder.sourceGreen or 0, holder.sourceBlue or 0;
   local function Eligible()
     if not db.castBarEnabled or not frame:IsShown()
@@ -708,7 +857,10 @@ function bar.Outcome(frame, objectGUID, kind, progress, sample)
     holder.fxUsed = 0;
     local elapsed = GetTime() - started;
     local running = elapsed < length and Eligible();
-    if running then effect(frame, holder, elapsed, r, g, b); end
+    if running then
+      effect(frame, holder, elapsed, r, g, b);
+      if timed then TimerOutcome(frame, holder, kind, elapsed, length); end
+    end
     for i = holder.fxUsed + 1, #holder.fx do holder.fx[i]:Hide(); end
     if not running then holder:Hide(); OutcomeLight(frame, 0, 0, 0, 0); end
   end
@@ -740,6 +892,8 @@ local function PreviewStep(driver)
       bar.Paint(frame, ns.GetTypeColor(frame.colorKey, false));
       bar.SetProgress(frame, PREVIEW_HOLD);
     end
+    -- Every step, so turning Show Cast Bar Timer on or off shows at once on the still cast.
+    bar.SetTimer(frame, PREVIEW_CAST * (1 - PREVIEW_HOLD), true);
     return;
   end
   local now = GetTime();
@@ -747,6 +901,7 @@ local function PreviewStep(driver)
     driver.started, driver.endedAt, driver.count = now, nil, driver.count + 1;
     bar.Paint(frame, ns.GetTypeColor(frame.colorKey, false));
     bar.SetProgress(frame, 0);
+    bar.SetTimer(frame, PREVIEW_CAST);
     if driver.onStart then driver.onStart(); end
     return;
   end
@@ -754,7 +909,11 @@ local function PreviewStep(driver)
   local stop = interrupt and PREVIEW_HOLD or 1;
   if not driver.endedAt then
     local progress = (now - driver.started) / PREVIEW_CAST;
-    if progress < stop then bar.SetProgress(frame, progress); return end
+    if progress < stop then
+      bar.SetProgress(frame, progress);
+      bar.SetTimer(frame, PREVIEW_CAST * (1 - progress));
+      return;
+    end
     driver.endedAt = now;
     bar.Hide(frame);
     bar.Outcome(frame, nil, interrupt and "interrupt" or "success", stop, driver.name);
