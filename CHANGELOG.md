@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.5.0 (2026-10-23)
+
+### Features
+
+- Added a cast bar timer.
+- Added Show Object Names, which shows the name of the object you're targeting above it on WoW: Forever and Retail.
+
+### Changes
+
+- Moved the Plain Text cast bar up a little.
+- Moved the Elv cast bar to the bottom edge of the panel.
+- Show Target Icons is now off by default.
+
 ## 0.4.1 (2026-10-21)
 
 ### Bug fixes
