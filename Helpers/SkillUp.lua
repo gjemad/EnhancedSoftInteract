@@ -99,6 +99,16 @@ function ns.SkillUpFor(cursorName, guid, name)
   return info.level, info;
 end
 
+-- "Too low skill level (100/150)" for a node that needs more skill than the character has, else nil. The game
+-- gives such a node the same Unable cursor as one out of range. Corpses are left out: their requirement
+-- comes from a formula, not the game's data.
+function ns.SkillRequirementText(cursorName, info)
+  local skill = SKILLS[cursorName];
+  if not (skill and skill.nodes and info and info.required and info.rank) then return nil end
+  if info.rank >= info.required then return nil end
+  return ("Too low skill level (%d/%d)"):format(info.rank, info.required);
+end
+
 -- A skill-up level for a preview sample of a herb, ore or skinnable corpse, or nil. Each call takes the
 -- next of the three levels, so the preview shows every icon as it cycles through targets.
 local SAMPLE_LEVELS = { "High", "Medium", "Low" };

@@ -169,11 +169,12 @@ function ns.ResolveTarget(icon, guid, lastInRangeTarget)
   local outOfRange = not inRange;
   local skillUp, skillInfo;
   if cursor and not requirement and not talkBadge then skillUp, skillInfo = ns.SkillUpFor(cursor, guid, range.name); end
+  local requirementText = ns.IsUnableKey(key) and (requirement or ns.SkillRequirementText(cursor, skillInfo)) or nil;
   return { name = range.name, knownTarget = knownTarget, hasCursor = hasCursor, iconSource = source,
     iconFromFileID = fromFileID, resolvedKey = resolvedKey, iconKey = key, overrideCursor = override,
     talkBadge = talkBadge, outOfRange = outOfRange, range = range, inRangeTarget = lastInRangeTarget,
-    requirementText = ns.IsUnableKey(key) and requirement or nil, skillUp = skillUp, skillInfo = skillInfo,
-    signature = key .. "|" .. tostring(talkBadge) .. "|" .. tostring(outOfRange) .. "|" .. tostring(requirement)
+    requirementText = requirementText, skillUp = skillUp, skillInfo = skillInfo,
+    signature = key .. "|" .. tostring(talkBadge) .. "|" .. tostring(outOfRange) .. "|" .. tostring(requirementText)
       .. "|" .. tostring(skillUp),
     action = key:lower():gsub("unable", "") };
 end
