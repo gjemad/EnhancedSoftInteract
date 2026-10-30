@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.5.1 (2026-10-30)
+
+### Improvements
+
+- The skill-up icon now shows on Outland, Northrend and Cataclysm herbs and ore.
+
+### Bug fixes
+
+- Fixed the skill-up icon's color on some herbs and ore in MoP Classic.
+
 ## 0.5.0 (2026-10-23)
 
 ### Features
