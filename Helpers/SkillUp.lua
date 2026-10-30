@@ -5,8 +5,14 @@ local issecretvalue = ns.issecretvalue;
 -- (High), yellow (Medium) or green (Low). A target that gives no skill (grey) or needs more skill than the
 -- character has shows none. Retail shows none either: its gathering skill-ups don't follow these
 -- thresholds.
-local RETAIL = select(4, GetBuildInfo()) >= 100000;
-ns.SkillUpSupported = not RETAIL; --for the settings page
+local INTERFACE = select(4, GetBuildInfo());
+-- This client's field in Data/GatherSkill.lua, or nil on Retail and on Classic versions with no data.
+local CLIENT = INTERFACE >= 16000 and INTERFACE < 20000 and "forever"
+  or INTERFACE < 20000 and "era"
+  or INTERFACE < 30000 and "tbc"
+  or INTERFACE >= 50000 and INTERFACE < 60000 and "mop"
+  or nil;
+ns.SkillUpSupported = CLIENT ~= nil; --for the settings page
 -- Forever has C_SkillInfo, the Classic clients the older Skills panel functions.
 local C_SkillInfo, GetNumSkillLines, GetSkillLineInfo = _G.C_SkillInfo, _G.GetNumSkillLines, _G.GetSkillLineInfo;
 
@@ -69,17 +75,19 @@ local function Required(skill, guid, name)
   end
   local nodes = ns.gatherSkill[skill.nodes];
   local entry = EntryID(guid);
-  if entry and nodes.entries[entry] then return nodes.entries[entry], "entry", entry, nodes.colors[entry] end
+  local node = entry and nodes.entries[entry];
+  if node and node[CLIENT] then return node[CLIENT], "entry", entry, nodes.colors[entry] end
   -- English names only; a node in another language without a known ID gets no icon.
   name = Accessible(name);
-  if name and nodes.names[name] then return nodes.names[name], "name", entry, nodes.colors[name] end
+  node = name and nodes.names[name];
+  if node and node[CLIENT] then return node[CLIENT], "name", entry, nodes.colors[name] end
   return nil, nil, entry;
 end
 
 -- The skill-up level for the soft target ("High", "Medium", "Low") and the details for /esi debug, or nil
 -- when the target gives no skill or isn't known.
 function ns.SkillUpFor(cursorName, guid, name)
-  local skill = not RETAIL and SKILLS[cursorName];
+  local skill = CLIENT and SKILLS[cursorName];
   if not skill then return nil end
   local required, source, entry, colors = Required(skill, guid, name);
   local rank = SkillRank(skill);
@@ -97,7 +105,7 @@ local SAMPLE_LEVELS = { "High", "Medium", "Low" };
 local sampleCount = 0;
 function ns.SampleSkillUp(cursorName)
   cursorName = cursorName and cursorName:gsub("^Unable", ""); --out of range keeps the icon, as on a real target
-  if RETAIL or not SKILLS[cursorName] then return nil end
+  if not CLIENT or not SKILLS[cursorName] then return nil end
   sampleCount = sampleCount % #SAMPLE_LEVELS + 1;
   return SAMPLE_LEVELS[sampleCount];
 end
