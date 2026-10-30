@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.2 (2026-10-30)
+
+### Bug fixes
+
+- Fixed gathering nodes showing "Move closer" when your skill is too low.
+
 ## 0.5.1 (2026-10-30)
 
 ### Improvements
