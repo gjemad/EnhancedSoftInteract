@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.3 (2026-11-01)
+
+### Improvements
+
+- Added a warning on the settings page when your Auto Loot Key and Interact Key conflict with another key binding, with a button to clear that binding.
+- The cast bar now shows when chopping lumber on Retail.
+
+### Bug fixes
+
+- Fixed the cast bar not showing when you click an object before it becomes your soft target.
+
 ## 0.5.2 (2026-10-30)
 
 ### Bug fixes
