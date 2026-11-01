@@ -6,8 +6,9 @@ local frame, issecretvalue = ns.frame, ns.issecretvalue;
 -- Track gathering and object-opening casts; other casts stay unassociated.
 local ATTEMPT_WINDOW = 1;
 local END_EVENT_GRACE = 0.25; --Food Crate success arrived 50 ms after the advertised end
-local PROFESSION_SPELLS = { ["cursor skin"] = 8613, ["cursor gatherherbs"] = 2368, ["cursor mine"] = 2576 };
-local attempt, sent, active;
+local PROFESSION_SPELLS = { ["cursor skin"] = 8613, ["cursor gatherherbs"] = 2368, ["cursor mine"] = 2576,
+  ["cursor axe"] = 1239682 }; --Woodchopping, Retail's lumber
+local attempt, sent, active, clicked;
 local watcher = CreateFrame("Frame");
 watcher:Hide();
 
@@ -115,7 +116,7 @@ local function Changed(reason)
 end
 
 local function Clear(reason)
-  attempt, sent = nil, nil;
+  attempt, sent, clicked = nil, nil, nil;
   watcher:Hide();
   if not active then
     -- A new or unrelated cast uses the game's bar again.
@@ -143,6 +144,20 @@ local function ReadCast(castGUID, spellID)
   return name, startMS / 1000, endMS / 1000;
 end
 
+-- A clicked object can become the soft target after its cast started. The cast doesn't say which object
+-- it's on, so the sent name and the spell decide. Gathering nodes are too far apart to share a name nearby.
+local function ClaimClickedCast()
+  local castName, startTime, endTime = ReadCast(clicked.castGUID, clicked.spellID);
+  if not castName then clicked = nil; return end
+  local guid, name, action = Target();
+  if not guid or name ~= clicked.name or not SupportedSpell(action, clicked.spellID)
+      or frame.inEditMode or frame.outOfRange or frame.requirementText then return end
+  active = { objectGUID = guid, castGUID = clicked.castGUID, spellID = clicked.spellID,
+    name = castName, colorKey = frame.colorKey, startTime = startTime, endTime = endTime };
+  clicked = nil;
+  Changed("started");
+end
+
 watcher:SetScript("OnEvent", function(_, event, unit, value, spellID, sentSpellID)
   if event == "PLAYER_SOFT_TARGET_INTERACTION" then
     attempt, sent = nil, nil;
@@ -157,7 +172,7 @@ watcher:SetScript("OnEvent", function(_, event, unit, value, spellID, sentSpellI
   if Accessible(unit) ~= "player" then return end
   if event == "UNIT_SPELLCAST_CHANNEL_START" then Clear("superseded"); return end
   if event == "UNIT_SPELLCAST_SENT" then
-    sent = nil;
+    sent, clicked = nil, nil;
     local targetName, castGUID = Accessible(value), Accessible(spellID);
     local id = Accessible(sentSpellID);
     local guid, name, action = Target();
@@ -173,7 +188,13 @@ watcher:SetScript("OnEvent", function(_, event, unit, value, spellID, sentSpellI
     end
     if not previous or GetTime() - previous.time > ATTEMPT_WINDOW or guid ~= previous.objectGUID
         or action ~= previous.action or name ~= previous.name or targetName ~= name
-        or not castGUID or type(id) ~= "number" or not SupportedSpell(action, id) then return end
+        or not castGUID or type(id) ~= "number" or not SupportedSpell(action, id) then
+      if db.castBarClicked and db.enabled and targetName and castGUID and type(id) == "number" then
+        clicked = { name = targetName, castGUID = castGUID, spellID = id, time = GetTime() };
+        watcher:Show();
+      end
+      return;
+    end
     sent = { objectGUID = guid, name = name, action = action, colorKey = previous.colorKey,
       castGUID = castGUID, spellID = id, time = GetTime() };
     watcher:Show(); --a clicked cast has no attempt that woke the watcher to expire it
@@ -182,10 +203,17 @@ watcher:SetScript("OnEvent", function(_, event, unit, value, spellID, sentSpellI
   local castGUID, id = Accessible(value), Accessible(spellID);
   if not castGUID then return end
   if event == "UNIT_SPELLCAST_START" then
-    local pending = sent;
+    local pending, click = sent, clicked;
     sent = nil;
     -- A new player cast supersedes any old association, even when it is unrelated.
     Clear("superseded");
+    if click and click.castGUID == castGUID and click.spellID == id then
+      click.started = true;
+      clicked = click;
+      watcher:Show();
+      ClaimClickedCast();
+      return;
+    end
     local guid = Target();
     if not pending or pending.castGUID ~= castGUID or pending.spellID ~= id
         or GetTime() - pending.time > ATTEMPT_WINDOW or guid ~= pending.objectGUID then return end
@@ -201,6 +229,7 @@ watcher:SetScript("OnEvent", function(_, event, unit, value, spellID, sentSpellI
     if startTime then active.startTime, active.endTime = startTime, endTime; Changed("delayed"); end
   else
     if sent and sent.castGUID == castGUID then sent = nil; end
+    if clicked and clicked.castGUID == castGUID then clicked = nil; end
     -- Interrupted can arrive before UnitCastingInfo clears, followed by duplicate interruptions.
     -- An old stop must never clear a newer cast.
     if active and active.castGUID == castGUID then Clear(event); end
@@ -211,9 +240,13 @@ end);
 watcher:SetScript("OnUpdate", function()
   if attempt and GetTime() - attempt.time > ATTEMPT_WINDOW then attempt = nil; end
   if sent and GetTime() - sent.time > ATTEMPT_WINDOW then sent = nil; end
+  if clicked then
+    if clicked.started then ClaimClickedCast();
+    elseif GetTime() - clicked.time > ATTEMPT_WINDOW then clicked = nil; end
+  end
   if active and GetTime() >= active.endTime + END_EVENT_GRACE then Clear("expired"); end
   if active then ns.RefreshInteractionCastBar(); end
-  if not (attempt or sent or active) then watcher:Hide(); end
+  if not (attempt or sent or active or clicked) then watcher:Hide(); end
 end);
 
 table.insert(ns.onLoad, function()

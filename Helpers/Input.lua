@@ -58,4 +58,33 @@ local function SetBindingSlot(action, slot, key)
   SaveBindings(GetCurrentBindingSet());
 end
 
+-- With auto-loot off, the warning for an interact key whose auto-loot chord runs another action. Only
+-- checks keys without a modifier of their own. Also returns the chord when SetBinding can clear it (an
+-- override binding from an addon can't be cleared that way) and the tooltip text.
+function ns.AutoLootConflictText()
+  if GetCVar("autoLootDefault") == "1" then return end
+  local modifier = GetModifiedClick("AUTOLOOTTOGGLE");
+  if not modifier or modifier == "NONE" then return end
+  for _, key in ipairs({ GetBindingKey("INTERACTTARGET") }) do
+    if not key:find(".%-") then
+      local chord = modifier .. "-" .. key;
+      local action = GetBindingAction(chord, true);
+      if action ~= "" and action ~= "INTERACTTARGET" then
+        local name = _G["BINDING_NAME_" .. action] or action;
+        return ("Auto Loot Key %s and key %s conflict with \"%s\"."):format(modifier, GetBindingText(key), name),
+          GetBindingAction(chord) == action and chord or nil,
+          ("%s is already bound to \"%s\"."):format(GetBindingText(chord), name);
+      end
+    end
+  end
+end
+
+function ns.ClearAutoLootConflict()
+  if InCombatLockdown() then ns.Notify("Key bindings can't change during combat."); return end
+  local _, chord = ns.AutoLootConflictText();
+  if not chord then return end
+  SetBinding(chord, nil);
+  SaveBindings(GetCurrentBindingSet());
+end
+
 ns.GetInteractKeyText, ns.IsChordDown, ns.SetBindingSlot = GetInteractKeyText, IsChordDown, SetBindingSlot;

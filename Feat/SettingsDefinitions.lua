@@ -3,7 +3,7 @@ local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
 local media, DEFAULTS, SLIDER_RANGES = ns.media, ns.DEFAULTS, ns.SLIDER_RANGES;
 local SetIconSide, UpdateIcon, UpdateFont = ns.SetIconSide, ns.UpdateIcon, ns.UpdateFont;
 local UpdateKeyCap, UpdateLayout = ns.UpdateKeyCap, ns.UpdateLayout;
-ns.SettingType = { Checkbox = 1, Slider = 2, Dropdown = 3, Section = 4, Keybind = 5 };
+ns.SettingType = { Checkbox = 1, Slider = 2, Dropdown = 3, Section = 4, Keybind = 5, Note = 6 };
 
 -- Shared settings definitions for the Interface AddOns page. Edit Mode only owns HUD positioning.
 -- Tooltip text (desc): one short sentence, then a second paragraph only for details or limits.
@@ -67,6 +67,13 @@ function ns.BuildSettings()
     desc = "Sets the keys you interact with.\n\nClick a slot, then press a key. Right-click clears it.",
     get = function() return GetBindingKey("INTERACTTARGET") end,
     set = function(slot, key) ns.SetBindingSlot("INTERACTTARGET", slot, key); end });
+  Add({ kind = kind.Note, name = "Auto-Loot Conflict", indent = 1,
+    desc = function()
+      local _, chord, tooltip = ns.AutoLootConflictText();
+      return (tooltip or "") .. (chord and " Clear removes that binding." or "");
+    end,
+    hidden = function() return not ns.AutoLootConflictText() end,
+    get = ns.AutoLootConflictText });
   local interactSound = ns.gameInteractSound;
   if interactSound then
     Add({ kind = kind.Checkbox, name = ENABLE_INTERACT_SOUND_OPTION or "Interact Key Sound Cue", default = interactSound.Default, indent = 1,
@@ -180,7 +187,7 @@ function ns.BuildSettings()
     desc = "Hides the default cast bar while the HUD shows a cast.",
     onChange = ns.RefreshInteractionCastBar, disabled = CastBarOff, indent = 1 });
   Checkbox("Show for Clicked Objects", "castBarClicked", {
-    desc = "Also shows the cast bar when you click an object.\n\nThis may not always work as expected.",
+    desc = "Also shows the cast bar when you click an object.",
     disabled = CastBarOff, indent = 1 });
 
   Section("Blizzard Displays");

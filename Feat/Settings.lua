@@ -267,6 +267,19 @@ local function CreateRow(content, data, y)
   elseif data.kind == ns.SettingType.Keybind then
     row.control = CreateBindingSlots(row, data);
     row.control:SetPoint("RIGHT", -8, 0);
+  elseif data.kind == ns.SettingType.Note then
+    row.label:SetWidth(432);
+    row.control = CreateFrame("Button", nil, row, "UIPanelButtonTemplate");
+    row.control:SetSize(60, 22);
+    row.control:SetPoint("RIGHT", -8, 0);
+    row.control:SetText("Clear");
+    row.control:SetScript("OnClick", function() ns.ClearAutoLootConflict(); ns.RefreshSettings(); end);
+    row.control.Refresh = function()
+      local text, chord = data.get();
+      row.label:SetText([[|TInterface\DialogFrame\UI-Dialog-Icon-AlertNew:16:16|t ]] .. (text or ""));
+      row.label:SetTextColor(1, 0.82, 0);
+      row.control:SetShown(chord ~= nil);
+    end;
   end
   if row.control then Hover(row.control, data, row); end
   if row.control and row.control.HookHover then row.control:HookHover(); end
@@ -312,7 +325,7 @@ function ns.RefreshSettings()
     row.control:SetEnabled(not disabled);
     row.label:SetTextColor(disabled and 0.45 or 1, disabled and 0.45 or 1, disabled and 0.45 or 1);
     local value = data.get();
-    row.reset:SetShown(data.kind ~= ns.SettingType.Keybind and value ~= DefaultValue(data)); --a binding has no default
+    row.reset:SetShown(data.kind ~= ns.SettingType.Keybind and data.kind ~= ns.SettingType.Note and value ~= DefaultValue(data)); --a binding has no default
     row.reset:SetEnabled(not disabled); --the button shows Blizzard's own disabled art
     local textWidth = math.min(row.label:GetStringWidth(), data.kind == ns.SettingType.Checkbox and 480 - row.indent or 200);
     row.reset:SetPoint("LEFT", row, "LEFT", math.max(238, 32 + row.indent + textWidth + 8), 0);
@@ -322,7 +335,7 @@ function ns.RefreshSettings()
       row.control:SetValue(value);
       if row.control.UpdateSteppers then row.control:UpdateSteppers(); end --also when the value didn't change
       row.value:SetText(data.formatter and data.formatter(value) or tostring(value));
-    elseif data.kind == ns.SettingType.Dropdown or data.kind == ns.SettingType.Keybind then
+    elseif data.kind == ns.SettingType.Dropdown or data.kind == ns.SettingType.Keybind or data.kind == ns.SettingType.Note then
       row.control:Refresh();
     end
     row.refreshing = false;
