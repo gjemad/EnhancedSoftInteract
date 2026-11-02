@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.5.4 (2026-11-02)
+
+### Improvements
+
+- Targets with secret names now use a narrower HUD and show a faint crossed-out eye.
+- Long target names now shrink slightly to fit before they get cut off.
+
+### Bug fixes
+
+- Fixed the Auto Loot Key conflict warning not showing while auto-loot is on, and made its message clearer.
+
 ## 0.5.3 (2026-11-01)
 
 ### Improvements
