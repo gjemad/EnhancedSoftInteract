@@ -161,8 +161,9 @@ function ns.SetupDisplay(hud)
 
   -- The settings preview's checkboxes: shows the current sample out of range or with an unmet
   -- requirement, using the same status transition, dimming and colors as a real target.
-  local function SetSampleState(cursor, outOfRange, requirementText)
+  local function SetSampleState(cursor, outOfRange, requirementText, secretName)
     if not frame.sampleName then return end
+    frame.sampleSecret = secretName;
     local visible = frame:IsShown();
     local fromAlpha = hud.CurrentAlpha();
     frame.sampleCursor, frame.outOfRange, frame.requirementText = cursor, outOfRange, requirementText;

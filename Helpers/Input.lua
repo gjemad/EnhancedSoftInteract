@@ -38,10 +38,14 @@ local function IsChordDown(chord)
   return IsKeyDown(key) and true or false;
 end
 
+local function NotifyUnbound(key, action)
+  ns.Notify(ns.L.KEY_UNBOUND:format(GetBindingText(key), _G["BINDING_NAME_" .. action] or action));
+end
+
 -- Puts key in the action's slot (1 or 2), or clears the slot when key is nil. The other slot keeps its
 -- key. A key taken from another action is named in chat, since the game unbinds it there.
 local function SetBindingSlot(action, slot, key)
-  if InCombatLockdown() then ns.Notify("Key bindings can't change during combat."); return end
+  if InCombatLockdown() then ns.Notify(ns.L.BINDINGS_IN_COMBAT); return end
   local keys = { GetBindingKey(action) };
   local wanted = { keys[1], keys[2] };
   for i = 1, 2 do if wanted[i] == key then wanted[i] = nil; end end
@@ -51,18 +55,17 @@ local function SetBindingSlot(action, slot, key)
     local previous = GetBindingAction(key);
     if previous ~= "" and previous ~= action then
       SetBinding(key, nil);
-      ns.Notify(('%s no longer does "%s".'):format(GetBindingText(key), _G["BINDING_NAME_" .. previous] or previous));
+      NotifyUnbound(key, previous);
     end
   end
   for i = 1, 2 do if wanted[i] then SetBinding(wanted[i], action); end end
   SaveBindings(GetCurrentBindingSet());
 end
 
--- With auto-loot off, the warning for an interact key whose auto-loot chord runs another action. Only
+-- The warning for an interact key whose Auto Loot Key chord is bound to another action. Only
 -- checks keys without a modifier of their own. Also returns the chord when SetBinding can clear it (an
 -- override binding from an addon can't be cleared that way) and the tooltip text.
 function ns.AutoLootConflictText()
-  if GetCVar("autoLootDefault") == "1" then return end
   local modifier = GetModifiedClick("AUTOLOOTTOGGLE");
   if not modifier or modifier == "NONE" then return end
   for _, key in ipairs({ GetBindingKey("INTERACTTARGET") }) do
@@ -71,20 +74,25 @@ function ns.AutoLootConflictText()
       local action = GetBindingAction(chord, true);
       if action ~= "" and action ~= "INTERACTTARGET" then
         local name = _G["BINDING_NAME_" .. action] or action;
-        return ("Auto Loot Key %s and key %s conflict with \"%s\"."):format(modifier, GetBindingText(key), name),
-          GetBindingAction(chord) == action and chord or nil,
-          ("%s is already bound to \"%s\"."):format(GetBindingText(chord), name);
+        local chordText = GetBindingText(chord);
+        local clearable = GetBindingAction(chord) == action;
+        return ("Auto Loot Key conflict: %s is already bound to \"%s\"."):format(chordText, name),
+          clearable and chord or nil,
+          ("Your Auto Loot Key is %s and your Interact Key is %s."):format(modifier, GetBindingText(key))
+            .. (clearable and (" Clear removes \"%s\" from %s."):format(name, chordText) or "");
       end
     end
   end
 end
 
 function ns.ClearAutoLootConflict()
-  if InCombatLockdown() then ns.Notify("Key bindings can't change during combat."); return end
+  if InCombatLockdown() then ns.Notify(ns.L.BINDINGS_IN_COMBAT); return end
   local _, chord = ns.AutoLootConflictText();
   if not chord then return end
+  local action = GetBindingAction(chord);
   SetBinding(chord, nil);
   SaveBindings(GetCurrentBindingSet());
+  NotifyUnbound(chord, action);
 end
 
 ns.GetInteractKeyText, ns.IsChordDown, ns.SetBindingSlot = GetInteractKeyText, IsChordDown, SetBindingSlot;

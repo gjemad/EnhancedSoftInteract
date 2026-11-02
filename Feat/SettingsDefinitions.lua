@@ -68,10 +68,7 @@ function ns.BuildSettings()
     get = function() return GetBindingKey("INTERACTTARGET") end,
     set = function(slot, key) ns.SetBindingSlot("INTERACTTARGET", slot, key); end });
   Add({ kind = kind.Note, name = "Auto-Loot Conflict", indent = 1,
-    desc = function()
-      local _, chord, tooltip = ns.AutoLootConflictText();
-      return (tooltip or "") .. (chord and " Clear removes that binding." or "");
-    end,
+    desc = function() return select(3, ns.AutoLootConflictText()) or "" end,
     hidden = function() return not ns.AutoLootConflictText() end,
     get = ns.AutoLootConflictText });
   local interactSound = ns.gameInteractSound;

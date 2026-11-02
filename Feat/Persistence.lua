@@ -22,14 +22,14 @@ local KEPT = {
   {
     option = "forceInteractKey", checkbox = "Always Enable Interact Key",
     desc = "Turns the game's interact key back on if something turns it off.",
-    notice = '"%s" was turned back on. To turn it off, first uncheck "%s" in /esi.',
+    notice = ns.L.KEPT_INTERACT_KEY,
     setting = "PROXY_ENABLE_INTERACT", value = true, name = "Enable Interact Key",
     cvars = { softTargetInteract = Enum.SoftTargetEnableFlags.Any },
   },
   {
     option = "forceInteractIcons", checkbox = "Always Show All Interact Key Icons",
     desc = "Keeps the game's Interact Key Icons on Show All, so the HUD can show the right icon for every target.",
-    notice = '"%s" was set back to Show All. To change it, first uncheck "%s" in /esi.',
+    notice = ns.L.KEPT_INTERACT_ICONS,
     setting = "PROXY_INTERACT_ICONS", value = 2, name = "Interact Key Icons",
     cvars = { SoftTargetIconEnemy = 1, SoftTargetIconInteract = 1, SoftTargetIconGameObject = 1, SoftTargetLowPriorityIcons = 1 },
   },

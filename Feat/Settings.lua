@@ -357,12 +357,13 @@ local PREVIEW_TOGGLES = {
   { key = "range", name = "Move closer", desc = "Shows the target as out of range." },
   { key = "requires", name = "Requires profession", desc = "Shows the missing profession message." },
   { key = "cast", name = "Cast bar", desc = "Shows a cast bar on targets you gather or open." },
+  { key = "secret", name = "Secret name", desc = "Shows a target whose name the game keeps secret from addons." },
 };
 local PREVIEW_PULSE_EVERY = 3;
 
 local function CreatePreviewControls(sample, nextSample, frame)
   local preview = sample.frame;
-  local state = { animate = true, range = false, requires = false, cast = false };
+  local state = { animate = true, range = false, requires = false, cast = false, secret = false };
   local current = {};
   local toggles = {};
   ns.previewToggles = toggles;
@@ -372,6 +373,7 @@ local function CreatePreviewControls(sample, nextSample, frame)
   local function Blocked() return state.range or Requirement() ~= nil end
   local function Applicable(key)
     if key == "requires" then return ns.RequirementText(current.cursor) ~= nil end
+    if key == "secret" then return C_Texture.GetAtlasInfo("transmog-icon-hidden") ~= nil end
     if key == "cast" then
       return EnhancedSoftInteractDB.castBarEnabled and ns.styles.Get().castBar ~= nil
         and ns.SampleCastable(current.name, current.cursor) and not Blocked();
@@ -382,7 +384,7 @@ local function CreatePreviewControls(sample, nextSample, frame)
   RefreshPreview = function()
     if not current.name then return end
     local requirement = Requirement();
-    sample.SetSampleState(Blocked() and "Unable" .. current.cursor or current.cursor, state.range, requirement);
+    sample.SetSampleState(Blocked() and "Unable" .. current.cursor or current.cursor, state.range, requirement, state.secret);
     ns.CastBar.Preview(preview, Casting() and (state.animate and "loop" or "hold") or nil, sample.PlayInteractPulse);
     for key, box in pairs(toggles) do
       local enabled = Applicable(key);

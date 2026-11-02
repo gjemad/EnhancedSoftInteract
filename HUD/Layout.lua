@@ -161,7 +161,13 @@ function ns.SetupLayout(hud)
   -- The box is a table of three columns: icon | name | key cap (swapIconAndKey swaps the outer two). The icon
   -- and key columns are fixed cells (CellSize); a hidden one shrinks to the edge padding (SidePadding). The
   -- name column fits the name (and the requirement line) between nameMinWidth and nameMaxWidth, and cuts a longer
-  -- name short with "...". A secret name has a secret width; its column then takes nameMaxWidth.
+  -- name short with "...", after its font steps down through NAME_FONT_STEPS to fit. A secret name has a
+  -- secret width, so its column takes SECRET_NAME_SCALE of nameMaxWidth and its font always takes
+  -- SECRET_FONT_SCALE. A faint crossed-out eye at the column's right end marks it. The name can't be
+  -- measured, so the eye stays there, and the name gives up the same room on both sides to stay centered.
+  local NAME_FONT_STEPS = { 0.95, 0.9, 0.85 };
+  local SECRET_NAME_SCALE, SECRET_FONT_SCALE = 0.67, 0.9;
+  local SECRET_ICON_W, SECRET_ICON_H, SECRET_ICON_INSET, SECRET_NAME_ROOM = 16, 13.25, 9.5, 18; --at font size 17.6
   local function UpdateLayout(animate)
     local db = EnhancedSoftInteractDB;
     local minName = ns.styles.NameMinWidth(db);
@@ -176,16 +182,33 @@ function ns.SetupLayout(hud)
     local edgeLeft, edgeRight = 0, 0;
     frame.cellSize, frame.sidePadding = cell, padding; --for the test tools
     -- Returns the column width, and the text's own width when it isn't secret.
+    local secretRoom = SECRET_NAME_ROOM * ns.styles.Size(db).fontSize / SKILL_FONT;
+    local secretWidth = math.max(minName, math.floor(maxName * SECRET_NAME_SCALE));
+    -- A secret string never reaches nameMeasure: its secret aspect would stay on the font string, and
+    -- every later measurement, of readable names too, would come back secret.
     local function FitWidth(text, size, width)
+      if issecretvalue(text) then return secretWidth end
       nameMeasure:SetFont(ns.styles.Font(db), size, ns.styles.FontFlags());
       nameMeasure:SetText(text);
       local textWidth = nameMeasure:GetStringWidth();
-      if issecretvalue(textWidth) then return maxName end
+      if issecretvalue(textWidth) then return secretWidth end
       return math.min(maxName, math.max(width, math.ceil(textWidth) + 1)), textWidth; --+1: no "..." on an exact fit
     end
     local textScale = REQ_TEXT_SCALE;
-    local nameWidth, nameTextWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "",
-      ns.styles.Size(db).fontSize, minName);
+    local nameWidth, nameTextWidth = secretWidth, nil; --the settings preview's Secret name checkbox
+    if not (frame.sampleName and frame.sampleSecret) then
+      nameWidth, nameTextWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "",
+        ns.styles.Size(db).fontSize, minName);
+    end
+    local nameFontScale = nameTextWidth and 1 or SECRET_FONT_SCALE;
+    if nameTextWidth and math.ceil(nameTextWidth) + 1 > maxName then
+      local fullWidth = nameTextWidth;
+      for _, scale in ipairs(NAME_FONT_STEPS) do
+        nameFontScale, nameTextWidth = scale, fullWidth * scale;
+        if math.ceil(nameTextWidth) + 1 <= maxName then break end
+      end
+    end
+    frame.nameFontScale = nameFontScale; --for the test tools
     local text = frame.requirementText or (frame.outOfRange and "Move closer");
     local statusWidth = minName;
     if text then
@@ -224,8 +247,18 @@ function ns.SetupLayout(hud)
     frame.statusShadow:SetPoint("CENTER", frame.box, "LEFT", edgeLeft + left + nameWidth * 0.5, requirementY);
     frame.statusShadow:SetSize(statusWidth + 32, ns.styles.Size(db).fontSize * textScale + 11);
     frame.name:ClearAllPoints();
-    frame.name:SetFont(ns.styles.Font(db), ns.styles.Size(db).fontSize, ns.styles.FontFlags());
-    frame.name:SetWidth(nameWidth);
+    frame.name:SetFont(ns.styles.Font(db), ns.styles.Size(db).fontSize * nameFontScale, ns.styles.FontFlags());
+    local secretName = nameTextWidth == nil;
+    local labelWidth = secretName and nameWidth - 2 * secretRoom or nameWidth;
+    frame.name:SetWidth(labelWidth);
+    frame.secretIcon:SetShown(secretName);
+    if secretName then
+      frame.secretIcon:SetAtlas("transmog-icon-hidden");
+      frame.secretIcon:SetSize(SECRET_ICON_W * skillUnit, SECRET_ICON_H * skillUnit);
+      frame.secretIcon:ClearAllPoints();
+      frame.secretIcon:SetPoint("CENTER", frame.box, "LEFT",
+        edgeLeft + left + nameWidth - SECRET_ICON_INSET * skillUnit, ns.styles.NameOffset(frame, db, 0));
+    end
     frame.skillTextWidth = skillAtlas and math.min(nameTextWidth, nameWidth) or nil;
     frame.skillGap, frame.skillIconWidth = SKILL_GAP * skillUnit, SKILL_W * SKILL_SCALE * skillUnit;
     frame.skillIcon:SetShown(frame.skillTextWidth ~= nil);
@@ -233,12 +266,12 @@ function ns.SetupLayout(hud)
       frame.skillIcon:SetAtlas(skillAtlas);
       frame.skillIcon:SetSize(frame.skillIconWidth, SKILL_H * SKILL_SCALE * skillUnit);
     end
-    frame.compactName:SetFont(ns.styles.Font(db), ns.styles.Size(db).fontSize * REQ_NAME_SCALE, ns.styles.FontFlags());
+    frame.compactName:SetFont(ns.styles.Font(db), ns.styles.Size(db).fontSize * REQ_NAME_SCALE * nameFontScale, ns.styles.FontFlags());
     -- An outlined style draws no drop shadow (ElvUI's convention); others keep the font's own shadow.
     for _, label in ipairs({ frame.name, frame.compactName, frame.requirement }) do
       if style.noTextShadow then label:SetShadowOffset(0, 0); else label:SetShadowOffset(unpack(label.baseShadow)); end
     end
-    frame.compactName:SetWidth(nameWidth);
+    frame.compactName:SetWidth(labelWidth);
     frame.name:SetJustifyH("CENTER");
     frame.compactName:SetJustifyH("CENTER");
     frame.requirement:SetJustifyH("CENTER");

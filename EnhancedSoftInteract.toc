@@ -1,4 +1,4 @@
-## Interface: 11509, 20506, 50504, 120000, 120001, 120100, 16001
+## Interface: 11509, 20506, 50504, 120000, 120001, 120100, 120107, 16001
 ## Title: Enhanced Soft Interact
 ## Notes: Shows your soft interact target's name, action and keybind in a frame you can customize.
 ## IconAtlas: Crosshair_interact_64
@@ -15,6 +15,7 @@ Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 Libs\LibEditMode\embed.xml
 #@end-no-lib-strip@
 
+Locales\enUS.lua
 Helpers\Text.lua
 Data\CursorData.lua
 Data\GatherSkill.lua

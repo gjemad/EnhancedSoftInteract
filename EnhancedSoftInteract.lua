@@ -74,6 +74,9 @@ local function CreateHUD(frame)
   frame.compactName:SetAlpha(0);
   frame.skillIcon = frame.nameHolder:CreateTexture(nil, "ARTWORK"); --skill-up arrows before the name
   frame.skillIcon:Hide();
+  frame.secretIcon = frame.nameHolder:CreateTexture(nil, "ARTWORK"); --a faint crossed-out eye for a secret name
+  frame.secretIcon:SetAlpha(0.5);
+  frame.secretIcon:Hide();
   frame.requirement = frame:CreateFontString(nil, "ARTWORK", NAME_FONT);
   frame.requirement:SetWordWrap(false);
   frame.requirement:SetJustifyH("CENTER");

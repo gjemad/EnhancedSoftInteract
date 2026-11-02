@@ -43,7 +43,7 @@ local function EndEditModeSample()
     settingsPending = nil;
     -- Let Blizzard finish its native exit, including saving/closing controls, before opening another panel.
     C_Timer.After(0, function()
-      if InCombatLockdown() then Notify("Settings can't be opened in combat."); return end
+      if InCombatLockdown() then Notify(ns.L.SETTINGS_IN_COMBAT); return end
       ns.OpenSettings();
     end);
   end
@@ -65,7 +65,7 @@ local function SetupEditMode()
       if EditModeManagerFrame.onCloseCallback then
         securecallfunction(EditModeManagerFrame.onCloseCallback);
       else
-        Notify("Close the main Edit Mode window to open Enhanced Soft Interact settings.");
+        Notify(ns.L.EDIT_MODE_CLOSE_FIRST);
       end
     end },
   });
@@ -81,12 +81,12 @@ end
 
 -- Opens Edit Mode for moving the HUD; all options live in the Interface AddOns page.
 function ns.OpenHUDInEditMode()
-  if InCombatLockdown() then Notify("Edit Mode can't be opened in combat."); return end
-  if not LibEditMode then Notify("Edit Mode isn't available."); return end
+  if InCombatLockdown() then Notify(ns.L.EDIT_MODE_IN_COMBAT); return end
+  if not LibEditMode then Notify(ns.L.EDIT_MODE_UNAVAILABLE); return end
   if ns.settingsPanel then ns.settingsPanel:Hide(); end
   if SettingsPanel:IsShown() then SettingsPanel:Close(true); end
   if not EditModeManagerFrame:IsShown() then
-    if not EditModeManagerFrame:CanEnterEditMode() then Notify("Edit Mode isn't available right now."); return end
+    if not EditModeManagerFrame:CanEnterEditMode() then Notify(ns.L.EDIT_MODE_UNAVAILABLE_NOW); return end
     ShowUIPanel(EditModeManagerFrame);
   end
 end
