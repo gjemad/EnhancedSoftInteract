@@ -16,7 +16,7 @@ local forever = build >= 16000 and build < 20000;
 local DEFAULTS = {
   -- Target icons are on by default only on Forever.
   enabled = true, showBlizzardTooltip = false, showNpcIcons = forever, showObjectIcons = forever, showObjectNames = true,
-  showQuestLootEffect = true, lootEffectOre = true, lootEffectHerbs = true, lootEffectQuest = false,
+  showQuestLootEffect = false, lootEffectOre = true, lootEffectHerbs = true, lootEffectQuest = false,
   forceInteractKey = true, forceInteractIcons = true,
   language = "auto", showIcon = true, elvShowIcon = false, swapIconAndKey = false, showKey = true, hudSize = "normal",
   showSkillUp = true, castBarEnabled = true, castBarTimer = true, castBarHideGame = true, castBarClicked = true, hudStyle = "levelup",

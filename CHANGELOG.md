@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.5.5 (2026-11-06)
+
+### Improvements
+
+- The target loot effect now fades smoothly between targets and when a target goes out of range or can't be used.
+
+### Changes
+
+- Show Quest Item Loot Effect is now off by default.
+
+### Bug fixes
+
+- Fixed the game's loot effect staying on quest items and quest NPCs after Show Quest Item Loot Effect was turned off. It goes away after you log out and back in.
+
 ## 0.5.4 (2026-11-06)
 
 ### Features

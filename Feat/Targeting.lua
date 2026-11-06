@@ -84,8 +84,8 @@ local function Apply()
           ns.SetGameCVar(cvar, want);
         end
       elseif original[cvar] then
-        -- The loot effect stays until the game restarts, so say so.
-        if cvar == QUEST_EFFECT and tonumber(original[cvar]) ~= 1 then ns.Notify(ns.L.CHAT_QUEST_LOOT_EFFECT_RESTART); end
+        -- The loot effect stays until the player logs out, so say so.
+        if cvar == QUEST_EFFECT and tonumber(original[cvar]) ~= 1 then ns.Notify(ns.L.CHAT_QUEST_LOOT_EFFECT_LOG_OUT); end
         ns.SetGameCVar(cvar, original[cvar]);
         original[cvar] = nil;
       end
@@ -94,8 +94,37 @@ local function Apply()
   applying = false;
 end
 
--- Called when Enabled, a targeting setting or Show Quest Item Loot Effect changes.
+-- Called when Enabled or a targeting setting changes.
 ns.UpdateTargeting = Apply;
+
+-- Unchecking Show Quest Item Loot Effect turns the game's effect off for good, not only back to the player's
+-- value: an older Forever Loot Sparkles leaves the CVar at 1 and Outline Mode off, which shows the effect on
+-- quest NPCs too. The CVar goes to 0, and Outline Mode comes back from off, so the game draws its outline
+-- where it showed the effect. Both are saved, so they use SetCVar even in the gamepad UI. Blocked by combat,
+-- it happens at PLAYER_REGEN_ENABLED.
+local OUTLINE = "graphicsOutlineMode";
+local OUTLINE_ON = 2;
+local clearPending = false;
+local function ClearQuestEffect()
+  clearPending = false;
+  if ns.ForeverLootSparklesOwnsQuestEffect() or not Has(QUEST_EFFECT) then return end
+  if BlockedInCombat(QUEST_EFFECT) or (Has(OUTLINE) and BlockedInCombat(OUTLINE)) then
+    clearPending = true;
+    return;
+  end
+  original[QUEST_EFFECT] = nil;
+  if tonumber(GetCVar(QUEST_EFFECT)) ~= 0 then
+    SetCVar(QUEST_EFFECT, 0);
+    ns.Notify(ns.L.CHAT_QUEST_LOOT_EFFECT_LOG_OUT);
+  end
+  if Has(OUTLINE) and tonumber(GetCVar(OUTLINE)) == 0 then SetCVar(OUTLINE, OUTLINE_ON); end
+end
+
+-- Called when Show Quest Item Loot Effect changes.
+function ns.UpdateQuestLootEffect(checked)
+  Apply();
+  if not checked then ClearQuestEffect(); end
+end
 
 local watched = {};
 for _, item in ipairs(CVARS) do watched[item.cvar:lower()] = true; end
@@ -117,6 +146,7 @@ watcher:SetScript("OnEvent", function(_, event, name)
     elseif presets[key] and not applying then C_Timer.After(PRESET_DELAY, Apply); end
   elseif event == "PLAYER_REGEN_ENABLED" or event == "PLAYER_ENTERING_WORLD" then
     Apply();
+    if clearPending then ClearQuestEffect(); end
   else
     -- Never leave an addon value in the saved settings.
     applying = true;

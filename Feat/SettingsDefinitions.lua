@@ -248,7 +248,7 @@ function ns.BuildSettings()
   Checkbox(L.OPTION_QUEST_LOOT_EFFECT, "showQuestLootEffect", {
     desc = L.OPTION_QUEST_LOOT_EFFECT_DESC, locked = ns.ForeverLootSparklesOwnsQuestEffect,
     hidden = function() return not ns.QuestLootEffectAvailable() end,
-    onChange = ns.UpdateTargeting });
+    onChange = ns.UpdateQuestLootEffect });
   -- Objects need their plate for the dust, which Feat\HideBlizzard.lua and Feat\ObjectNames.lua provide.
   -- The rows exist on every client but are hidden where Feat\LootEffect.lua doesn't load.
   local function LootEffectChanged()

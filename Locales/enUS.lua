@@ -108,7 +108,7 @@ ns.AddLanguage("enUS", "English", nil, {
   OPTION_OBJECT_NAMES = "Show Object Names",
   OPTION_OBJECT_NAMES_DESC = "Shows the name above your soft target when it's an object.",
   OPTION_QUEST_LOOT_EFFECT = "Show Quest Item Loot Effect",
-  OPTION_QUEST_LOOT_EFFECT_DESC = "Turns on the game's loot effect for quest items you can loot.",
+  OPTION_QUEST_LOOT_EFFECT_DESC = "Turns on the game's loot effect for quest items you can loot. To turn it off again, uncheck this and log out and back in. /reload isn't enough.",
   OPTION_LOOT_EFFECT = "Show Target Loot Effect",
   OPTION_LOOT_EFFECT_DESC = "Shows a loot effect on your soft target when it's an ore vein, a herb or a quest object.",
   OPTION_LOOT_EFFECT_ORE = "Ore Veins",
@@ -175,7 +175,7 @@ ns.AddLanguage("enUS", "English", nil, {
   CHAT_EDIT_MODE_UNAVAILABLE_NOW = "Edit Mode isn't available right now.",
   CHAT_EDIT_MODE_CLOSE_FIRST = "Close the main Edit Mode window to open Enhanced Soft Interact settings.",
   CHAT_BINDINGS_IN_COMBAT = "Key bindings can't be changed in combat.",
-  CHAT_QUEST_LOOT_EFFECT_RESTART = "The quest item loot effect goes away after you restart the game. /reload isn't enough.",
+  CHAT_QUEST_LOOT_EFFECT_LOG_OUT = "The quest item loot effect goes away after you log out and back in. /reload isn't enough.",
   CHAT_KEY_UNBOUND = '%s is no longer bound to "%s".', --the key, the action
   CHAT_KEPT_INTERACT_KEY = '"%s" was turned back on. To turn it off, first uncheck "%s" in /esi.', --the game's option, the checkbox
   CHAT_KEPT_INTERACT_ICONS = '"%s" was set back to Show All. To change it, first uncheck "%s" in /esi.', --the game's option, the checkbox
