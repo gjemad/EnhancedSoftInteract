@@ -11,13 +11,17 @@ ns.slashCommands = {};
 local function Notify(msg) print("|cffffd100Enhanced Soft Interact:|r " .. msg) end
 
 -- Saved-setting defaults. LoadSettings fills in unset keys from here.
+local build = select(4, GetBuildInfo());
+local forever = build >= 16000 and build < 20000;
 local DEFAULTS = {
-  enabled = true, showBlizzardTooltip = false, showBlizzardIcons = false, showObjectNames = true,
+  -- Target icons are on by default only on Forever.
+  enabled = true, showBlizzardTooltip = false, showNpcIcons = forever, showObjectIcons = forever, showObjectNames = true,
+  showQuestLootEffect = true, lootEffectOre = true, lootEffectHerbs = true, lootEffectQuest = false,
   forceInteractKey = true, forceInteractIcons = true,
-  showIcon = true, elvShowIcon = false, swapIconAndKey = false, showKey = true, hudSize = "normal",
+  language = "auto", showIcon = true, elvShowIcon = false, swapIconAndKey = false, showKey = true, hudSize = "normal",
   showSkillUp = true, castBarEnabled = true, castBarTimer = true, castBarHideGame = true, castBarClicked = true, hudStyle = "levelup",
   -- Retail defaults to Plunderstorm keys; Forever and the Classic clients default to the Classic keys.
-  elvFont = "PT Sans Narrow", keyStyle = select(4, GetBuildInfo()) >= 100000 and "plunderstorm" or "classic",
+  elvFont = "PT Sans Narrow", keyStyle = build >= 100000 and "plunderstorm" or "classic",
   -- The game's own defaults are 10 yards, straight ahead.
   interactRange = 20, interactArc = 1,
 };
@@ -156,6 +160,7 @@ local function OnSoftInteractChanged(oldTarget, newTarget, fromRangeCheck)
   end
   ns.RefreshInteractionCastBar();
   if ns.UpdateObjectName then ns.UpdateObjectName(); end
+  if ns.UpdateLootEffect then ns.UpdateLootEffect(); end
   -- Selected debug sources retain clears/repeats while open; unchanged range polls stay silent.
   if ns.DebugSoftTarget and (not fromRangeCheck or changed) then
     ns.DebugSoftTarget(oldTarget, newTarget, target, EnhancedSoftInteractDB.enabled and "active" or "disabled", fromRangeCheck);
@@ -197,6 +202,8 @@ local function LoadSettings()
   end
   db.layouts = db.layouts or {};
   db.font = db.font or media:GetDefault("font"); --not in DEFAULTS: fonts from other addons may register later
+  ns.ApplyLanguage(db.language);
+  ns.styles.UpdateNames();
   hud.ApplyAllSettings();
   for _, fn in ipairs(ns.onLoad) do fn(); end
 end

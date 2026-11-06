@@ -64,6 +64,15 @@ local function EntryID(guid)
   return unitType == "GameObject" and tonumber(id) or nil;
 end
 
+-- The data's name for a node, from the name this language's game shows. A node in another language with
+-- neither a known ID nor an entry in NODE_NAMES gets no icon. This runs only for a node with an unknown ID.
+local function EnglishNodeName(name)
+  for english, translated in pairs(ns.L.NODE_NAMES) do
+    if translated == name then return english end
+  end
+  return name;
+end
+
 -- What a node or corpse needs: the skill, where that came from ("entry", "name" or "level"), the entry ID,
 -- and the node's own yellow, green and grey skills when it has them. Unknown nodes give nil. A corpse
 -- needs nothing below level 10, then 10 per level to level 20, then 5 per level.
@@ -77,8 +86,8 @@ local function Required(skill, guid, name)
   local entry = EntryID(guid);
   local node = entry and nodes.entries[entry];
   if node and node[CLIENT] then return node[CLIENT], "entry", entry, nodes.colors[entry] end
-  -- English names only; a node in another language without a known ID gets no icon.
   name = Accessible(name);
+  name = name and EnglishNodeName(name);
   node = name and nodes.names[name];
   if node and node[CLIENT] then return node[CLIENT], "name", entry, nodes.colors[name] end
   return nil, nil, entry;
@@ -106,7 +115,7 @@ function ns.SkillRequirementText(cursorName, info)
   local skill = SKILLS[cursorName];
   if not (skill and skill.nodes and info and info.required and info.rank) then return nil end
   if info.rank >= info.required then return nil end
-  return ("Too low skill level (%d/%d)"):format(info.rank, info.required);
+  return ns.L.HUD_SKILL_TOO_LOW:format(info.rank, info.required);
 end
 
 -- A skill-up level for a preview sample of a herb, ore or skinnable corpse, or nil. Each call takes the

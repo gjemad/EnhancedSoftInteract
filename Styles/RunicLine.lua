@@ -1,7 +1,7 @@
 local ADDON_NAME, ns = ...;
 local DIAMOND = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\RunicDiamond]];
 ns.styles.Register("runic", {
-  name = "Runic Line", underline = true, shadow = true,
+  name = function() return ns.L.STYLE_RUNIC_LINE end, underline = true, shadow = true,
   sizes = {
     small = { fontSize = 14, iconSize = 24, keyHeight = 22.75, glyphHeight = 22.75, keyFontSize = 14, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 42 },
     normal = { fontSize = 16, iconSize = 28, keyHeight = 26, glyphHeight = 26, keyFontSize = 16, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 48 },
@@ -39,10 +39,11 @@ ns.styles.Register("runic", {
   end,
   -- The underline sits on the lower border of the visible button.
   UnderlineY = ns.styles.ButtonBottom,
-  -- Status text stays clear of the ornament.
+  -- Status text stays clear of the ornament. 0.795 font sizes is the status line's bottom: HUD\Layout.lua's
+  -- REQ_TEXT_Y plus half its 0.65 font size.
   StatusOffset = function(frame, db)
     local size = ns.styles.Size(db);
-    return math.max(0, size.fontSize * 0.735 + 3 * size.inputScale + ns.styles.UnderlineY(frame, db));
+    return math.max(0, size.fontSize * 0.795 + 3 * size.inputScale + ns.styles.UnderlineY(frame, db));
   end,
   -- The cast track snaps like the line, so both keep the same whole-pixel thickness everywhere.
   PlaceCast = function(frame, texture, left, width, height, y)

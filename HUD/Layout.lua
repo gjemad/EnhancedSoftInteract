@@ -99,7 +99,7 @@ function ns.SetupLayout(hud)
   -- blends fixed-size labels on one moving anchor without changing the HUD's height or measuring
   -- a secret region. Keep font sizes fixed so glyph rasterization cannot step during the transition.
   local REQ_NAME_SCALE, REQ_TEXT_SCALE = 0.82, 0.65;
-  local REQ_TEXT_Y = -0.41;
+  local REQ_TEXT_Y = -0.47; --with NameOffset's 0.32, room for tall capitals and deep descenders (Morpheus, Skurri)
   local REQ_NAME_GREY = 0.8;
   -- The skill-up icon (Blizzard's 13 x 15 recipe list arrows) is anchored to the name and centered between
   -- the interaction icon and the name's text, at least SKILL_GAP from the text. With no
@@ -138,7 +138,7 @@ function ns.SetupLayout(hud)
   end
 
   local function StyleName(animate)
-    local text = frame.requirementText or (frame.outOfRange and "Move closer");
+    local text = frame.requirementText or (frame.outOfRange and ns.L.HUD_MOVE_CLOSER);
     local to = text and 1 or 0;
     if not (animate and frame.statusAmount ~= nil) then
       statusTween:Stop();
@@ -209,7 +209,7 @@ function ns.SetupLayout(hud)
       end
     end
     frame.nameFontScale = nameFontScale; --for the test tools
-    local text = frame.requirementText or (frame.outOfRange and "Move closer");
+    local text = frame.requirementText or (frame.outOfRange and ns.L.HUD_MOVE_CLOSER);
     local statusWidth = minName;
     if text then
       statusWidth = FitWidth(text, ns.styles.Size(db).fontSize * textScale, 0);

@@ -43,7 +43,7 @@ local function EndEditModeSample()
     settingsPending = nil;
     -- Let Blizzard finish its native exit, including saving/closing controls, before opening another panel.
     C_Timer.After(0, function()
-      if InCombatLockdown() then Notify(ns.L.SETTINGS_IN_COMBAT); return end
+      if InCombatLockdown() then Notify(ns.L.CHAT_SETTINGS_IN_COMBAT); return end
       ns.OpenSettings();
     end);
   end
@@ -57,7 +57,7 @@ local function SetupEditMode()
   end, HUD_DEFAULT_POSITION, "Enhanced Soft Interact");
   -- Keep the native position controls and one shortcut; all addon options live on the AddOns page.
   LibEditMode:AddFrameSettingsButtons(frame, {
-    { text = "Open Settings", click = function()
+    { text = ns.L.SETTINGS_OPEN, click = function()
       if InCombatLockdown() then return end
       settingsPending = true;
       -- This is the native Escape/close callback, including the unsaved-layout prompt.
@@ -65,7 +65,7 @@ local function SetupEditMode()
       if EditModeManagerFrame.onCloseCallback then
         securecallfunction(EditModeManagerFrame.onCloseCallback);
       else
-        Notify(ns.L.EDIT_MODE_CLOSE_FIRST);
+        Notify(ns.L.CHAT_EDIT_MODE_CLOSE_FIRST);
       end
     end },
   });
@@ -81,12 +81,12 @@ end
 
 -- Opens Edit Mode for moving the HUD; all options live in the Interface AddOns page.
 function ns.OpenHUDInEditMode()
-  if InCombatLockdown() then Notify(ns.L.EDIT_MODE_IN_COMBAT); return end
-  if not LibEditMode then Notify(ns.L.EDIT_MODE_UNAVAILABLE); return end
+  if InCombatLockdown() then Notify(ns.L.CHAT_EDIT_MODE_IN_COMBAT); return end
+  if not LibEditMode then Notify(ns.L.CHAT_EDIT_MODE_UNAVAILABLE); return end
   if ns.settingsPanel then ns.settingsPanel:Hide(); end
   if SettingsPanel:IsShown() then SettingsPanel:Close(true); end
   if not EditModeManagerFrame:IsShown() then
-    if not EditModeManagerFrame:CanEnterEditMode() then Notify(ns.L.EDIT_MODE_UNAVAILABLE_NOW); return end
+    if not EditModeManagerFrame:CanEnterEditMode() then Notify(ns.L.CHAT_EDIT_MODE_UNAVAILABLE_NOW); return end
     ShowUIPanel(EditModeManagerFrame);
   end
 end

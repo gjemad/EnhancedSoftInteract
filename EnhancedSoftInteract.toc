@@ -15,6 +15,7 @@ Libs\LibSharedMedia-3.0\LibSharedMedia-3.0.lua
 Libs\LibEditMode\embed.xml
 #@end-no-lib-strip@
 
+Locales\Translation.lua
 Locales\enUS.lua
 Helpers\Text.lua
 Data\CursorData.lua
@@ -41,6 +42,7 @@ EnhancedSoftInteract.lua
 Feat\SkinningRange.lua [ExcludeLoadGameType standard]
 Feat\Gamepad_Camelot.lua [ExcludeLoadGameType standard, classic][AllowLoadGameType camelot]
 Feat\ObjectNames.lua [ExcludeLoadGameType classic]
+Feat\LootEffect.lua [ExcludeLoadGameType classic]
 Feat\Target.lua
 Feat\HideBlizzard.lua
 Feat\Persistence.lua
@@ -53,3 +55,4 @@ Feat\EditMode.lua
 Feat\SettingsDefinitions.lua
 Feat\SettingsDropdown.lua
 Feat\Settings.lua
+Feat\SettingsAbout.lua

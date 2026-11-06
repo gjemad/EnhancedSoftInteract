@@ -1,15 +1,33 @@
 # Changelog
 
-## 0.5.4 (2026-11-02)
+## 0.5.4 (2026-11-06)
+
+### Features
+
+- Added Show Target Loot Effect on Forever, which shows a loot effect on your soft target when it's an ore vein, a herb or a quest object, with an option for each.
+- Added Show Quest Item Loot Effect on Forever, which turns on the game's loot effect for quest items you can loot.
 
 ### Improvements
 
 - Targets with secret names now use a narrower HUD and show a faint crossed-out eye.
 - Long target names now shrink slightly to fit before they get cut off.
+- Show Target Icons now has separate options for NPCs and objects.
+- Object names now fade in, have a soft shadow, and get a glow behind the icon.
+
+### Changes
+
+- Show Target Icons is now on by default on Forever.
 
 ### Bug fixes
 
 - Fixed the Auto Loot Key conflict warning not showing while auto-loot is on, and made its message clearer.
+- Fixed numpad keys showing a long label too small to read on the button.
+- Fixed the status line overlapping the target name in some fonts.
+- Fixed known conflicts with other addons, like object names.
+
+### Package
+
+- All text is now in one language file, ready for translations. The README explains how to translate.
 
 ## 0.5.3 (2026-11-01)
 

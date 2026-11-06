@@ -29,7 +29,12 @@ function ns.styles.Register(id, style)
   end
   styles[id] = style;
   order[#order + 1] = id;
-  ns.HUD_STYLES[#ns.HUD_STYLES + 1] = { text = style.name, value = id };
+  ns.HUD_STYLES[#ns.HUD_STYLES + 1] = { value = id };
+end
+
+-- The style dropdown's text, once the player's language is known.
+function ns.styles.UpdateNames()
+  for _, entry in ipairs(ns.HUD_STYLES) do entry.text = styles[entry.value].name(); end
 end
 
 function ns.styles.Get()
@@ -88,7 +93,7 @@ end
 -- name rises with it to make room.
 function DEFAULT_HOOKS.NameOffset(frame, db, amount)
   local style, size = ns.styles.Get(), ns.styles.Size(db);
-  return (style.nameOffsetY or 0) * size.inputScale + size.fontSize * 0.26 * amount
+  return (style.nameOffsetY or 0) * size.inputScale + size.fontSize * 0.32 * amount
     + ns.styles.StatusOffset(frame, db) * amount;
 end
 function ns.styles.NameOffset(frame, db, amount) return ns.styles.Get().NameOffset(frame, db, amount) end

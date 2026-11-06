@@ -6,6 +6,19 @@ local _, ns = ...;
 -- (Feat\Gamepad_Camelot.lua) returns its glyph while that UI is on.
 ns.gamepadActive = false;
 local function IsPadKey(key) return key:find("^PAD") ~= nil or key:find("%-PAD") ~= nil end
+-- The game has no short label for numpad keys: GetBindingText gives "Num Pad 3" even when abbreviating,
+-- too wide for the button, so the base key's label becomes "N3". The modifier part stays the game's.
+local NUMPAD_SYMBOLS = { DECIMAL = ".", DIVIDE = "/", MINUS = "-", MULTIPLY = "*", PLUS = "+" };
+local function ShortKeyText(key, text)
+  local base = key:match("%-(%-)$") or key:match("([^%-]+)$") or key;
+  local which = base:match("^NUMPAD(.+)$");
+  local symbol = which and (which:match("^%d$") or NUMPAD_SYMBOLS[which]);
+  if not symbol then return text end
+  local long = GetBindingText(base, 1);
+  if not long or long == "" or text:sub(-#long) ~= long then return text end
+  return text:sub(1, #text - #long) .. ns.L.HUD_KEY_NUMPAD:format(symbol);
+end
+
 -- Also returns the key itself ("F", "SHIFT-F", "PAD3"), which KeyWatcher checks. The gamepad UI's
 -- interact button is the left face button, GAMEPAD_FACE_LEFT.
 local function GetInteractKeyText()
@@ -19,7 +32,7 @@ local function GetInteractKeyText()
   if not key then return nil end
   local text = GetBindingText(key, 1); --same compact, localized labels as Blizzard action buttons
   if not text or text == "" then return nil end
-  return text, key;
+  return ShortKeyText(key, text), key;
 end
 
 -- Whether a key chord is held: its key and every modifier in it ("SHIFT-F", "PADLTRIGGER-PAD1"). A chord
@@ -39,13 +52,13 @@ local function IsChordDown(chord)
 end
 
 local function NotifyUnbound(key, action)
-  ns.Notify(ns.L.KEY_UNBOUND:format(GetBindingText(key), _G["BINDING_NAME_" .. action] or action));
+  ns.Notify(ns.L.CHAT_KEY_UNBOUND:format(GetBindingText(key), _G["BINDING_NAME_" .. action] or action));
 end
 
 -- Puts key in the action's slot (1 or 2), or clears the slot when key is nil. The other slot keeps its
 -- key. A key taken from another action is named in chat, since the game unbinds it there.
 local function SetBindingSlot(action, slot, key)
-  if InCombatLockdown() then ns.Notify(ns.L.BINDINGS_IN_COMBAT); return end
+  if InCombatLockdown() then ns.Notify(ns.L.CHAT_BINDINGS_IN_COMBAT); return end
   local keys = { GetBindingKey(action) };
   local wanted = { keys[1], keys[2] };
   for i = 1, 2 do if wanted[i] == key then wanted[i] = nil; end end
@@ -76,17 +89,17 @@ function ns.AutoLootConflictText()
         local name = _G["BINDING_NAME_" .. action] or action;
         local chordText = GetBindingText(chord);
         local clearable = GetBindingAction(chord) == action;
-        return ("Auto Loot Key conflict: %s is already bound to \"%s\"."):format(chordText, name),
+        return ns.L.OPTION_AUTO_LOOT_CONFLICT_TEXT:format(chordText, name),
           clearable and chord or nil,
-          ("Your Auto Loot Key is %s and your Interact Key is %s."):format(modifier, GetBindingText(key))
-            .. (clearable and (" Clear removes \"%s\" from %s."):format(name, chordText) or "");
+          ns.L.OPTION_AUTO_LOOT_CONFLICT_DESC:format(modifier, GetBindingText(key))
+            .. (clearable and " " .. ns.L.OPTION_AUTO_LOOT_CONFLICT_CLEAR_DESC:format(name, chordText) or "");
       end
     end
   end
 end
 
 function ns.ClearAutoLootConflict()
-  if InCombatLockdown() then ns.Notify(ns.L.BINDINGS_IN_COMBAT); return end
+  if InCombatLockdown() then ns.Notify(ns.L.CHAT_BINDINGS_IN_COMBAT); return end
   local _, chord = ns.AutoLootConflictText();
   if not chord then return end
   local action = GetBindingAction(chord);

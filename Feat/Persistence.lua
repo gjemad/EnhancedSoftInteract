@@ -1,4 +1,5 @@
 local _, ns = ...;
+local L = ns.L;
 
 ----
 --  Persistence: game settings the HUD needs, which the addon puts back when something changes them.
@@ -20,21 +21,23 @@ local CHECK_INTERVAL = 1;
 -- undoes a change in the game's options, with the game's option name and the checkbox.
 local KEPT = {
   {
-    option = "forceInteractKey", checkbox = "Always Enable Interact Key",
-    desc = "Turns the game's interact key back on if something turns it off.",
-    notice = ns.L.KEPT_INTERACT_KEY,
-    setting = "PROXY_ENABLE_INTERACT", value = true, name = "Enable Interact Key",
+    option = "forceInteractKey", setting = "PROXY_ENABLE_INTERACT", value = true,
     cvars = { softTargetInteract = Enum.SoftTargetEnableFlags.Any },
   },
   {
-    option = "forceInteractIcons", checkbox = "Always Show All Interact Key Icons",
-    desc = "Keeps the game's Interact Key Icons on Show All, so the HUD can show the right icon for every target.",
-    notice = ns.L.KEPT_INTERACT_ICONS,
-    setting = "PROXY_INTERACT_ICONS", value = 2, name = "Interact Key Icons",
+    option = "forceInteractIcons", setting = "PROXY_INTERACT_ICONS", value = 2,
     cvars = { SoftTargetIconEnemy = 1, SoftTargetIconInteract = 1, SoftTargetIconGameObject = 1, SoftTargetLowPriorityIcons = 1 },
   },
 };
 ns.keptSettings = KEPT;
+-- The player's language is known only once the settings load.
+table.insert(ns.onLoad, 1, function()
+  local key, icons = KEPT[1], KEPT[2];
+  key.checkbox, key.desc = L.OPTION_ALWAYS_INTERACT_KEY, L.OPTION_ALWAYS_INTERACT_KEY_DESC;
+  key.notice, key.name = L.CHAT_KEPT_INTERACT_KEY, L.GAME_ENABLE_INTERACT_KEY;
+  icons.checkbox, icons.desc = L.OPTION_ALWAYS_INTERACT_ICONS, L.OPTION_ALWAYS_INTERACT_ICONS_DESC;
+  icons.notice, icons.name = L.CHAT_KEPT_INTERACT_ICONS, L.GAME_INTERACT_KEY_ICONS;
+end);
 local watched = {}; --lowercase CVar name -> true, for CVAR_UPDATE
 for _, kept in ipairs(KEPT) do
   for cvar in pairs(kept.cvars) do watched[cvar:lower()] = true; end

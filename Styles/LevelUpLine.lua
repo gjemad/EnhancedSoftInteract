@@ -3,7 +3,7 @@ local ATLAS = "LevelUp-Bar-White";
 local BAR_TEXTURE = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\LevelUpBar]];
 local FLASH_ATLAS = "AftLevelup-GlowLine";
 ns.styles.Register("levelup", {
-  name = "Level-Up Line", shadow = true,
+  name = function() return ns.L.STYLE_LEVEL_UP_LINE end, shadow = true,
   sizes = {
     small = { fontSize = 14, iconSize = 26, keyHeight = 22.75, glyphHeight = 22.75, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 44 },
     normal = { fontSize = 16, iconSize = 30, keyHeight = 26, glyphHeight = 26, keyFontSize = 17, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 50 },

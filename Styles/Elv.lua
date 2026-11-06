@@ -238,7 +238,7 @@ local function PlaceTimer(frame, timer)
 end
 
 ns.styles.Register("elv", {
-  name = "Elv", underline = true, shadow = false, flatKey = true, ownKey = true,
+  name = function() return "Elv" end, underline = true, shadow = false, flatKey = true, ownKey = true,
   scaleButtons = true, noTextShadow = true, showIconKey = "elvShowIcon",
   sizes = {
     small = { fontSize = 14, iconSize = 28, keyHeight = 28, glyphHeight = 28, keyFontSize = 14.5, inputScale = 0.875, nameMinWidth = 125, nameMaxWidth = 220, hudHeight = 40 },
@@ -270,10 +270,10 @@ ns.styles.Register("elv", {
   -- The ready name sits 2 units above center. A status line lifts the name and sits between it and the line.
   NameOffset = function(_, db, amount)
     local size = ns.styles.Size(db);
-    -- 0.3 font sizes keeps the smaller name's descenders clear of the status line.
-    return 2 * size.inputScale + size.fontSize * 0.3 * amount;
+    -- 0.36 font sizes keeps the smaller name's descenders clear of the status line in every font.
+    return 2 * size.inputScale + size.fontSize * 0.36 * amount;
   end,
-  RequirementY = function(_, db) return -ns.styles.Size(db).fontSize * 0.25 end,
+  RequirementY = function(_, db) return -ns.styles.Size(db).fontSize * 0.31 end,
   -- The interaction icon sits inside its square, clear of the border.
   IconDimensions = function(_, db) local size = Square(db) - Padding(db); return size, size end,
   IconMax = function(frame, db) return Square(db) - FillInset(Pixel(frame)) * 2 end,

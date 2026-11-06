@@ -1,4 +1,5 @@
 local ADDON_NAME, ns = ...;
+local L = ns.L;
 local MEDIA = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\]];
 local panel, card;
 local rows = {};
@@ -201,7 +202,7 @@ local function CreateBindingSlots(row, data)
       if button ~= "LeftButton" then return end
       listening = self;
       self:LockHighlight();
-      self:SetText("Press a key");
+      self:SetText(L.SETTINGS_PRESS_KEY);
       self:EnableKeyboard(true);
       self:SetScript("OnKeyDown", function(_, key)
         if key == "ESCAPE" then StopListening(); return end
@@ -249,7 +250,9 @@ local function CreateRow(content, data, y)
     row.control = CreateFrame("CheckButton", nil, row, "UICheckButtonTemplate");
     row.control:SetSize(28, 28);
     row.control:SetPoint("LEFT", row.indent, 0);
-    row.control:SetScript("OnClick", function(self) Changed(data, not not self:GetChecked()); end);
+    row.control:SetScript("OnClick", function(self)
+      Changed(data, (data.partial and data.partial()) or not not self:GetChecked());
+    end);
   elseif data.kind == ns.SettingType.Slider then
     row.control = CreateSlider(row, data);
     row.control:SetPoint("RIGHT", -64, 0);
@@ -272,7 +275,7 @@ local function CreateRow(content, data, y)
     row.control = CreateFrame("Button", nil, row, "UIPanelButtonTemplate");
     row.control:SetSize(60, 22);
     row.control:SetPoint("RIGHT", -8, 0);
-    row.control:SetText("Clear");
+    row.control:SetText(L.SETTINGS_CLEAR);
     row.control:SetScript("OnClick", function() ns.ClearAutoLootConflict(); ns.RefreshSettings(); end);
     row.control.Refresh = function()
       local text, chord = data.get();
@@ -303,16 +306,82 @@ local function CreateRow(content, data, y)
     card:Hide();
     Changed(data, DefaultValue(data));
   end);
-  Hover(row.reset, { name = "Reset " .. data.name, desc = function()
+  Hover(row.reset, { name = L.SETTINGS_RESET:format(data.name), desc = function()
     local value = DefaultValue(data);
     local text = data.formatter and data.formatter(value) or tostring(value);
-    if type(value) == "boolean" then text = value and "On" or "Off"; end
+    if type(value) == "boolean" then text = value and L.SETTINGS_ON or L.SETTINGS_OFF; end
     if data.values then
       for _, entry in ipairs(data.values()) do if entry.value == value then text = entry.text; break end end
     end
-    return "Restores this option to its default: " .. text .. ".";
+    return L.SETTINGS_RESET_DESC:format(text);
   end }, row);
   rows[#rows + 1] = row;
+end
+
+-- A box over the rows another addon's setting locks: a dark overlay, a warning badge and the client's
+-- options_frame_child border, the nine-slice atlas the preview frame uses. The box takes the mouse, so
+-- the rows under it show no tooltips and only the badge explains the lock. The mouse wheel still scrolls.
+local conflictBoxes = {};
+-- Locked rows in separate places get a box each. At most four: Range and Arc, the icon rows through Show Quest
+-- Item Loot Effect, and two loot effect sub-options with a free one between them.
+local CONFLICT_BOXES = 4;
+
+local function CreateConflictBox(content)
+  local box = CreateFrame("Frame", nil, content);
+  box:SetFrameLevel(content:GetFrameLevel() + 20);
+  box:EnableMouse(true);
+  local function Panel(parent, r, g, b, a)
+    local fill = parent:CreateTexture(nil, "BACKGROUND");
+    fill:SetPoint("TOPLEFT", 2, -2);
+    fill:SetPoint("BOTTOMRIGHT", -2, 2);
+    fill:SetColorTexture(r, g, b, a);
+    local border = parent:CreateTexture(nil, "BORDER");
+    border:SetAtlas("options_frame_child");
+    border:SetAllPoints();
+  end
+  Panel(box, 0, 0, 0, 0.35);
+  local badge = CreateFrame("Button", nil, box);
+  badge:SetFrameLevel(box:GetFrameLevel() + 1);
+  Panel(badge, 0.1, 0.08, 0.05, 1);
+  local icon = badge:CreateTexture(nil, "ARTWORK");
+  icon:SetTexture([[Interface\DialogFrame\UI-Dialog-Icon-AlertNew]]);
+  icon:SetSize(16, 16);
+  icon:SetPoint("LEFT", 6, 0);
+  local text = Label(badge, L.CONFLICT_TITLE, "GameFontNormalSmall");
+  text:SetPoint("LEFT", icon, "RIGHT", 4, 0);
+  badge:SetSize(6 + 16 + 4 + math.ceil(text:GetStringWidth()) + 8, 22);
+  badge:SetPoint("RIGHT", box, "TOPRIGHT", -16, 0);
+  Hover(badge, { name = L.CONFLICT_TITLE, desc = function() return ns.DisplayConflictText() end });
+  box.badge = badge;
+  box:Hide();
+  return box;
+end
+
+-- One box over each run of shown locked rows. A hidden row doesn't end a run; a shown unlocked one does.
+local function UpdateConflictBox()
+  if not conflictBoxes[1] then return end
+  local runs, first, last = {}, nil, nil;
+  for _, row in ipairs(rows) do
+    if not row.settingsHidden then
+      if row.data.locked and row.data.locked() then
+        first = first or row;
+        last = row;
+      elseif first then
+        runs[#runs + 1] = { first, last };
+        first = nil;
+      end
+    end
+  end
+  if first then runs[#runs + 1] = { first, last }; end
+  for index, box in ipairs(conflictBoxes) do
+    local run = runs[index];
+    box:ClearAllPoints();
+    box:SetShown(run ~= nil);
+    if run then
+      box:SetPoint("TOPLEFT", run[1], "TOPLEFT", -4, 0);
+      box:SetPoint("BOTTOMRIGHT", run[2], "BOTTOMRIGHT", 0, 0);
+    end
+  end
 end
 
 function ns.RefreshSettings()
@@ -331,6 +400,7 @@ function ns.RefreshSettings()
     row.reset:SetPoint("LEFT", row, "LEFT", math.max(238, 32 + row.indent + textWidth + 8), 0);
     if data.kind == ns.SettingType.Checkbox then
       row.control:SetChecked(value);
+      row.control:GetCheckedTexture():SetDesaturated(data.partial and data.partial() or false);
     elseif data.kind == ns.SettingType.Slider then
       row.control:SetValue(value);
       if row.control.UpdateSteppers then row.control:UpdateSteppers(); end --also when the value didn't change
@@ -347,21 +417,22 @@ function ns.RefreshSettings()
     if item.frame.settingsHidden then removed = removed + ROW_HEIGHT; end
   end
   if pageContent then pageContent:SetHeight(pageHeight - removed); end
+  UpdateConflictBox();
   if RefreshPreview then RefreshPreview(); end
 end
 
 -- Checkboxes under the preview show states a sample can't reach on its own. They change only the
 -- preview and are not saved. Animate plays the interaction every few seconds, or loops the cast.
-local PREVIEW_TOGGLES = {
-  { key = "animate", name = "Animate", desc = "Plays the interaction every few seconds." },
-  { key = "range", name = "Move closer", desc = "Shows the target as out of range." },
-  { key = "requires", name = "Requires profession", desc = "Shows the missing profession message." },
-  { key = "cast", name = "Cast bar", desc = "Shows a cast bar on targets you gather or open." },
-  { key = "secret", name = "Secret name", desc = "Shows a target whose name the game keeps secret from addons." },
-};
 local PREVIEW_PULSE_EVERY = 3;
 
 local function CreatePreviewControls(sample, nextSample, frame)
+  local PREVIEW_TOGGLES = {
+    { key = "animate", name = L.PREVIEW_ANIMATE, desc = L.PREVIEW_ANIMATE_DESC },
+    { key = "range", name = L.HUD_MOVE_CLOSER, desc = L.PREVIEW_MOVE_CLOSER_DESC },
+    { key = "requires", name = L.PREVIEW_REQUIRES, desc = L.PREVIEW_REQUIRES_DESC },
+    { key = "cast", name = L.PREVIEW_CAST, desc = L.PREVIEW_CAST_DESC },
+    { key = "secret", name = L.PREVIEW_SECRET, desc = L.PREVIEW_SECRET_DESC },
+  };
   local preview = sample.frame;
   local state = { animate = true, range = false, requires = false, cast = false, secret = false };
   local current = {};
@@ -436,6 +507,24 @@ local function CreatePreviewControls(sample, nextSample, frame)
   Next();
 end
 
+-- A centered gold header with a line on each side. The caller anchors it.
+function ns.CreateSettingsSection(parent, name)
+  local heading = CreateFrame("Frame", nil, parent);
+  heading:SetHeight(18);
+  local text = heading:CreateFontString(nil, "ARTWORK", "GameFontNormal");
+  text:SetText(name);
+  text:SetPoint("CENTER");
+  for _, side in ipairs({ "LEFT", "RIGHT" }) do
+    local line = heading:CreateTexture(nil, "BACKGROUND");
+    line:SetTexture([[Interface\Tooltips\UI-Tooltip-Border]]);
+    line:SetTexCoord(0.81, 0.94, 0.5, 1);
+    line:SetHeight(8);
+    line:SetPoint(side, heading, side, side == "LEFT" and 3 or -3, 0);
+    line:SetPoint(side == "LEFT" and "RIGHT" or "LEFT", text, side, side == "LEFT" and -5 or 5, 0);
+  end
+  return heading;
+end
+
 local function CreatePage()
   panel = CreateFrame("Frame", "EnhancedSoftInteractSettings", UIParent);
   panel.name = "Enhanced Soft Interact";
@@ -444,14 +533,14 @@ local function CreatePage()
   local title = Label(panel, panel.name, "GameFontNormalLarge");
   title:SetPoint("TOPLEFT", 16, -16);
   title:SetTextColor(1, 0.82, 0.25);
-  local subtitle = Label(panel, "Customize the HUD here. Use Edit Mode to move it.", "GameFontHighlightSmall");
+  local subtitle = Label(panel, L.SETTINGS_SUBTITLE, "GameFontHighlightSmall");
   subtitle:SetPoint("TOPLEFT", 16, -48);
   local move = CreateFrame("Button", nil, panel, "UIPanelButtonTemplate");
   move:SetSize(210, 26);
   move:SetPoint("TOPRIGHT", -20, -14);
-  move:SetText("Move HUD in Edit Mode");
+  move:SetText(L.SETTINGS_MOVE_HUD);
   move:SetScript("OnClick", ns.OpenHUDInEditMode);
-  Hover(move, { name = "Move HUD in Edit Mode", desc = "Opens Edit Mode so you can drag the HUD." });
+  Hover(move, { name = L.SETTINGS_MOVE_HUD, desc = L.SETTINGS_MOVE_HUD_DESC });
   -- The preview sits in a fixed frame above the scrolling options, like Blizzard's nameplate preview,
   -- so it stays in view while options change. Clients without that frame art get a plain border.
   local previewFrame = CreateFrame("Frame", nil, panel, "BackdropTemplate");
@@ -470,7 +559,7 @@ local function CreatePage()
   end
   local caption = Label(previewFrame, PREVIEW or "Preview", "GameFontHighlightSmall");
   caption:SetPoint("TOPLEFT", 10, -10);
-  local hint = Label(previewFrame, "Click for another target", "GameFontDisableSmall");
+  local hint = Label(previewFrame, L.PREVIEW_HINT, "GameFontDisableSmall");
   hint:SetPoint("TOPRIGHT", -10, -10);
   local preview = CreateFrame("Frame", nil, previewFrame);
   preview:SetPoint("TOP", 0, -22);
@@ -493,22 +582,10 @@ local function CreatePage()
   for _, data in ipairs(definitions) do
     if data.kind == ns.SettingType.Section then
       y = y + 18;
-      local heading = CreateFrame("Frame", nil, content);
+      local heading = ns.CreateSettingsSection(content, data.name);
       heading:SetPoint("TOPLEFT", 0, -y);
       heading:SetPoint("TOPRIGHT", 0, -y);
-      heading:SetHeight(18);
       pageItems[#pageItems + 1] = {frame = heading, inset = 0, y = y};
-      local text = heading:CreateFontString(nil, "ARTWORK", "GameFontNormal");
-      text:SetText(data.name);
-      text:SetPoint("CENTER");
-      for _, side in ipairs({ "LEFT", "RIGHT" }) do
-        local line = heading:CreateTexture(nil, "BACKGROUND");
-        line:SetTexture([[Interface\Tooltips\UI-Tooltip-Border]]);
-        line:SetTexCoord(0.81, 0.94, 0.5, 1);
-        line:SetHeight(8);
-        line:SetPoint(side, heading, side, side == "LEFT" and 3 or -3, 0);
-        line:SetPoint(side == "LEFT" and "RIGHT" or "LEFT", text, side, side == "LEFT" and -5 or 5, 0);
-      end
       y = y + 26;
     else
       CreateRow(content, data, y);
@@ -518,6 +595,9 @@ local function CreatePage()
   end
   content:SetHeight(y + 20);
   pageContent, pageHeight = content, y + 20;
+  for index = 1, CONFLICT_BOXES do conflictBoxes[index] = CreateConflictBox(content); end
+  ns.settingsConflictBox = conflictBoxes[1]; --for the test tools
+  ns.settingsConflictBoxes = conflictBoxes; --for the test tools
   CreateCard();
   ns.SettingsDropdown.CreateList(panel);
   panel:SetScript("OnShow", ns.RefreshSettings);

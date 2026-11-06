@@ -1,4 +1,3 @@
-# The packager fetches these from .pkgmeta externals. Local copies stay on disk so the addon loads in-game.
 Libs/
 *.md
 !README.md
