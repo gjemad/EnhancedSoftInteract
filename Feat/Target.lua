@@ -167,9 +167,18 @@ function ns.ResolveTarget(icon, guid, lastInRangeTarget)
     Replace(inRange and "Speak" or "UnableSpeak");
   end
   local outOfRange = not inRange;
+  -- A locked object keeps the generic Unable cursor at every distance, so within UnitIsInInteractRange it only
+  -- reads as unusable, without "Move closer". That range reaches a few steps past where an object can be used.
+  -- Other Unable object cursors, such as a gathering node's, mean out of range. Chests can't be opened in
+  -- combat, which gives the same cursor, so in combat the status line says so.
+  local combatText;
+  if outOfRange and unable == "Interact" and not issecretvalue(object) and object and interactRange then
+    outOfRange = false;
+    if UnitAffectingCombat("player") then combatText = ns.L.HUD_IN_COMBAT; end
+  end
   local skillUp, skillInfo;
   if cursor and not requirement and not talkBadge then skillUp, skillInfo = ns.SkillUpFor(cursor, guid, range.name); end
-  local requirementText = ns.IsUnableKey(key) and (requirement or ns.SkillRequirementText(cursor, skillInfo)) or nil;
+  local requirementText = ns.IsUnableKey(key) and (requirement or ns.SkillRequirementText(cursor, skillInfo)) or combatText;
   return { name = range.name, knownTarget = knownTarget, hasCursor = hasCursor, iconSource = source,
     iconFromFileID = fromFileID, resolvedKey = resolvedKey, iconKey = key, overrideCursor = override,
     talkBadge = talkBadge, outOfRange = outOfRange, range = range, inRangeTarget = lastInRangeTarget,

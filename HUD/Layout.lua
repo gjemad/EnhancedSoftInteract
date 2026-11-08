@@ -45,11 +45,18 @@ function ns.SetupLayout(hud)
     frame.icon:SetPoint("CENTER", frame.box, side, Inset(side) + nudgeX, nudgeY);
   end
 
+  -- cap.shakeX is the key cap's sideways offset while it shakes (HUD\Interaction.lua), so a layout
+  -- change during a shake keeps it.
   local function SetIconSide()
     local keySide = EnhancedSoftInteractDB.swapIconAndKey and "LEFT" or "RIGHT";
     AnchorIcon();
     cap:ClearAllPoints();
-    cap:SetPoint("CENTER", frame.box, keySide, Inset(keySide), 0);
+    cap:SetPoint("CENTER", frame.box, keySide, Inset(keySide) + (cap.shakeX or 0), 0);
+  end
+  function hud.SetKeyCapShake(x)
+    cap.shakeX = x;
+    local keySide = EnhancedSoftInteractDB.swapIconAndKey and "LEFT" or "RIGHT";
+    cap:SetPoint("CENTER", frame.box, keySide, Inset(keySide) + x, 0);
   end
 
   -- The glow behind the icon is GLOW_W x GLOW_H icon sizes in range and shrinks to GLOW_OUT_OF_RANGE_SCALE

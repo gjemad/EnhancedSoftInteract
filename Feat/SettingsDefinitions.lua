@@ -155,10 +155,13 @@ function ns.BuildSettings()
     desc = L.OPTION_BUTTON_STYLE_DESC,
     hidden = function() return ns.styles.Get().ownKey end,
     disabled = KeyHidden,
-    values = function() return {
-      {text = L.VALUE_BUTTON_CLASSIC, value = "classic"},
-      {text = L.VALUE_BUTTON_PLUNDERSTORM, value = "plunderstorm"},
-    } end,
+    -- Classic (Red) needs the game's red button art; a saved choice without it shows Classic (Black).
+    values = function()
+      local values = { {text = L.VALUE_BUTTON_CLASSIC, value = "classic"} };
+      if ns.RedButtonSupported() then values[#values + 1] = {text = L.VALUE_BUTTON_RED, value = "red"}; end
+      values[#values + 1] = {text = L.VALUE_BUTTON_PLUNDERSTORM, value = "plunderstorm"};
+      return values;
+    end,
     get = function() return db.keyStyle end,
     set = function(_, value)
       if ns.styles.Get().ownKey then return end

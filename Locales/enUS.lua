@@ -26,6 +26,7 @@ local _, ns = ...;
 ns.AddLanguage("enUS", "English", nil, {
   ----  HUD  ----
   HUD_MOVE_CLOSER = "Move closer",
+  HUD_IN_COMBAT = "In combat",
   HUD_SKILL_TOO_LOW = "Too low skill level (%d/%d)", --your skill, the skill the node needs
   HUD_KEY_NUMPAD = "N%s", --a numpad key on the button: the digit or symbol, as in N3 or N+
 
@@ -69,7 +70,8 @@ ns.AddLanguage("enUS", "English", nil, {
   OPTION_SHOW_BUTTON_DESC = "Shows the interact button in the HUD.",
   OPTION_BUTTON_STYLE = "Button Style",
   OPTION_BUTTON_STYLE_DESC = "Changes the artwork of the interact button.",
-  VALUE_BUTTON_CLASSIC = "Classic",
+  VALUE_BUTTON_CLASSIC = "Classic (Black)",
+  VALUE_BUTTON_RED = "Classic (Red)",
   VALUE_BUTTON_PLUNDERSTORM = "Plunderstorm",
   OPTION_SWAP_SIDES = "Swap Icon and Interact Button positions",
   OPTION_SWAP_SIDES_DESC = "Moves the icon to the right side and the interact button to the left.",

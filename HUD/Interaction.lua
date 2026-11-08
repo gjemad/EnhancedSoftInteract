@@ -53,7 +53,7 @@ function ns.SetupInteraction(hud)
   --  release doesn't jump. cap.pressDepth (0 up, 1 fully down) drives both the darkening and that start.
   ----
   local PRESS_DEPTH, PRESS_DOWN, PRESS_UP, PRESS_SHADE = 2, 0.05, 0.15, 0.7;
-  local RIPPLE_TIME, RIPPLE_GROW, RIPPLE_ALPHA = 0.35, 1.45, 0.55;
+  local RIPPLE_TIME, RIPPLE_GROW, RIPPLE_ALPHA = 0.35, 1.3, 0.35;
   local RING_PAD = 1.6;
   local RING_KEY, RING_ROUND = MEDIA .. "PressRingKey", MEDIA .. "PressRingRound";
   local KEY_HOLD_TIME = 3600;
@@ -116,9 +116,28 @@ function ns.SetupInteraction(hud)
     end
   end
 
+  ----
+  --  Pressing the key while the target is blocked (hud.KeyBlocked) doesn't press the cap, except in Elv: it shakes sideways
+  --  SHAKE_SWINGS times over SHAKE_TIME, up to SHAKE_WIDTH units, fading out as it goes, with no ripple. The
+  --  layout keeps the offset (hud.SetKeyCapShake).
+  ----
+  local SHAKE_TIME, SHAKE_SWINGS, SHAKE_WIDTH = 0.3, 3, 1.5;
+  local shakeTween = CreateTween();
+  local function Shake()
+    shakeTween:Play(SHAKE_TIME, function(t)
+      hud.SetKeyCapShake(t >= 1 and 0 or SHAKE_WIDTH * (1 - t) * math.sin(t * SHAKE_SWINGS * 2 * math.pi));
+    end);
+  end
+
   local function KeyDown()
     if cap.isDown then return end
     cap.isDown = true;
+    -- Elv's key square shares the panel's edges, so it presses as usual.
+    cap.blockedPress = hud.KeyBlocked() and not ns.styles.Get().flatKey;
+    if cap.blockedPress then
+      Shake();
+      return;
+    end
     local k = PressedScale();
     SetPressScale(frame.pressIn, 1 - (1 - k) * cap.pressDepth, k);
     frame.pressOut:Stop();
@@ -140,6 +159,10 @@ function ns.SetupInteraction(hud)
   local function KeyUp(withRipple)
     if not cap.isDown then return end
     cap.isDown = false;
+    if cap.blockedPress then
+      cap.blockedPress = false;
+      return;
+    end
     cap.releasedAt = not withRipple and GetTime() or nil;
     SetPressScale(frame.pressOut, 1 - (1 - PressedScale()) * cap.pressDepth, 1);
     frame.pressIn:Stop();
@@ -182,6 +205,11 @@ function ns.SetupInteraction(hud)
       return;
     end
     samplePulseAt = source == "sample_release" and GetTime() or nil;
+    -- A sample can't be used while it's blocked, so it only shakes, without the flash and icon pop.
+    if source ~= "game" and hud.KeyBlocked() then
+      if cap.isDown and not cap.tapping then KeyUp(false); else TapKey(); end
+      return;
+    end
     frame.pulse:Stop();
     frame.pulse:Play();
     frame.pulseUntil = GetTime() + PULSE_TIME;
@@ -230,6 +258,9 @@ function ns.SetupInteraction(hud)
       group:Stop();
     end
     depthTween:Stop();
+    shakeTween:Stop();
+    if cap.shakeX and cap.shakeX ~= 0 then hud.SetKeyCapShake(0); end
+    cap.blockedPress = false;
     tapToken = tapToken + 1; --cancels a pending tap release
     ClearPulseLight();
     cap.ring:SetAlpha(0);

@@ -17,6 +17,44 @@ local KEYCAP_STYLES = { --in order of preference
 };
 local NO_MARGINS = {0, 0, 0, 0};
 
+----
+--  Classic (Red): the game's red button (BigRedThreeSliceButtonTemplate's 128-RedButton atlases), the one on
+--  Forever's Game Menu with the gold rim. Its states are up, pressed and disabled, each a three-slice. The
+--  key keeps RED_EDGE pixels of each end piece's outer side (the bevelled corner and rim) and stretches the
+--  center piece between them. Only rows RED_TOP to RED_BOTTOM of the art are visible, and the left and right
+--  pieces have RED_LEFT_PAD and RED_RIGHT_PAD clear columns. The visible button covers exactly the visible
+--  part of Classic (Black)'s art: its canvas less one source texel on each side and the top row.
+----
+local RED_STATES = { "", "-Pressed", "-Disabled" };
+local RED_EDGE, RED_TOP, RED_BOTTOM, RED_LEFT_PAD, RED_RIGHT_PAD = 46, 3, 126, 2, 4;
+
+-- Each slice's file and texture coordinates for one state (left, center, right), or nil on a client
+-- without the art.
+local function RedSlices(suffix)
+  local infos = { C_Texture.GetAtlasInfo("128-RedButton-Left" .. suffix),
+    C_Texture.GetAtlasInfo("_128-RedButton-Center" .. suffix), C_Texture.GetAtlasInfo("128-RedButton-Right" .. suffix) };
+  local slices = {};
+  for i = 1, 3 do
+    local info = infos[i];
+    local file = info and (info.file or info.filename);
+    if not file or not info.width or info.width <= 0 or not info.height or info.height <= 0 then return nil end
+    local du = (info.rightTexCoord - info.leftTexCoord) / info.width;
+    local dv = (info.bottomTexCoord - info.topTexCoord) / info.height;
+    local left, right = info.leftTexCoord, info.rightTexCoord;
+    if i == 1 then left = left + RED_LEFT_PAD * du; right = left + RED_EDGE * du; end
+    if i == 3 then right = right - RED_RIGHT_PAD * du; left = right - RED_EDGE * du; end
+    slices[i] = { file = file, left = left, right = right,
+      top = info.topTexCoord + RED_TOP * dv, bottom = info.topTexCoord + RED_BOTTOM * dv };
+  end
+  return slices;
+end
+
+local redSupported;
+function ns.RedButtonSupported()
+  if redSupported == nil then redSupported = RedSlices("") ~= nil; end
+  return redSupported;
+end
+
 local keyTextMeasure = ns.CreateMeasure();
 
 -- The interact key's cap: its art, its text and its colors. Other parts of the HUD reach it through
@@ -47,10 +85,14 @@ function ns.SetupKeyCap(hud)
     cap.isGlyph = false;
     cap.styleArt = ns.styles.Get();
     cap.keyStyle = EnhancedSoftInteractDB.keyStyle;
-    cap.classic = not cap.styleArt.ownKey and cap.keyStyle == "classic";
+    -- Classic (Red) shares Classic's layout; a client without its art shows Classic.
+    cap.red = not cap.styleArt.ownKey and cap.keyStyle == "red" and ns.RedButtonSupported();
+    cap.classic = not cap.styleArt.ownKey and (cap.keyStyle == "classic" or cap.keyStyle == "red");
     cap.classicCanvasWidth, cap.classicCanvasHeight, cap.classicCanvasOffsetY = nil, nil, nil;
-    for _, slices in ipairs(cap.classicButton or {}) do
-      for _, texture in ipairs(slices) do texture:Hide(); end
+    for _, set in ipairs({ cap.classicButton or {}, cap.redButton or {} }) do
+      for _, slices in ipairs(set) do
+        for _, texture in ipairs(slices) do texture:Hide(); end
+      end
     end
     if cap.classic then
       -- Both keyboard choices share the selected native reference's logical face and border anchors.
@@ -82,6 +124,19 @@ function ns.SetupKeyCap(hud)
           end
         end
       end
+      if cap.red and not cap.redButton then
+        cap.redButton = {};
+        for state, suffix in ipairs(RED_STATES) do
+          local slices = {};
+          cap.redButton[state] = slices;
+          for i, slice in ipairs(RedSlices(suffix) or {}) do
+            local texture = cap:CreateTexture(nil, "ARTWORK", nil, state);
+            texture:SetTexture(slice.file);
+            texture:SetTexCoord(slice.left, slice.right, slice.top, slice.bottom);
+            slices[i] = texture;
+          end
+        end
+      end
       return;
     end
     if ns.styles.Get().flatKey then
@@ -109,15 +164,33 @@ function ns.SetupKeyCap(hud)
     cap.text:SetShadowOffset(1, -1);
   end
 
-  -- A blocked interaction dims the input; the status line explains why. Press shading still applies.
+  -- The interact key can't use the target: out of range, a missing requirement, or any Unable cursor in
+  -- range, such as a locked chest.
+  local function KeyBlocked()
+    return frame.outOfRange or frame.requirementText ~= nil or ns.IsUnableKey(frame.colorKey);
+  end
+
+  -- A blocked interaction dims the input, and Classic (Red) turns to its grey disabled art; the status line
+  -- explains why. Press shading still applies.
   local WHITE = {1, 1, 1};
   local function PaintKeyCap()
+    local blocked = KeyBlocked();
     for state, slices in ipairs(cap.classicButton or {}) do
       for _, texture in ipairs(slices) do
-        local tint = (cap.pressShade or 1) * ((frame.outOfRange or frame.requirementText ~= nil) and 0.7 or 1);
+        local tint = (cap.pressShade or 1) * (blocked and 0.7 or 1);
         texture:SetVertexColor(tint, tint * 0.98, tint * 0.93, 1);
         texture:SetAlpha(state == 1 and 1 or (cap.pressDepth or 0));
-        texture:SetShown(cap.classic and cap:IsShown() and not cap.isGlyph and (texture.classicWidth or 0) > 0);
+        texture:SetShown(cap.classic and not cap.red and cap:IsShown() and not cap.isGlyph
+          and (texture.classicWidth or 0) > 0);
+      end
+    end
+    for state, slices in ipairs(cap.redButton or {}) do
+      local alpha;
+      if state == 3 then alpha = blocked and 1 or 0;
+      else alpha = blocked and 0 or (state == 1 and 1 or (cap.pressDepth or 0)); end
+      for _, texture in ipairs(slices) do
+        texture:SetAlpha(alpha);
+        texture:SetShown(cap.red and cap:IsShown() and not cap.isGlyph and (texture.classicWidth or 0) > 0);
       end
     end
     if cap.classic and not cap.isGlyph and cap.textX then
@@ -128,7 +201,7 @@ function ns.SetupKeyCap(hud)
       local bg = data and data.backdropcolor or {0.1, 0.1, 0.1};
       cap.icon:SetColorTexture(bg[1] * 0.6, bg[2] * 0.6, bg[3] * 0.6, 1);
       cap.icon:SetVertexColor(1, 1, 1, 1);
-      local shade = (frame.outOfRange or frame.requirementText) and 0.75 or 1;
+      local shade = blocked and 0.75 or 1;
       cap.text:SetTextColor(shade, shade, shade);
       local style = ns.styles.Get();
       if style.PaintKeyCap then style.PaintKeyCap(frame, cap); end
@@ -137,7 +210,6 @@ function ns.SetupKeyCap(hud)
     end
     local shade = cap.pressShade or 1;
     local function Shaded(c) return c[1] * shade, c[2] * shade, c[3] * shade end
-    local blocked = frame.outOfRange or frame.requirementText ~= nil;
     local neutral = blocked and {0.75, 0.75, 0.75};
     cap.icon:SetDesaturated(cap.isGlyph and blocked and true or false);
     if cap.isGlyph then
@@ -255,6 +327,22 @@ function ns.SetupKeyCap(hud)
           texture.classicWidth = widths[i];
         end
       end
+      if cap.red and cap.redButton then
+        -- Classic's art is 80 x 22 source texels with its outer column on each side and its top row clear.
+        local texelX, texelY = edge / 12, canvasHeight / 22;
+        local redWidth, redHeight = canvasWidth - 2 * texelX, canvasHeight - texelY;
+        local redEdge = math.min(redWidth * 0.5, redHeight * RED_EDGE / (RED_BOTTOM - RED_TOP));
+        local redWidths = {redEdge, math.max(0, redWidth - redEdge * 2), redEdge};
+        local redLefts = {0, redEdge, redWidth - redEdge};
+        for _, slices in ipairs(cap.redButton) do
+          for i, texture in ipairs(slices) do
+            texture:ClearAllPoints();
+            texture:SetPoint("LEFT", cap, "CENTER", -redWidth * 0.5 + redLefts[i], offsetY - texelY * 0.5);
+            texture:SetSize(math.max(0.01, redWidths[i]), redHeight);
+            texture.classicWidth = redWidths[i];
+          end
+        end
+      end
     end
     ns.ModifierKey.Layout(frame, db);
     PaintKeyCap();
@@ -275,5 +363,5 @@ function ns.SetupKeyCap(hud)
     end
   end
 
-  hud.StyleKeyCap, hud.PaintKeyCap, hud.UpdateKeyCap = StyleKeyCap, PaintKeyCap, UpdateKeyCap;
+  hud.StyleKeyCap, hud.PaintKeyCap, hud.UpdateKeyCap, hud.KeyBlocked = StyleKeyCap, PaintKeyCap, UpdateKeyCap, KeyBlocked;
 end

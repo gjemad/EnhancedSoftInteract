@@ -1,5 +1,26 @@
 # Changelog
 
+## 0.5.6 (2026-11-08)
+
+### Features
+
+- Added the Classic (Red) button style, a red button that turns grey when you can't use the target.
+- Pressing the interact key when you can't use the target now shakes the button.
+
+### Improvements
+
+- Objects you can't use in combat, such as chests, now show "In combat" while you're in combat.
+
+### Changes
+
+- Renamed the Classic button style to Classic (Black).
+- The interact key's label is a little smaller, and its ripple is more subtle.
+- The interact key now also dims for targets in range you can't use, such as locked chests.
+
+### Bug fixes
+
+- Fixed locked chests and similar objects showing "Move closer" when you're standing next to them.
+
 ## 0.5.5 (2026-11-06)
 
 ### Improvements

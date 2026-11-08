@@ -3,9 +3,9 @@ local DIAMOND = [[Interface\AddOns\]] .. ADDON_NAME .. [[\Media\RunicDiamond]];
 ns.styles.Register("runic", {
   name = function() return ns.L.STYLE_RUNIC_LINE end, underline = true, shadow = true,
   sizes = {
-    small = { fontSize = 14, iconSize = 24, keyHeight = 22.75, glyphHeight = 22.75, keyFontSize = 14, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 42 },
-    normal = { fontSize = 16, iconSize = 28, keyHeight = 26, glyphHeight = 26, keyFontSize = 16, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 48 },
-    large = { fontSize = 20, iconSize = 34, keyHeight = 32.5, glyphHeight = 32.5, keyFontSize = 20, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 60 },
+    small = { fontSize = 14, iconSize = 24, keyHeight = 22.75, glyphHeight = 22.75, keyFontSize = 12.5, inputScale = 0.875, nameMinWidth = 90, nameMaxWidth = 220, hudHeight = 42 },
+    normal = { fontSize = 16, iconSize = 28, keyHeight = 26, glyphHeight = 26, keyFontSize = 14.5, inputScale = 1, nameMinWidth = 100, nameMaxWidth = 250, hudHeight = 48 },
+    large = { fontSize = 20, iconSize = 34, keyHeight = 32.5, glyphHeight = 32.5, keyFontSize = 18, inputScale = 1.25, nameMinWidth = 125, nameMaxWidth = 310, hudHeight = 60 },
   },
   -- The cast fills the line itself (lineFill): additive in the object color, the unfilled part darkened,
   -- no backing, like Level-Up Line. The fill rises in brightness toward the tip.
