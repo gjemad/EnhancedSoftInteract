@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.7 (2026-11-08)
+
+### Features
+
+- Added a Korean translation, thanks to hinski.
+
 ## 0.5.6 (2026-11-08)
 
 ### Features

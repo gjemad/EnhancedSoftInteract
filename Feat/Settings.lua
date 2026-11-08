@@ -276,12 +276,13 @@ local function CreateRow(content, data, y)
     row.control:SetSize(60, 22);
     row.control:SetPoint("RIGHT", -8, 0);
     row.control:SetText(L.SETTINGS_CLEAR);
-    row.control:SetScript("OnClick", function() ns.ClearAutoLootConflict(); ns.RefreshSettings(); end);
+    row.control:SetScript("OnClick", function() data.clear(); ns.RefreshSettings(); end);
+    -- get returns the text, and a second value when the Clear button should show.
     row.control.Refresh = function()
-      local text, chord = data.get();
+      local text, clearable = data.get();
       row.label:SetText([[|TInterface\DialogFrame\UI-Dialog-Icon-AlertNew:16:16|t ]] .. (text or ""));
       row.label:SetTextColor(1, 0.82, 0);
-      row.control:SetShown(chord ~= nil);
+      row.control:SetShown(data.clear ~= nil and clearable ~= nil);
     end;
   end
   if row.control then Hover(row.control, data, row); end

@@ -17,6 +17,7 @@ Libs\LibEditMode\embed.xml
 
 Locales\Translation.lua
 Locales\enUS.lua
+Locales\koKR.lua
 Helpers\Text.lua
 Data\CursorData.lua
 Data\GatherSkill.lua

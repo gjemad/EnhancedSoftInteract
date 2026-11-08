@@ -81,7 +81,7 @@ function DEFAULT_HOOKS.FontFlags() return "" end
 function ns.styles.FontFlags() return ns.styles.Get().FontFlags() end
 
 function DEFAULT_HOOKS.Font(db) return ns.media:Fetch("font", db.font) end
-function ns.styles.Font(db) return ns.styles.Get().Font(db) end
+function ns.styles.Font(db) return ns.languageFont or ns.styles.Get().Font(db) end
 
 function ns.styles.ShowIcon(db) return db[ns.styles.Get().showIconKey] end
 

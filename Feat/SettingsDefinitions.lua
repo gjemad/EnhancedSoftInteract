@@ -75,7 +75,7 @@ function ns.BuildSettings()
   Add({ kind = kind.Note, name = L.OPTION_AUTO_LOOT_CONFLICT, indent = 1,
     desc = function() return select(3, ns.AutoLootConflictText()) or "" end,
     hidden = function() return not ns.AutoLootConflictText() end,
-    get = ns.AutoLootConflictText });
+    get = ns.AutoLootConflictText, clear = ns.ClearAutoLootConflict });
   local interactSound = ns.gameInteractSound;
   if interactSound then
     Add({ kind = kind.Checkbox, name = ENABLE_INTERACT_SOUND_OPTION or L.GAME_INTERACT_SOUND, default = interactSound.Default, indent = 1,
@@ -106,7 +106,8 @@ function ns.BuildSettings()
       ns.UpdateStyle();
       ns.RefreshSettings();
     end });
-  -- Text is read when the page and HUD are built, so a new language needs a reload.
+  -- Text is read when the page and HUD are built, so a new language needs a reload. The player types /reload:
+  -- ReloadUI needs a key or mouse press, and the game blocked it from this dropdown's click.
   Add({ kind = kind.Dropdown, name = L.OPTION_LANGUAGE, default = DEFAULTS.language,
     desc = L.OPTION_LANGUAGE_DESC,
     hidden = function() return #ns.languageOrder < 2 end,
@@ -121,10 +122,17 @@ function ns.BuildSettings()
     set = function(_, value)
       if value == db.language then return end
       db.language = value;
-      ReloadUI();
+      ns.Notify(L.CHAT_RELOAD);
     end });
+  -- Shown while the saved choice differs from the language this session loaded.
+  local function LanguagePending() return #ns.languageOrder >= 2 and db.language ~= ns.loadedLanguage end
+  Add({ kind = kind.Note, name = L.OPTION_LANGUAGE_RELOAD, indent = 1, desc = L.OPTION_LANGUAGE_RELOAD_TEXT,
+    hidden = function() return not LanguagePending() end,
+    get = function() return L.OPTION_LANGUAGE_RELOAD_TEXT end });
   Add({ kind = kind.Dropdown, name = L.OPTION_FONT,
-    desc = L.OPTION_FONT_DESC,
+    desc = function()
+      return ns.languageFont and L.OPTION_FONT_DESC .. "\n\n" .. L.OPTION_FONT_LANGUAGE_DESC or L.OPTION_FONT_DESC;
+    end,
     default = function() return db.hudStyle == "elv" and DEFAULTS.elvFont or media:GetDefault("font"); end,
     values = function()
       local values = {};
@@ -133,6 +141,7 @@ function ns.BuildSettings()
     end,
     get = function() return db.hudStyle == "elv" and ns.ElvTheme.FontName(db) or db.font end,
     disabled = function()
+      if ns.languageFont then return true end
       local data = db.hudStyle == "elv" and ns.ElvTheme.Media();
       return data and data.normFont ~= nil;
     end,
@@ -289,7 +298,8 @@ function ns.BuildSettings()
       hidden = NoLootEffect, onChange = LootEffectChanged });
   end
   -- Reads and writes Plumber's own Show Cast Bar setting, so the two pages always agree. Plumber reads it
-  -- when it loads and has no public way to read it again, so a change needs a reload.
+  -- when it loads and has no public way to read it again, so a change needs a reload, which the player types
+  -- for the same reason as the Language option.
   Add({ kind = kind.Checkbox, name = L.OPTION_PLUMBER_CAST_BAR, desc = L.OPTION_PLUMBER_CAST_BAR_DESC, default = false,
     hidden = function() return not PlumberOwns() end,
     get = function() return _G.PlumberDB ~= nil and _G.PlumberDB.SoftTarget_CastBar == false end,
@@ -297,7 +307,7 @@ function ns.BuildSettings()
       local plumber = _G.PlumberDB;
       if not plumber or plumber.SoftTarget_CastBar == not value then return end
       plumber.SoftTarget_CastBar = not value;
-      ReloadUI();
+      ns.Notify(L.CHAT_RELOAD);
     end });
 
   return settings;
