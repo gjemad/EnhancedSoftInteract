@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.5.8 (2026-11-11)
+
+### Improvements
+
+- The skill-up icon now learns from the game's tooltip: after you hover a herb or ore vein, the icon's color matches the tooltip's.
+
+### Bug fixes
+
+- Fixed the action bars moving onto XP bar addons (for example LS: Monobrow) after a /reload, thanks to cybern4ut for the report.
+- Fixed the skill-up icon's color on Tin Vein in WoW Forever.
+- Fixed quest herbs such as Doom Weed showing a skill-up icon.
+
 ## 0.5.7 (2026-11-08)
 
 ### Features

@@ -7,6 +7,11 @@ local issecretvalue = ns.issecretvalue;
 -- The Feat files add functions to run once the saved settings are ready, and /esi subcommands.
 ns.onLoad = {};
 ns.slashCommands = {};
+-- Functions that set game CVars wait for PLAYER_LOGIN, after every addon's ADDON_LOADED. On a /reload the
+-- player already exists while addons load, so a CVar change there makes Blizzard's XP bar manager show its
+-- container at once. ls_Monobrow, loading later, then hides that container for good, and the bars above it
+-- drop onto Monobrow's bar. ns.loggedIn tells their CVAR_UPDATE handlers not to set anything before then.
+ns.onLogin = {};
 
 local function Notify(msg) print("|cffffd100Enhanced Soft Interact:|r " .. msg) end
 
@@ -218,6 +223,7 @@ local function RefreshKeyCap()
 end
 
 frame:RegisterEvent("ADDON_LOADED");
+frame:RegisterEvent("PLAYER_LOGIN");
 frame:RegisterEvent("PLAYER_SOFT_INTERACT_CHANGED");
 frame:RegisterEvent("PLAYER_SOFT_TARGET_INTERACTION");
 frame:RegisterEvent("UPDATE_BINDINGS");
@@ -229,6 +235,10 @@ frame:SetScript("OnEvent", function(_, event, ...)
       frame.loaded = true;
       frame:UnregisterEvent("ADDON_LOADED");
     end
+  elseif event == "PLAYER_LOGIN" then
+    frame:UnregisterEvent("PLAYER_LOGIN");
+    ns.loggedIn = true;
+    for _, fn in ipairs(ns.onLogin) do fn(); end
   elseif event == "PLAYER_SOFT_INTERACT_CHANGED" then
     OnSoftInteractChanged(...);
   elseif event == "PLAYER_SOFT_TARGET_INTERACTION" then

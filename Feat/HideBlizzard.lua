@@ -91,7 +91,7 @@ end
 local hiding = false;
 local plumberOwned, platerDraws;
 local function HideBlizzardDisplays()
-  if hiding then return end
+  if hiding or not ns.loggedIn then return end
   hiding = true;
   plumberOwned, platerDraws = ns.PlumberOwnsTargetIcons(), ns.PlaterDrawsObjectNames();
   local tooltipChanged = false;
@@ -161,4 +161,4 @@ watcher:SetScript("OnEvent", function(_, event, name)
   end
 end);
 
-table.insert(ns.onLoad, HideBlizzardDisplays);
+table.insert(ns.onLogin, HideBlizzardDisplays);

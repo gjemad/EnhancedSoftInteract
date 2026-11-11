@@ -54,7 +54,8 @@ local function JSON(v)
   local kind = type(v);
   if kind == "number" then
     if v ~= v or v == math.huge or v == -math.huge then return '"<nonfinite>"' end
-    return ("%.3f"):format(v):gsub(",", ".");
+    if v % 1 == 0 and math.abs(v) < 2^53 then return ("%d"):format(v) end
+    return (("%.3f"):format(v):gsub(",", "."));
   end
   if kind == "boolean" then return v and "true" or "false" end
   if kind ~= "table" then return Quote(tostring(v)); end
@@ -75,6 +76,7 @@ local function JSON(v)
   for _, key in ipairs(keys) do fields[#fields + 1] = Quote(tostring(key)) .. ":" .. JSON(v[key]); end
   return "{" .. table.concat(fields, ",") .. "}";
 end
+log.JSON = JSON; --also used by /esi skills in Feat\Debug.lua
 
 local function Layer(tex)
   local r, g, b, a = tex:GetVertexColor();

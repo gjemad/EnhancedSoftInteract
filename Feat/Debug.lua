@@ -316,3 +316,112 @@ ns.slashCommands.debug = function()
   window = window or CreateWindow();
   window:SetShown(not window:IsShown());
 end
+----
+--  /esi skills: the nodes whose seen skill-up colors disagree with the data (ns.SkillColorReport in
+--  Helpers\SkillUp.lua) as one JSON document in a window to copy from. Each node is on its own line, so the text stays readable in game.
+----
+local skillsWindow;
+
+local function SkillColorJSON()
+  local report = ns.SkillColorReport();
+  local nodes = report.nodes;
+  report.nodes = nil;
+  local version, _, _, interface = GetBuildInfo();
+  report.format, report.schema = "esi-skill-colors", 1;
+  report.build, report.interface = version, interface;
+  report.exported = date("!%Y-%m-%dT%H:%M:%SZ");
+  local lines = {};
+  for i, node in ipairs(nodes) do lines[i] = log.JSON(node); end
+  local head = log.JSON(report):sub(1, -2);
+  if #lines == 0 then return head .. ',"nodes":[]}', nodes, report.seen_nodes end
+  return head .. ',\n"nodes":[\n' .. table.concat(lines, ",\n") .. "\n]}", nodes, report.seen_nodes;
+end
+
+local function CreateSkillsWindow()
+  local w = CreateFrame("Frame", "EnhancedSoftInteractSkills", UIParent, "ButtonFrameBaseTemplate");
+  w:Hide();
+  w:SetSize(760, 480);
+  w:SetPoint("CENTER");
+  w:SetFrameStrata("DIALOG");
+  w:SetToplevel(true);
+  w:SetMovable(true);
+  w:EnableMouse(true);
+  w:RegisterForDrag("LeftButton");
+  w:SetClampedToScreen(true);
+  w:SetScript("OnDragStart", w.StartMoving);
+  w:SetScript("OnDragStop", w.StopMovingOrSizing);
+  w:SetBorder("ButtonFrameTemplateNoPortrait");
+  w:SetPortraitShown(false);
+  w.TitleBg = w:CreateTexture(nil, "BACKGROUND", "_UI-Frame-TitleTileBg", -6);
+  w.TitleBg:SetHeight(17);
+  w.TitleBg:SetPoint("TOPLEFT", 2, -3);
+  w.TitleBg:SetPoint("TOPRIGHT", -2, -3);
+  w:SetTitle("Enhanced Soft Interact Skill Colors");
+  table.insert(UISpecialFrames, w:GetName());
+
+  local panel = CreateFrame("Frame", nil, w, "InsetFrameTemplate");
+  panel:SetPoint("TOPLEFT", 18, -32);
+  panel:SetPoint("BOTTOMRIGHT", -18, 52);
+  panel.Bg:SetVertexColor(0.25, 0.25, 0.25);
+  local scroll = CreateFrame("ScrollFrame", nil, w, "ScrollFrameTemplate");
+  scroll:SetPoint("TOPLEFT", panel, "TOPLEFT", 12, -10);
+  scroll:SetPoint("BOTTOMRIGHT", panel, "BOTTOMRIGHT", -28, 10);
+  local text = CreateFrame("EditBox", nil, scroll);
+  text:SetMultiLine(true);
+  text:SetAutoFocus(false);
+  text:SetMaxLetters(0);
+  text:SetFontObject("GameFontHighlightSmall");
+  text:SetTextInsets(0, 6, 0, 0);
+  text:SetWidth(scroll:GetWidth());
+  scroll:SetScrollChild(text);
+  scroll:SetScript("OnSizeChanged", function(_, width) text:SetWidth(width); end);
+  -- Read-only: typing puts the report back and selects it again.
+  text:SetScript("OnTextChanged", function(self, userInput)
+    if userInput then self:SetText(w.shownText or ""); self:HighlightText(); end
+  end);
+  text:SetScript("OnEscapePressed", function() w:Hide(); end);
+  w.text = text;
+
+  w.count = w:CreateFontString(nil, "OVERLAY", "GameFontHighlightSmall");
+  w.count:SetPoint("BOTTOMLEFT", 24, 22);
+  w.count:SetTextColor(0.7, 0.7, 0.7);
+  local function Select()
+    text:SetFocus();
+    text:HighlightText();
+  end
+  local function Fill()
+    local json, nodes, seen = SkillColorJSON();
+    w.shownText = json;
+    text:SetText(json);
+    text:SetCursorPosition(0);
+    scroll:SetVerticalScroll(0);
+    w.count:SetText(("%d of %d seen nodes disagree with the data. Press Ctrl+C to copy."):format(#nodes, seen));
+    Select();
+  end
+  local function Button(value, width, x)
+    local button = CreateFrame("Button", nil, w, "SharedButtonTemplate");
+    button:SetSize(width, 27);
+    button:SetPoint("BOTTOMRIGHT", x, 16);
+    button:SetText(value);
+    return button;
+  end
+  w.refresh = Button("Refresh", 90, -118);
+  w.refresh:SetScript("OnClick", Fill);
+  w.selectAll = Button("Select all", 90, -22);
+  w.selectAll:SetScript("OnClick", Select);
+  w:SetScript("OnShow", function()
+    PlaySound(SOUNDKIT.IG_QUEST_LOG_OPEN);
+    Fill();
+  end);
+  w:SetScript("OnHide", function()
+    PlaySound(SOUNDKIT.IG_QUEST_LOG_CLOSE);
+    text:ClearFocus(); text:SetText(""); w.shownText = nil;
+  end);
+  return w;
+end
+
+ns.SkillColorJSON = SkillColorJSON; --for the test tools
+ns.slashCommands.skills = function()
+  skillsWindow = skillsWindow or CreateSkillsWindow();
+  skillsWindow:SetShown(not skillsWindow:IsShown());
+end

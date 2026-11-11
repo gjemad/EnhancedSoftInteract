@@ -112,7 +112,7 @@ watcher:SetScript("OnEvent", function(_, event, name)
   end
 end);
 
-table.insert(ns.onLoad, function()
+table.insert(ns.onLogin, function()
   KeepSettings();
   if not RegisterNotices() then watcher:RegisterEvent("ADDON_LOADED"); end
   watcher:RegisterEvent("CVAR_UPDATE");

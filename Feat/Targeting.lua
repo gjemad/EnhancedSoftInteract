@@ -69,7 +69,7 @@ end
 
 -- Sets every CVar to the value wanted now, or back to the player's own.
 local function Apply()
-  if applying then return end
+  if applying or not ns.loggedIn then return end
   applying = true; --setting a CVar fires CVAR_UPDATE, which calls this again
   for _, item in ipairs(CVARS) do
     local cvar = item.cvar;
@@ -154,4 +154,4 @@ watcher:SetScript("OnEvent", function(_, event, name)
   end
 end);
 
-table.insert(ns.onLoad, Apply);
+table.insert(ns.onLogin, Apply);

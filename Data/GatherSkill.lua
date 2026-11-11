@@ -28,20 +28,12 @@ ns.gatherSkill = {
       [3727] = { era = 50, forever = 50, tbc = 50, mop = 1 }, --Mageroyal
       [3729] = { era = 70, forever = 70, tbc = 70, mop = 1 }, --Briarthorn
       [3730] = { era = 100, forever = 100, tbc = 100, mop = 1 }, --Bruiseweed
-      [13874] = { era = 1, forever = 1 }, --Serpentbloom
-      [13891] = { era = 1, forever = 1 }, --Serpentbloom
-      [35254] = { era = 1, forever = 1 }, --Herb Node Point Check
-      [141853] = { era = 1, forever = 1 }, --Violet Tragan
       [142140] = { era = 210, forever = 210, tbc = 210, mop = 210 }, --Purple Lotus
       [142141] = { era = 220, forever = 220, tbc = 220, mop = 220 }, --Arthas' Tears
       [142142] = { era = 230, forever = 230, tbc = 230, mop = 230 }, --Sungrass
       [142143] = { era = 235, forever = 235, tbc = 235, mop = 235 }, --Blindweed
       [142144] = { era = 245, forever = 245, tbc = 245, mop = 245 }, --Ghost Mushroom
       [142145] = { era = 250, forever = 250, tbc = 250, mop = 250 }, --Gromsblood
-      [175207] = { era = 1, forever = 1 }, --Beached Sea Creature
-      [175566] = { era = 1, forever = 1 }, --Gloom Weed
-      [175928] = { era = 1, forever = 1 }, --Incendia Agave
-      [176189] = { era = 1, forever = 1 }, --Skeletal Sea Turtle
       [176583] = { era = 260, forever = 260, tbc = 260, mop = 260 }, --Golden Sansam
       [176584] = { era = 270, forever = 270, tbc = 270, mop = 270 }, --Dreamfoil
       [176586] = { era = 280, forever = 280, tbc = 280, mop = 280 }, --Mountain Silversage
@@ -55,7 +47,6 @@ ns.gatherSkill = {
       [176640] = { era = 280, forever = 280, tbc = 280, mop = 280 }, --Mountain Silversage
       [176641] = { era = 285, forever = 285, tbc = 285, mop = 285 }, --Plaguebloom
       [176642] = { era = 220, forever = 220, tbc = 220, mop = 220 }, --Arthas' Tears
-      [176753] = { era = 1, forever = 1 }, --Doom Weed
       [180164] = { era = 230, forever = 230, tbc = 230, mop = 230 }, --Sungrass
       [180165] = { era = 210, forever = 210, tbc = 210, mop = 210 }, --Purple Lotus
       [180166] = { era = 280, forever = 280, tbc = 280, mop = 280 }, --Mountain Silversage
@@ -105,13 +96,11 @@ ns.gatherSkill = {
       ["Ancient Lichen"] = { tbc = 340, mop = 340 },
       ["Arthas' Tears"] = { era = 220, forever = 220, tbc = 220, mop = 220 },
       ["Azshara's Veil"] = { mop = 425 },
-      ["Beached Sea Creature"] = { era = 1, forever = 1 },
       ["Black Lotus"] = { era = 300, forever = 300, tbc = 300, mop = 300 },
       ["Blindweed"] = { era = 235, forever = 235, tbc = 235, mop = 235 },
       ["Briarthorn"] = { era = 70, forever = 70, tbc = 70, mop = 1 },
       ["Bruiseweed"] = { era = 100, forever = 100, tbc = 100, mop = 1 },
       ["Cinderbloom"] = { mop = 425 },
-      ["Doom Weed"] = { era = 1, forever = 1 },
       ["Dragon's Teeth"] = { mop = 195 },
       ["Dreamfoil"] = { era = 270, forever = 270, tbc = 270, mop = 270 },
       ["Dreaming Glory"] = { tbc = 315, mop = 315 },
@@ -125,18 +114,15 @@ ns.gatherSkill = {
       ["Frost Lotus"] = { mop = 450 },
       ["Frozen Herb"] = { mop = 400 },
       ["Ghost Mushroom"] = { era = 245, forever = 245, tbc = 245, mop = 245 },
-      ["Gloom Weed"] = { era = 1, forever = 1 },
       ["Goldclover"] = { mop = 350 },
       ["Golden Sansam"] = { era = 260, forever = 260, tbc = 260, mop = 260 },
       ["Goldthorn"] = { era = 170, forever = 170, tbc = 170, mop = 150 },
       ["Grave Moss"] = { era = 120, forever = 120, tbc = 120, mop = 105 },
       ["Gromsblood"] = { era = 250, forever = 250, tbc = 250, mop = 250 },
       ["Heartblossom"] = { mop = 475 },
-      ["Herb Node Point Check"] = { era = 1, forever = 1 },
       ["I Should not be here B"] = { era = 50, forever = 50 },
       ["Icecap"] = { era = 290, forever = 290, tbc = 290, mop = 270 },
       ["Icethorn"] = { mop = 435 },
-      ["Incendia Agave"] = { era = 1, forever = 1 },
       ["Khadgar's Whisker"] = { era = 185, forever = 185, tbc = 185, mop = 160 },
       ["Kingsblood"] = { era = 125, forever = 125, tbc = 125, mop = 125 },
       ["Lichbloom"] = { mop = 425 },
@@ -153,9 +139,7 @@ ns.gatherSkill = {
       ["Plaguebloom"] = { era = 285, forever = 285, tbc = 285, mop = 285 },
       ["Purple Lotus"] = { era = 210, forever = 210, tbc = 210, mop = 210 },
       ["Ragveil"] = { tbc = 325, mop = 325 },
-      ["Serpentbloom"] = { era = 1, forever = 1 },
       ["Silverleaf"] = { era = 1, forever = 1, tbc = 1, mop = 1 },
-      ["Skeletal Sea Turtle"] = { era = 1, forever = 1 },
       ["Sorrowmoss"] = { mop = 285 },
       ["Star Lotus"] = { era = 250, forever = 250 },
       ["Stormvine"] = { mop = 425 },
@@ -166,17 +150,16 @@ ns.gatherSkill = {
       ["Terocone"] = { tbc = 325, mop = 325 },
       ["Tiger Lily"] = { mop = 375 },
       ["Twilight Jasmine"] = { mop = 525 },
-      ["Violet Tragan"] = { era = 1, forever = 1 },
       ["Whiptail"] = { mop = 500 },
       ["Wild Steelbloom"] = { era = 115, forever = 115, tbc = 115, mop = 115 },
       ["Wilted Peacebloom"] = { forever = 1 },
       ["Wintersbite"] = { era = 195, forever = 195, tbc = 195 },
     },
     colors = {
-      [656160] = {10, 15, 20}, --Wilted Peacebloom
-      [656161] = {10, 15, 20}, --Stunted Silverleaf
-      ["Stunted Silverleaf"] = {10, 15, 20},
-      ["Wilted Peacebloom"] = {10, 15, 20},
+      [656160] = { forever = {10, 15, 20} }, --Wilted Peacebloom
+      [656161] = { forever = {10, 15, 20} }, --Stunted Silverleaf
+      ["Stunted Silverleaf"] = { forever = {10, 15, 20} },
+      ["Wilted Peacebloom"] = { forever = {10, 15, 20} },
     },
   },
   mining = {
@@ -198,11 +181,9 @@ ns.gatherSkill = {
       [3763] = { era = 1, forever = 1, tbc = 1, mop = 1 }, --Copper Vein
       [3764] = { era = 65, forever = 65, tbc = 65, mop = 50 }, --Tin Vein
       [19903] = { era = 150, forever = 150, tbc = 150, mop = 150 }, --Indurium Mineral Vein
-      [35253] = { era = 1, forever = 1 }, --Mining Node Point Check
       [73939] = { era = 125, forever = 125 }, --Ooze Covered Iron Deposit
       [73940] = { era = 75, forever = 75, tbc = 75, mop = 65 }, --Ooze Covered Silver Vein
       [73941] = { era = 155, forever = 155, tbc = 155, mop = 115 }, --Ooze Covered Gold Vein
-      [103709] = { era = 1, forever = 1 }, --Tin Vein
       [103710] = { era = 125, forever = 125 }, --Iron Deposit
       [103711] = { era = 65, forever = 65, tbc = 65, mop = 50 }, --Tin Vein
       [103712] = { era = 125, forever = 125 }, --Iron Deposit
@@ -275,7 +256,6 @@ ns.gatherSkill = {
       ["Khorium Vein"] = { tbc = 375, mop = 375 },
       ["Large Obsidian Chunk"] = { era = 305, forever = 305, tbc = 305, mop = 305 },
       ["Lesser Bloodstone Deposit"] = { era = 75, forever = 75, tbc = 75, mop = 65 },
-      ["Mining Node Point Check"] = { era = 1, forever = 1 },
       ["Mithril Deposit"] = { era = 175, forever = 175, tbc = 175, mop = 150 },
       ["Nethercite Deposit"] = { tbc = 350, mop = 275 },
       ["Obsidium Deposit"] = { mop = 425 },
@@ -307,8 +287,13 @@ ns.gatherSkill = {
       ["Truesilver Deposit"] = { era = 230, forever = 230, tbc = 230, mop = 165 },
     },
     colors = {
-      [562111] = {10, 15, 20}, --Poor Copper Vein
-      ["Poor Copper Vein"] = {10, 15, 20},
+      [1732] = { forever = {90, 130, 165} }, --Tin Vein
+      [2054] = { forever = {90, 130, 165} }, --Tin Vein
+      [3764] = { forever = {90, 130, 165} }, --Tin Vein
+      [103711] = { forever = {90, 130, 165} }, --Tin Vein
+      [562111] = { forever = {10, 15, 20} }, --Poor Copper Vein
+      ["Poor Copper Vein"] = { forever = {10, 15, 20} },
+      ["Tin Vein"] = { forever = {90, 130, 165} },
     },
   },
 };
