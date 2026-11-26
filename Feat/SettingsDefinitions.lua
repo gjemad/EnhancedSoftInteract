@@ -4,7 +4,7 @@ local media, DEFAULTS, SLIDER_RANGES = ns.media, ns.DEFAULTS, ns.SLIDER_RANGES;
 local SetIconSide, UpdateIcon, UpdateFont = ns.SetIconSide, ns.UpdateIcon, ns.UpdateFont;
 local UpdateKeyCap, UpdateLayout = ns.UpdateKeyCap, ns.UpdateLayout;
 local L = ns.L;
-ns.SettingType = { Checkbox = 1, Slider = 2, Dropdown = 3, Section = 4, Keybind = 5, Note = 6 };
+ns.SettingType = { Checkbox = 1, Slider = 2, Dropdown = 3, Section = 4, Keybind = 5, Note = 6, Button = 7 };
 
 -- Shared settings definitions for the Interface AddOns page. Edit Mode only owns HUD positioning.
 -- Tooltip text (desc): one short sentence, then a second paragraph only for details or limits.
@@ -212,15 +212,24 @@ function ns.BuildSettings()
     formatter = Yards, onChange = ns.UpdateTargeting, hidden = TargetingUnavailable,
     locked = ns.ForeverLootSparklesOwnsTargeting });
   Add({ kind = kind.Dropdown, name = L.OPTION_INTERACT_ARC, default = DEFAULTS.interactArc,
-    desc = L.OPTION_INTERACT_ARC_DESC,
+    desc = L.OPTION_INTERACT_ARC_DESC .. " " .. L.OPTION_INTERACT_ARC_DYNAMIC_DESC,
     hidden = TargetingUnavailable, locked = ns.ForeverLootSparklesOwnsTargeting,
     values = function() return {
       {text = L.VALUE_ARC_STRAIGHT_AHEAD, value = 0, icon = MEDIA .. "ArcStraightAhead"},
       {text = L.VALUE_ARC_NARROW, value = 1, icon = MEDIA .. "ArcNarrow"},
       {text = L.VALUE_ARC_WIDE, value = 2, icon = MEDIA .. "ArcWide"},
+      {text = L.VALUE_ARC_DYNAMIC, value = ns.DYNAMIC_ARC, icon = MEDIA .. "ArcDynamic"},
     } end,
     get = function() return db.interactArc end,
-    set = function(_, value) db.interactArc = value; ns.UpdateTargeting(); end });
+    set = function(_, value) db.interactArc = value; ns.ResetDynamicArc(); ns.UpdateTargeting(); end });
+  Add({ kind = kind.Button, name = L.OPTION_DYNAMIC_ARC_SETTINGS, desc = L.OPTION_DYNAMIC_ARC_SETTINGS_DESC, indent = 1,
+    button = L.SETTINGS_OPEN_WINDOW, click = ns.ToggleDynamicArcWindow, get = function() end,
+    hidden = function() return TargetingUnavailable() or db.interactArc ~= ns.DYNAMIC_ARC end,
+    locked = ns.ForeverLootSparklesOwnsTargeting });
+  Checkbox(L.OPTION_PICK_POCKET, "pickPocket", {
+    desc = L.OPTION_PICK_POCKET_DESC,
+    hidden = function() return not (ns.PickPocketAvailable and ns.PickPocketAvailable()) end,
+    onChange = function() if ns.UpdatePickPocket then ns.UpdatePickPocket(); end end });
 
   Section(L.SECTION_TARGET_DISPLAYS);
   Checkbox(L.OPTION_TARGET_TOOLTIP, "showBlizzardTooltip", {

@@ -145,7 +145,8 @@ local function CreateSlider(row, data)
   slider:HookScript("OnValueChanged", slider.UpdateSteppers);
   return slider;
 end
-ns.CreateSettingsSlider = CreateSlider; --for the test tools
+ns.CreateSettingsSlider = CreateSlider; --also used by the Dynamic Interaction Arc window
+ns.HoverSettingsTooltip = Hover;
 
 ----
 --  Binding slots: two buttons for a game binding, like the game's Keybindings page. Click a slot, then
@@ -284,6 +285,12 @@ local function CreateRow(content, data, y)
       row.label:SetTextColor(1, 0.82, 0);
       row.control:SetShown(data.clear ~= nil and clearable ~= nil);
     end;
+  elseif data.kind == ns.SettingType.Button then
+    row.control = CreateFrame("Button", nil, row, "UIPanelButtonTemplate");
+    row.control:SetSize(140, 22);
+    row.control:SetPoint("RIGHT", -8, 0);
+    row.control:SetText(data.button);
+    row.control:SetScript("OnClick", function() data.click(); end);
   end
   if row.control then Hover(row.control, data, row); end
   if row.control and row.control.HookHover then row.control:HookHover(); end
@@ -395,7 +402,8 @@ function ns.RefreshSettings()
     row.control:SetEnabled(not disabled);
     row.label:SetTextColor(disabled and 0.45 or 1, disabled and 0.45 or 1, disabled and 0.45 or 1);
     local value = data.get();
-    row.reset:SetShown(data.kind ~= ns.SettingType.Keybind and data.kind ~= ns.SettingType.Note and value ~= DefaultValue(data)); --a binding has no default
+    row.reset:SetShown(data.kind ~= ns.SettingType.Keybind and data.kind ~= ns.SettingType.Note
+      and data.kind ~= ns.SettingType.Button and value ~= DefaultValue(data)); --a binding has no default
     row.reset:SetEnabled(not disabled); --the button shows Blizzard's own disabled art
     local textWidth = math.min(row.label:GetStringWidth(), data.kind == ns.SettingType.Checkbox and 480 - row.indent or 200);
     row.reset:SetPoint("LEFT", row, "LEFT", math.max(238, 32 + row.indent + textWidth + 8), 0);
@@ -601,6 +609,7 @@ local function CreatePage()
   ns.settingsConflictBoxes = conflictBoxes; --for the test tools
   CreateCard();
   ns.SettingsDropdown.CreateList(panel);
+  ns.CreateDynamicArcWindow(); --Feat\DynamicArc.lua
   panel:SetScript("OnShow", ns.RefreshSettings);
   panel:SetScript("OnHide", function() card:Hide(); ns.SettingsDropdown.Close(); StopListening(); end);
   panel:RegisterEvent("UPDATE_BINDINGS"); --bindings changed outside the page

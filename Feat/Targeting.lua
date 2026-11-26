@@ -2,11 +2,11 @@ local _, ns = ...;
 
 -- How far and where the game looks for soft interact targets: SoftTargetInteractRange and
 -- SoftTargetInteractArc (0 straight ahead, 1 in a cone ahead, 2 the half circle in front). This file owns
--- both CVars, and outlineModeShowLootEffectWhenDisabled (WoW: Forever only), which turns on the game's loot
--- effect for quest items you can loot.
+-- both CVars, SoftTargetEnemy while Feat\PickPocket.lua needs it, and outlineModeShowLootEffectWhenDisabled
+-- (WoW: Forever only), which turns on the game's loot effect for quest items you can loot.
 --
 -- While the addon is enabled, it holds them at Interaction Range, Interaction Arc and Show Quest Item
--- Loot Effect. With Show Quest Item Loot Effect unchecked, that CVar is the player's. The player's own
+-- Loot Effect, or the arc Feat\DynamicArc.lua picks while Interaction Arc is Dynamic. With Show Quest Item Loot Effect unchecked, that CVar is the player's. The player's own
 -- value comes back when the addon is turned off, and at logout, so the client never saves an addon value.
 -- The range is a secure CVar, so it can't change in combat; the arc can. A change blocked by combat
 -- happens at PLAYER_REGEN_ENABLED. In Forever's gamepad UI the values are temporary CVars (ns.SetGameCVar).
@@ -37,10 +37,16 @@ end
 -- Each CVar with the value the addon wants from the settings, or nil for the player's own, and owner(),
 -- true while another addon sets it.
 local CVARS = {
-  { cvar = ARC, want = function(db) return db.interactArc end, owner = ns.ForeverLootSparklesOwnsTargeting },
+  { cvar = ARC, owner = ns.ForeverLootSparklesOwnsTargeting, want = function(db)
+    if db.interactArc == ns.DYNAMIC_ARC then return ns.DynamicArcLevel() end --Feat\DynamicArc.lua
+    return db.interactArc;
+  end },
   { cvar = RANGE, want = function(db) return db.interactRange end, owner = ns.ForeverLootSparklesOwnsTargeting },
   { cvar = QUEST_EFFECT, want = function(db) return db.showQuestLootEffect and 1 or nil end,
     owner = ns.ForeverLootSparklesOwnsQuestEffect },
+  -- Soft enemy targeting on keyboard too, while Pick Pocket with Interact Key is active (Feat\PickPocket.lua).
+  { cvar = "SoftTargetEnemy", owner = function() return false end,
+    want = function() return ns.PickPocketSoftEnemy and ns.PickPocketSoftEnemy() end },
 };
 
 local original = {}; --CVar -> the player's value from before the addon changed it

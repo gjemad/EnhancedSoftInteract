@@ -17,6 +17,7 @@ log.sourceOptions = {
   { "input", "Input devices", "inputFilter", "Records gamepad and input mode changes." },
   { "cvars", "Relevant CVars", "cvarFilter", "Records changes to game settings used by this addon." },
   { "snapshot", "Live snapshots", "liveFilter", "Records changing HUD details. Requires Animations or Range data." },
+  { "pickpocket", "Pickpocket", "pickpocketFilter", "Records stealth, your soft enemy and target, Pick Pocket casts, loot and error messages, and changes to them." },
 };
 for _, option in ipairs(log.sourceOptions) do log.sources[option[1]] = false; end
 local function Enabled(source)
@@ -192,7 +193,7 @@ local function DebugSoftTarget(oldGUID, newGUID, target, mode, fromRangeCheck)
   if not log.sections.event then Append(source, nil, animations, range); return end
   target = target or {};
   local hasCursor, resolvedKey, iconKey = target.hasCursor, target.resolvedKey, target.iconKey;
-  local talkBadge, outOfRange = target.talkBadge, target.outOfRange;
+  local outOfRange = target.outOfRange;
   local same = "<secret>";
   if not issecretvalue(newGUID) and not issecretvalue(lastGUID) then same = newGUID == lastGUID; end
   lastGUID = newGUID;
@@ -208,7 +209,7 @@ local function DebugSoftTarget(oldGUID, newGUID, target, mode, fromRangeCheck)
     icon = { has_cursor = Safe(hasCursor), source = Safe(frame.iconSource), resolved = Safe(resolvedKey),
       key = Safe(iconKey), red = Number(r), green = Number(g), blue = Number(b),
       default_color = not (outOfRange or ns.IsUnableKey(iconKey) or ns.typeColors[iconKey]) and true or false,
-      talk_badge = Safe(talkBadge), nudge_x = Number(frame.iconNudgeX or 0), nudge_y = Number(frame.iconNudgeY or 0) },
+      nudge_x = Number(frame.iconNudgeX or 0), nudge_y = Number(frame.iconNudgeY or 0) },
     skill_up = target.skillInfo and { level = target.skillUp, rank = Number(target.skillInfo.rank),
       required = Number(target.skillInfo.required), source = target.skillInfo.source,
       entry = Number(target.skillInfo.entry), shown = Safe(frame.skillIcon:IsShown()) } or nil,
@@ -291,9 +292,101 @@ watcher:SetScript("OnEvent", function(_, name, ...)
   Append(source, event, animations, range);
 end);
 
+-- Pickpocket evidence: what a Pick Pocket target on the interact key would rely on. Events are recorded
+-- as they come, and log.Sample adds a record when the player, soft enemy or target details change.
+-- Distance is left out of that comparison, so walking alone doesn't add records.
+local PICK_POCKET = 921;
+local pickLast;
+
+local function PickUnit(unit)
+  local exists = UnitExists(unit);
+  if not issecretvalue(exists) and not exists then return { exists = false } end
+  local creatureType, creatureTypeID = UnitCreatureType(unit);
+  local distance = UnitDistanceSquared and UnitDistanceSquared(unit);
+  return { exists = Safe(exists), guid = Safe(UnitGUID(unit)), name = Safe(UnitName(unit)),
+    creature_type = Safe(creatureType), creature_type_id = Safe(creatureTypeID),
+    classification = Safe(UnitClassification(unit)), level = Number(UnitLevel(unit)),
+    player = Safe(UnitIsPlayer(unit)), dead = Safe(UnitIsDead(unit)),
+    can_attack = Safe(UnitCanAttack("player", unit)), reaction = Number(UnitReaction(unit, "player")),
+    in_combat = Safe(UnitAffectingCombat(unit)), distance_squared = Number(distance),
+    spell_range = Safe(C_Spell.IsSpellInRange and C_Spell.IsSpellInRange(PICK_POCKET, unit)),
+    -- Retail protects CheckInteractDistance in combat.
+    interact_distance = not InCombatLockdown() and CheckInteractDistance
+      and Safe(CheckInteractDistance(unit, 3)) or "<nil>" };
+end
+
+local function PickPlayer()
+  local known = C_SpellBook and C_SpellBook.IsSpellKnown and C_SpellBook.IsSpellKnown(PICK_POCKET);
+  local key1, key2 = GetBindingKey("INTERACTTARGET");
+  local sameUnit = UnitExists("softenemy") and UnitIsUnit("softenemy", "target");
+  return { class = Safe(UnitClassBase and UnitClassBase("player")), stealthed = Safe(IsStealthed()),
+    in_combat = Safe(UnitAffectingCombat("player")), lockdown = InCombatLockdown(),
+    spell_known = Safe(known), spell_name = Safe(C_Spell.GetSpellName(PICK_POCKET)),
+    interact_key1 = Safe(key1), interact_key2 = Safe(key2),
+    soft_interact_guid = Safe(UnitGUID("softinteract")), soft_enemy_is_target = Safe(sameUnit),
+    cvars = { SoftTargetEnemy = Safe(GetCVar("SoftTargetEnemy")),
+      SoftTargetEnemyRange = Safe(GetCVar("SoftTargetEnemyRange")),
+      SoftTargetEnemyArc = Safe(GetCVar("SoftTargetEnemyArc")) } };
+end
+
+local function PickState()
+  return { player = PickPlayer(), soft_enemy = PickUnit("softenemy"), target = PickUnit("target") };
+end
+
+local function WithoutDistance(state)
+  local copy = {};
+  for key, value in pairs(state) do
+    if type(value) == "table" then copy[key] = WithoutDistance(value);
+    elseif key ~= "distance_squared" then copy[key] = value; end
+  end
+  return copy;
+end
+
+local function PickLoot()
+  local slots = {};
+  for slot = 1, GetNumLootItems() do
+    local sources = { GetLootSourceInfo(slot) };
+    local list = {};
+    for i = 1, #sources, 2 do list[#list + 1] = { guid = Safe(sources[i]), quantity = Number(sources[i + 1]) }; end
+    slots[slot] = { link = Safe(GetLootSlotLink(slot)), sources = list };
+  end
+  return { count = #slots, slots = slots };
+end
+
+local PICK_CAST_EVENTS = { UNIT_SPELLCAST_SENT = 4, UNIT_SPELLCAST_START = 3, UNIT_SPELLCAST_SUCCEEDED = 3,
+  UNIT_SPELLCAST_FAILED = 3, UNIT_SPELLCAST_FAILED_QUIET = 3, UNIT_SPELLCAST_INTERRUPTED = 3 };
+local PICK_EVENTS = { "PLAYER_SOFT_ENEMY_CHANGED", "PLAYER_TARGET_CHANGED", "UPDATE_STEALTH", "UI_ERROR_MESSAGE",
+  "LOOT_READY", "LOOT_OPENED", "LOOT_CLOSED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED" };
+local pickWatcher = CreateFrame("Frame");
+pickWatcher:SetScript("OnEvent", function(_, name, ...)
+  if not Enabled("pickpocket") then return end
+  local spellArg = PICK_CAST_EVENTS[name];
+  if spellArg then
+    local spellID = select(spellArg, ...);
+    if issecretvalue(spellID) then return end
+    -- A client may cast Pick Pocket under another ID, so the name counts too.
+    local pickName = C_Spell.GetSpellName(PICK_POCKET);
+    if spellID ~= PICK_POCKET and (not pickName or C_Spell.GetSpellName(spellID) ~= pickName) then return end
+  end
+  local animations, range = Details();
+  if not log.sections.event then Append("pickpocket", nil, animations, range); return end
+  local args = {};
+  for i = 1, select("#", ...) do args[i] = Safe(select(i, ...)); end
+  local event = { name = name, args = args, state = PickState() };
+  if name == "LOOT_READY" or name == "LOOT_OPENED" then event.loot = PickLoot(); end
+  pickLast = WithoutDistance(event.state);
+  Append("pickpocket", event, animations, range);
+end);
+
 function log.Configure(open)
   log.open = open and true or false;
-  lastGUID, lastSnapshot = nil, nil;
+  lastGUID, lastSnapshot, pickLast = nil, nil, nil;
+  for _, name in ipairs(PICK_EVENTS) do
+    if Enabled("pickpocket") then pickWatcher:RegisterEvent(name); else pickWatcher:UnregisterEvent(name); end
+  end
+  for name in pairs(PICK_CAST_EVENTS) do
+    if Enabled("pickpocket") then pickWatcher:RegisterUnitEvent(name, "player"); else pickWatcher:UnregisterEvent(name); end
+  end
   ns.DebugSoftTarget = (Enabled("target") or Enabled("target_repeat") or Enabled("range_check")) and DebugSoftTarget or nil;
   ns.DebugInteractionCast = Enabled("cast_state") and DebugInteractionCast or nil;
   ns.DebugLoot = Enabled("interaction") and DebugLoot or nil;
@@ -375,7 +468,17 @@ local function Equal(a, b)
   for key in pairs(b) do if key ~= "dataInstanceID" and a[key] == nil then return false end end
   return true;
 end
+local function SamplePickpocket()
+  if not Enabled("pickpocket") or not log.sections.event then return end
+  local state = PickState();
+  local compared = WithoutDistance(state);
+  if pickLast and Equal(compared, pickLast) then return end
+  pickLast = compared;
+  Append("pickpocket", { name = "PICKPOCKET_SAMPLE", state = state });
+end
+
 function log.Sample()
+  SamplePickpocket();
   if not Enabled("snapshot") or not (log.sections.animations or log.sections.range) then return end
   local animations, range = Details();
   local snapshot = { animations = animations, range = range };

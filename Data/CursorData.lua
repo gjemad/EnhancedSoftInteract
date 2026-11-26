@@ -21,6 +21,7 @@ ns.typeColors = {
   ["Cursor Skin"] = {1, 0.6, 0.49},
   ["Cursor LootAll"] = {1, 0.83, 0.47},
   ["Cursor PickLock"] = {0.78, 0.88, 1}, --locked chests and footlockers
+  ["Cursor PickPocket"] = {1, 0.49, 0.45}, --Pick Pocket's bag icon, a target from Feat\PickPocket.lua
   ["Cursor OpenHand"] = {0.92, 0.95, 1}, --chests, petting animals
   ["Cursor OpenHandGlow"] = {0.73, 0.96, 1},
   -- Merchants and services.

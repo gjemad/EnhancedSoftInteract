@@ -16,7 +16,8 @@ function ns.SetupDisplay(hud)
   -- uses too, else the classic Interface\Cursor file, whose art sits in the top-left corner (the mouse
   -- hotspot).
   local function ShowCursor(name)
-    frame.iconFromFileID = false;
+    frame.iconFromFileID, frame.iconScale = false, nil;
+    frame.icon:SetDesaturated(false);
     local atlas = ns.CrosshairAtlasFor(name);
     if atlas then
       frame.icon:SetAtlas(atlas);
@@ -43,8 +44,8 @@ function ns.SetupDisplay(hud)
     if wait > 0 then C_Timer.After(wait, FadeOut); else FadeOut(); end
   end
 
-  local function OnSoftTargetChanged(newTarget)
-    local target = ns.ResolveTarget(frame.icon, newTarget, frame.inRangeTarget);
+  -- Shows a resolved target: the soft interact target, or a Pick Pocket target (Feat\PickPocket.lua).
+  local function ApplyTarget(target)
     frame.targetState = target;
     frame.iconSource, frame.iconFromFileID = target.iconSource, target.iconFromFileID;
     frame.inRangeTarget = target.inRangeTarget;
@@ -90,6 +91,25 @@ function ns.SetupDisplay(hud)
     if switched then hud.PlaySwitchAnim(); end
 
     return target, true;
+  end
+
+  local function OnSoftTargetChanged(newTarget)
+    -- A spell icon before this one may have left its crop and size.
+    frame.icon:SetTexCoord(0, 1, 0, 1);
+    frame.icon:SetDesaturated(false);
+    frame.iconScale = nil;
+    return ApplyTarget(ns.ResolveTarget(frame.icon, newTarget, frame.inRangeTarget));
+  end
+
+  -- A spell icon fills its whole square, unlike the cursor art around it, so it draws smaller.
+  local SPELL_ICON_SCALE = 0.72;
+  local function ShowSpellTarget(target)
+    frame.icon:SetTexture(target.icon);
+    frame.icon:SetTexCoord(0, 1, 0, 1);
+    frame.iconScale = SPELL_ICON_SCALE;
+    frame.icon:SetDesaturated(target.iconDesaturated and true or false); --grey while the target can't be used
+    target.inRangeTarget = frame.inRangeTarget; --kept for the soft interact target that comes back
+    return ApplyTarget(target);
   end
 
   -- When the HUD hides, every animation stops and its values go back to rest, so nothing half-finished
@@ -191,5 +211,6 @@ function ns.SetupDisplay(hud)
   hud.ApplyAllSettings, hud.UpdateStyle = ApplyAllSettings, UpdateStyle;
   hud.ShowSample, hud.SetSampleState = ShowSample, SetSampleState;
   hud.OnSoftTargetChanged, hud.OnSoftTargetCleared = OnSoftTargetChanged, OnSoftTargetCleared;
+  hud.ShowSpellTarget = ShowSpellTarget;
   hud.SettleAppearance = SettleAppearance;
 end

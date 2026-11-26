@@ -12,6 +12,7 @@ function ns.SetupLayout(hud)
 
   -- Shows the target's name in both the normal and the compact label.
   local function SetName(text)
+    frame.shownName = text; --the layout measures this, whichever unit the target came from
     frame.name:SetText(text);
     frame.compactName:SetText(text);
   end
@@ -39,7 +40,8 @@ function ns.SetupLayout(hud)
       nudgeX, nudgeY = Round(-offset[1] * width / 64), Round(offset[2] * height / 64);
     end
     frame.iconNudgeX, frame.iconNudgeY = nudgeX, nudgeY; --for /esi debug
-    frame.icon:SetSize(width, height);
+    local scale = frame.iconScale or 1; --a spell icon (ShowSpellTarget in HUD\Display.lua)
+    frame.icon:SetSize(width * scale, height * scale);
     frame.iconCenterY, frame.iconColumnWidth = 0, width; --for the test tools
     frame.icon:ClearAllPoints();
     frame.icon:SetPoint("CENTER", frame.box, side, Inset(side) + nudgeX, nudgeY);
@@ -204,7 +206,7 @@ function ns.SetupLayout(hud)
     local textScale = REQ_TEXT_SCALE;
     local nameWidth, nameTextWidth = secretWidth, nil; --the settings preview's Secret name checkbox
     if not (frame.sampleName and frame.sampleSecret) then
-      nameWidth, nameTextWidth = FitWidth(frame.sampleName or UnitName("softInteract") or "",
+      nameWidth, nameTextWidth = FitWidth(frame.sampleName or frame.shownName or "",
         ns.styles.Size(db).fontSize, minName);
     end
     local nameFontScale = nameTextWidth and 1 or SECRET_FONT_SCALE;
@@ -304,7 +306,7 @@ function ns.SetupLayout(hud)
 
   -- After a font or font size change, the name, key cap, columns and lines follow.
   local function UpdateFont()
-    SetName(frame.sampleName or UnitName("softInteract"));
+    SetName(frame.sampleName or frame.shownName);
     hud.UpdateKeyCap();
     UpdateLayout();
     -- Invalidate native glyph caches after applying the new face, including an unchanged target.

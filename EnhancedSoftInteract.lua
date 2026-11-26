@@ -29,6 +29,7 @@ local DEFAULTS = {
   elvFont = "PT Sans Narrow", keyStyle = build >= 100000 and "plunderstorm" or "classic",
   -- The game's own defaults are 10 yards, straight ahead.
   interactRange = 20, interactArc = 1,
+  pickPocket = true,
 };
 -- Each settings slider's {min, max, step}.
 local SLIDER_RANGES = {
@@ -156,8 +157,12 @@ local function OnSoftInteractChanged(oldTarget, newTarget, fromRangeCheck)
   end
   frame.fadeToken = (frame.fadeToken or 0) + 1;
   local target, changed;
+  -- With no soft interact target, a stealthed rogue's Pick Pocket target can show (Feat\PickPocket.lua).
+  local pick = not newTarget and EnhancedSoftInteractDB.enabled and ns.PickPocketTarget and ns.PickPocketTarget();
   if newTarget and EnhancedSoftInteractDB.enabled then
     target, changed = hud.OnSoftTargetChanged(newTarget);
+  elseif pick then
+    target, changed = hud.ShowSpellTarget(pick);
   else
     frame.targetState = nil;
     frame.inRangeTarget = nil;
@@ -274,5 +279,9 @@ function ns.SetIconSide() for _, h in ipairs(huds) do h.SetIconSide(); end end
 function ns.UpdateFont() for _, h in ipairs(huds) do h.UpdateFont(); end end
 function ns.UpdateKeyCap() for _, h in ipairs(huds) do h.UpdateKeyCap(); end end
 function ns.UpdateLayout() for _, h in ipairs(huds) do h.UpdateLayout(); end end
+-- The interaction pulse on the real HUD, for an interaction the game doesn't report (Pick Pocket).
+function ns.PlayTargetPulse()
+  if frame:IsShown() and not frame.fadingOut then hud.PlayInteractPulse("game"); end
+end
 -- Only the test tools call this one.
 function ns.PlayInteractPulse(source) for _, h in ipairs(huds) do h.PlayInteractPulse(source); end end

@@ -20,13 +20,14 @@ local _, ns = ...;
 --
 --  Prefixes: HUD_ the HUD itself. SECTION_ settings headers. OPTION_ settings rows, with _DESC for the
 --  tooltip. VALUE_ dropdown choices and slider values. STYLE_ HUD styles. SETTINGS_ the rest of the
---  settings page. PREVIEW_ the preview's checkboxes. CHAT_ chat messages. GAME_ the game's own option
+--  settings page. ARC_ the Dynamic Interaction Arc window. PREVIEW_ the preview's checkboxes. CHAT_ chat messages. GAME_ the game's own option
 --  names, used only if the game doesn't provide them.
 ----
 ns.AddLanguage("enUS", "English", nil, {
   ----  HUD  ----
   HUD_MOVE_CLOSER = "Move closer",
   HUD_IN_COMBAT = "In combat",
+  HUD_ALREADY_PICKED = "Already pickpocketed",
   HUD_SKILL_TOO_LOW = "Too low skill level (%d/%d)", --your skill, the skill the node needs
   HUD_KEY_NUMPAD = "N%s", --a numpad key on the button: the digit or symbol, as in N3 or N+
 
@@ -99,6 +100,31 @@ ns.AddLanguage("enUS", "English", nil, {
   VALUE_ARC_STRAIGHT_AHEAD = "Straight Ahead",
   VALUE_ARC_NARROW = "Narrow",
   VALUE_ARC_WIDE = "Wide",
+  VALUE_ARC_DYNAMIC = "Dynamic",
+  OPTION_INTERACT_ARC_DYNAMIC_DESC = "Dynamic starts wide and narrows when several targets stand close together.",
+  OPTION_DYNAMIC_ARC_SETTINGS = "Dynamic Arc Settings",
+  OPTION_DYNAMIC_ARC_SETTINGS_DESC = "Opens the settings for when Dynamic narrows and widens the arc.",
+  OPTION_PICK_POCKET = "Pick Pocket with Interact Key",
+  OPTION_PICK_POCKET_DESC = "While you're stealthed, the HUD shows the humanoid in front of you, and your interact key picks its pocket. Turns on soft targeting for enemies while you're stealthed and out of combat.",
+
+  ----  Dynamic Interaction Arc window  ----
+  ARC_TITLE = "Dynamic Interaction Arc",
+  ARC_CURRENT = "Current arc: %s", --the arc's name, such as Narrow
+  ARC_NOT_IN_USE = "Choose Dynamic under Interaction Arc to use these settings.",
+  ARC_TIME_WINDOW = "Time Window",
+  ARC_TIME_WINDOW_DESC = "Sets how many seconds back your target changes count.",
+  ARC_TARGETS = "Targets Before Narrowing",
+  ARC_TARGETS_DESC = "Sets how many different targets within the time window make the arc narrower.",
+  ARC_WAIT = "Time Between Narrowing",
+  ARC_WAIT_DESC = "Sets how long the arc waits before it narrows again.",
+  ARC_WIDEN = "Time Before Widening",
+  ARC_WIDEN_DESC = "Sets how long you need to be without a target before the arc gets wider.",
+  ARC_WIDEST = "Widest Arc",
+  ARC_WIDEST_DESC = "Sets the arc Dynamic starts with and widens back to.",
+  ARC_NARROWEST = "Narrowest Arc",
+  ARC_NARROWEST_DESC = "Sets how far Dynamic can narrow the arc.",
+  ARC_DEFAULTS = "Reset to Defaults",
+  VALUE_SECONDS = "%s sec", --the number of seconds
 
   ----  Settings: Target Displays  ----
   SECTION_TARGET_DISPLAYS = "Target Displays",
@@ -138,6 +164,7 @@ ns.AddLanguage("enUS", "English", nil, {
   SETTINGS_OPEN = "Open Settings", --the button on the HUD in Edit Mode
   SETTINGS_PRESS_KEY = "Press a key",
   SETTINGS_CLEAR = "Clear",
+  SETTINGS_OPEN_WINDOW = "Open", --the button that opens a settings window
   SETTINGS_RESET = "Reset %s", --the option's name
   SETTINGS_RESET_DESC = "Restores this option to its default: %s.", --the default value
   SETTINGS_ON = "On",

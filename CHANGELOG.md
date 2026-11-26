@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.6.0 (2026-11-26)
+
+### Features
+
+- Added Pick Pocket with Interact Key for rogues: while you're stealthed, the HUD shows the humanoid in front of you and your interact key picks its pocket, thanks to cybern4ut for the suggestion.
+- Added a Dynamic choice to Interaction Arc, which narrows the arc when there are several targets around you and widens it again when there are none.
+
+### Changes
+
+- The HUD now shows the game's icon for NPCs more consistently.
+
+### Bug fixes
+
+- Fixed an issue where the cast bar would not appear when opening some objects, such as Untainted Flower.
+- Fixed an issue with skinning range.
+
 ## 0.5.8 (2026-11-11)
 
 ### Improvements

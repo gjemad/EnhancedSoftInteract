@@ -40,6 +40,11 @@ ns.styles.Register("levelup", {
       frame.flash:SetDesaturated(true);
     end
   end,
+  -- An instant outcome (Pick Pocket) runs along the whole lower line, which reaches 5 units past the box.
+  InstantSpan = function(frame, db)
+    local inset = 5 * ns.styles.Size(db).inputScale;
+    return -inset, frame.boxWidth + 2 * inset;
+  end,
   Layout = function(frame, db)
     local scale = ns.styles.Size(db).inputScale;
     local y = -ns.styles.LineY(frame, db, 6.5);

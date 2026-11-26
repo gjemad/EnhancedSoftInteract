@@ -8,6 +8,7 @@ local ATTEMPT_WINDOW = 1;
 local END_EVENT_GRACE = 0.25; --Food Crate success arrived 50 ms after the advertised end
 local PROFESSION_SPELLS = { ["cursor skin"] = 8613, ["cursor gatherherbs"] = 2368, ["cursor mine"] = 2576,
   ["cursor axe"] = 1239682 }; --Woodchopping, Retail's lumber
+local OPENING_SPELL = 6478;
 local attempt, sent, active, clicked;
 local watcher = CreateFrame("Frame");
 watcher:Hide();
@@ -29,9 +30,15 @@ local function Target()
 end
 
 local function SupportedSpell(action, id)
-  -- The barrel uses Opening - No Text, 22810, with an empty display name. Never show that
-  -- internal spell name to the player or treat every cast on an Interact object as opening.
-  if action == "cursor interact" then return id == 22810 end
+  -- Objects open with different spells: Opening (6478) on Untainted Flower, Opening - No Text
+  -- (22810, empty display name) on the barrel. Any spell whose name contains the client's name
+  -- for Opening counts, so other casts on an Interact object stay unassociated.
+  if action == "cursor interact" then
+    if id == 22810 then return true end
+    local opening = Accessible(C_Spell.GetSpellName(OPENING_SPELL));
+    local name = Accessible(C_Spell.GetSpellName(id));
+    return opening and name and name:find(opening, 1, true) ~= nil or false;
+  end
   local profession = PROFESSION_SPELLS[action];
   local name = profession and Accessible(C_Spell.GetSpellName(profession));
   return name and Accessible(C_Spell.GetSpellName(id)) == name;

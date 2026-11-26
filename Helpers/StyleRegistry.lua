@@ -12,7 +12,7 @@ ns.styles = {};
 -- Hooks a style may leave out. Register copies these into every style that doesn't define them, so
 -- callers call the hook without checking. A few hooks are absent on purpose, and their callers check for
 -- them: Pixel, IconMax, IconDimensions, KeyText, KeyWidth, PaintKeyCap, RequirementY, PlaceCast, CastY,
--- CastSpan and OutcomeLight.
+-- CastSpan, InstantSpan and OutcomeLight.
 local DEFAULT_HOOKS = {
   showIconKey = "showIcon", --the saved setting that shows the icon
 };

@@ -119,7 +119,7 @@ local function CreateWindow()
     "Includes target range and tracked cast details.");
   for i, option in ipairs(log.sourceOptions) do
     local source = option[1];
-    local column, row = math.floor((i - 1) / 5), (i - 1) % 5;
+    local column, row = math.floor((i - 1) / 6), (i - 1) % 6;
     w[option[3]] = Check(option[2], SOURCE_X + column * 219, -120 - row * 28,
       sources[source], function(v) sources[source] = v; end, option[4]);
   end

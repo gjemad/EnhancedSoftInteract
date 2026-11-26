@@ -4,7 +4,6 @@ local SetUnitCursorTexture = SetUnitCursorTexture or function() return false end
 
 -- Target decisions have no dependency on HUD layout or animations. Reading the game's cursor requires
 -- a texture; the caller supplies its icon. The result describes any replacement the renderer must draw.
-local GENERIC_ICONS = { ["Cursor Interact"] = true, ["Cursor UnableInteract"] = true, default = true };
 local CROSSHAIR_STYLE = Enum.CursorStyle and Enum.CursorStyle.Crosshair;
 
 local function InInteractRange()
@@ -22,12 +21,14 @@ end
 -- not at 36 (UnitDistanceSquared gives whole numbers there).
 local LOOT_CURSORS = { Loot = true, LootAll = true, Pickup = true };
 local LOOT_RANGE_SQUARED = 35;
+-- The distance is returned for every dead unit so range records carry it for skinning too.
 local function LootRange(cursor, unit)
-  if not (LOOT_CURSORS[cursor] and UnitDistanceSquared) then return nil end
+  if not UnitDistanceSquared then return nil end
   local dead = UnitIsDead(unit);
   if issecretvalue(dead) or not dead then return nil end
   local distance, checked = UnitDistanceSquared(unit);
   if issecretvalue(distance) or issecretvalue(checked) or not checked or type(distance) ~= "number" then return nil end
+  if not LOOT_CURSORS[cursor] then return nil, distance end
   return distance <= LOOT_RANGE_SQUARED, distance;
 end
 
@@ -88,22 +89,6 @@ lootWatcher:SetScript("OnEvent", function(_, event)
   if ns.DebugLoot then ns.DebugLoot(event, before, LootSnapshot()); end
 end);
 
-local function IsTalkableNPC()
-  local unit = "softinteract";
-  local player, attackable = UnitIsPlayer(unit), UnitCanAttack("player", unit);
-  if issecretvalue(player) or issecretvalue(attackable) then return false end
-  if not UnitExists(unit) or player or attackable then return false end
-  if UnitIsGameObject then
-    local object = UnitIsGameObject(unit);
-    if issecretvalue(object) or object then return false end
-  end
-  if UnitIsInteractable then
-    local interactable = UnitIsInteractable(unit);
-    if issecretvalue(interactable) or not interactable then return false end
-  end
-  return true;
-end
-
 local function IdentifyCursor(icon)
   local atlas = icon:GetAtlas();
   if issecretvalue(atlas) then return "default", "secret", false end
@@ -161,11 +146,6 @@ function ns.ResolveTarget(icon, guid, lastInRangeTarget)
   local cursor = key:match("^Cursor Unable(.+)$") or key:match("^Cursor (.+)$");
   local requirement = cursor and ns.RequirementFor(cursor);
   if requirement then Replace("Unable" .. cursor); end
-  local talkBadge = (not hasCursor or GENERIC_ICONS[key]) and IsTalkableNPC() or false;
-  if talkBadge then
-    if interactRange ~= nil then inRange = interactRange; end
-    Replace(inRange and "Speak" or "UnableSpeak");
-  end
   local outOfRange = not inRange;
   -- A locked object keeps the generic Unable cursor at every distance, so within UnitIsInInteractRange it only
   -- reads as unusable, without "Move closer". That range reaches a few steps past where an object can be used.
@@ -177,13 +157,13 @@ function ns.ResolveTarget(icon, guid, lastInRangeTarget)
     if UnitAffectingCombat("player") then combatText = ns.L.HUD_IN_COMBAT; end
   end
   local skillUp, skillInfo;
-  if cursor and not requirement and not talkBadge then skillUp, skillInfo = ns.SkillUpFor(cursor, guid, range.name); end
+  if cursor and not requirement then skillUp, skillInfo = ns.SkillUpFor(cursor, guid, range.name); end
   local requirementText = ns.IsUnableKey(key) and (requirement or ns.SkillRequirementText(cursor, skillInfo)) or combatText;
   return { name = range.name, knownTarget = knownTarget, hasCursor = hasCursor, iconSource = source,
     iconFromFileID = fromFileID, resolvedKey = resolvedKey, iconKey = key, overrideCursor = override,
-    talkBadge = talkBadge, outOfRange = outOfRange, range = range, inRangeTarget = lastInRangeTarget,
+    outOfRange = outOfRange, range = range, inRangeTarget = lastInRangeTarget,
     requirementText = requirementText, skillUp = skillUp, skillInfo = skillInfo,
-    signature = key .. "|" .. tostring(talkBadge) .. "|" .. tostring(outOfRange) .. "|" .. tostring(requirementText)
+    signature = key .. "|" .. tostring(outOfRange) .. "|" .. tostring(requirementText)
       .. "|" .. tostring(skillUp),
     action = key:lower():gsub("unable", "") };
 end

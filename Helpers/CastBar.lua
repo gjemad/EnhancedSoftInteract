@@ -411,8 +411,10 @@ function bar.Layout(frame, holder)
   holder.endDim = config.endDim;
   holder.gap = 5 * size.inputScale;
   holder.pixel = config.pixel and style.Pixel(frame) or nil;
-  -- The bar spans the name column, or the style's own span (Elv, docked to its squares).
-  if style.CastSpan then holder.left, holder.width = style.CastSpan(frame, EnhancedSoftInteractDB);
+  -- The bar spans the name column, or the style's own span (Elv, docked to its squares). An instant
+  -- outcome has no markers to end on, so it spans the style's whole line where that is longer (Level-Up).
+  if holder.instant and style.InstantSpan then holder.left, holder.width = style.InstantSpan(frame, EnhancedSoftInteractDB);
+  elseif style.CastSpan then holder.left, holder.width = style.CastSpan(frame, EnhancedSoftInteractDB);
   else holder.width, holder.left = frame.nameWidth, frame.nameLeft; end
   -- Share the idle line or selected key baseline, including the style's text clearance.
   -- Only an outcome overlay sets yOffset, for an interrupted bar that sinks away.
@@ -470,8 +472,8 @@ function bar.Layout(frame, holder)
   local inside = holder.pixel and endWidth * 0.5 or 0;
   Marker(holder.end1, holder.left - endWidth * 0.5 + inside);
   Marker(holder.end2, holder.left + holder.width - endWidth * 0.5 - inside);
-  holder.end1:Show();
-  holder.end2:Show();
+  holder.end1:SetShown(not holder.instant);
+  holder.end2:SetShown(not holder.instant);
   holder.runeGlow:ClearAllPoints();
   holder.runeGlow:SetPoint("CENTER", frame.box, "LEFT", holder.left + half, holder.y);
   holder.runeGlow:SetSize(16 * size.inputScale, 14 * size.inputScale);
@@ -816,13 +818,18 @@ end
 -- A separate overlay lets tracking clear immediately while the outcome plays on the same object.
 -- Stale casts, target changes, settings and layout changes never keep an outcome overlay.
 -- A preview outcome passes the sample name instead of an object GUID and stays on that sample.
-function bar.Outcome(frame, objectGUID, kind, progress, sample)
+-- options, for an outcome with no cast bar before it (Pick Pocket): color = {r, g, b} in place of the
+-- bar's, instant for a spell with no cast time (no start or end markers, and the style's InstantSpan when it
+-- has one: its full line), noTimer skips the cast timer.
+function bar.Outcome(frame, objectGUID, kind, progress, sample, options)
   local style, db = ns.styles.Get(), EnhancedSoftInteractDB;
   local name = style.castBar and style.castBar[kind];
   local effect, length = OUTCOMES[name], LENGTH[name];
   if not effect then return end
   local holder = frame.castFinish;
   holder.sourceRed, holder.sourceGreen, holder.sourceBlue = frame.castBar.sourceRed, frame.castBar.sourceGreen, frame.castBar.sourceBlue;
+  if options and options.color then holder.sourceRed, holder.sourceGreen, holder.sourceBlue = unpack(options.color); end
+  holder.instant = options and options.instant or nil;
   holder.progress = kind == "success" and 1 or math.max(0, math.min(1, progress or 0));
   holder.outcome, holder.yOffset, holder.fx = true, nil, holder.fx or {};
   holder.darkenAll = kind ~= "success";
@@ -836,7 +843,7 @@ function bar.Outcome(frame, objectGUID, kind, progress, sample)
   local started, size = GetTime(), ns.styles.Size(db);
   holder.endsAt = started + length;
   local timer = frame.castTimer;
-  local timed = style.castBar.timer and db.castBarTimer;
+  local timed = style.castBar.timer and db.castBarTimer and not (options and options.noTimer);
   if timed then
     timer.state = kind;
     TimerFont(frame);

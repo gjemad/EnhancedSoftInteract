@@ -48,6 +48,8 @@ Feat\Target.lua
 Feat\HideBlizzard.lua
 Feat\Persistence.lua
 Feat\Targeting.lua
+Feat\DynamicArc.lua
+Feat\PickPocket.lua
 Feat\DebugLog.lua
 Feat\InteractionCast.lua
 Feat\Debug.lua
